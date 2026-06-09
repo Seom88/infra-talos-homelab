@@ -19,7 +19,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
     datastore_id = var.datastore_vm
     ip_config {
       ipv4 {
-        address = "${each.value.ip}/8"
+        address = "${each.value.ip}/24"
         gateway = var.gateway
       }
     }
@@ -76,18 +76,14 @@ data "talos_machine_configuration" "control_machine_config" {
   kubernetes_version = "v${var.kubernetes_version}"
   talos_version      = "v${var.talos_version}"
   config_patches = [
-    # Configure the installation disk and image for the Talos installer
     yamlencode({
       machine = {
+        # Configure the installation disk and image for the Talos installer
         install = {
           disk  = "/dev/vda"
           image = local.install_image
         }
-      }
-    }),
-    # Dns
-    yamlencode({
-      machine = {
+        # Dns
         network = {
           nameservers = [var.gateway, "1.1.1.1"]
         }
@@ -113,28 +109,9 @@ data "talos_machine_configuration" "control_machine_config" {
       name       = "tailscale"
       environment = [
         "TS_AUTHKEY=${var.tailscale_auth_key}",
-        "TS_EXTRA_ARGS=--accept-dns=false",
-        "TS_ACCEPT_DNS=false",
+        "TS_ACCEPT_DNS=false"
       ]
     }),
-    # Disables the Flannel, the default CNI for Talos
-    # yamlencode({
-    #   cluster = {
-    #     network = {
-    #       cni = {
-    #         name = "none"
-    #       }
-    #     }
-    #   }
-    # }),
-    # Disables kube-proxy, the default proxy service
-    # yamlencode({
-    #   cluster = {
-    #     proxy = {
-    #       disabled = true
-    #     }
-    #   }
-    # })
   ]
 }
 
