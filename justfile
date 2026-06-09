@@ -5,7 +5,7 @@
 # falls back to LAN IPs from terraform.tfvars otherwise.
 
 talosconfig := "./secrets/talosconfig.yaml"
-kubeconfig  := "./secrets/kubeconfig.yaml"
+kubeconfig  := "./secrets/kubeconfig"
 
 # LAN IPs from terraform.tfvars (fallback when cluster is unreachable)
 lan_first := `grep -A2 'hostname = "talos-cp1"' terraform.tfvars | awk -F'"' '/ip/{print $2}'`

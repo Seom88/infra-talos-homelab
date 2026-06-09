@@ -17,6 +17,11 @@ variable "endpoint" {
   description = "Proxmox API endpoint URL (e.g. https://10.1.3.1:8006)"
   type        = string
 }
+variable "network_bridge" {
+  description = "Proxmox network bridge to attach VMs to (e.g. vmbr0)"
+  type        = string
+  default     = "vmbr0"
+}
 
 # Talos image settings
 variable "node_name" {
@@ -74,6 +79,11 @@ variable "kubernetes_version" {
   description = "Kubernetes version to install (e.g. 1.36.1)"
   type        = string
   default     = "1.36.1"
+}
+
+variable "tailscale_domain" {
+  description = "Tailscale MagicDNS domain (e.g. lonk-mirfak.ts.net)"
+  type        = string
 }
 
 # Tailscale

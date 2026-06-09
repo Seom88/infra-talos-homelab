@@ -44,7 +44,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
     floating  = each.value.memory
   }
   network_device {
-    bridge = "vmbr0"
+    bridge = var.network_bridge
   }
   operating_system {
     type = "l26"
@@ -59,13 +59,14 @@ data "talos_client_configuration" "client_config" {
   cluster_name         = var.cluster_name
   client_configuration = talos_machine_secrets.machine_secrets.client_configuration
   endpoints            = local.node_ips
-  nodes                = local.node_ips
+  nodes                = local.tailscale_names
 }
 
 locals {
-  node_ips = [for node in var.nodes : node.ip]
+  node_ips        = [for node in var.nodes : node.ip]
+  tailscale_names = [for node in var.nodes : "${node.hostname}.${var.tailscale_domain}"]
   cluster_endpoint = "https://${var.cluster_vip}:6443"
-  install_image = "factory.talos.dev/installer/${var.talos_image_factory_id}:v${var.talos_version}"
+  install_image   = "factory.talos.dev/installer/${var.talos_image_factory_id}:v${var.talos_version}"
 }
 
 data "talos_machine_configuration" "control_machine_config" {
@@ -78,15 +79,16 @@ data "talos_machine_configuration" "control_machine_config" {
   config_patches = [
     yamlencode({
       machine = {
+        certSANs = concat(local.tailscale_names, local.node_ips)
         # Configure the installation disk and image for the Talos installer
         install = {
           disk  = "/dev/vda"
           image = local.install_image
         }
         # Dns
-        network = {
-          nameservers = [var.gateway, "1.1.1.1"]
-        }
+        # network = {
+        #   nameservers = [var.gateway, "100.100.100.100", "1.1.1.1"]
+        # }
       }
     }),
     # Enable workers on your control plane nodes
