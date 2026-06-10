@@ -1,11 +1,13 @@
 output "talosconfig" {
-  value     = data.talos_client_configuration.client_config.talos_config
-  sensitive = true
+  description = "Talos client configuration for talosctl"
+  value       = data.talos_client_configuration.client_config.talos_config
+  sensitive   = true
 }
 
 output "kubeconfig" {
-  value     = resource.talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw
-  sensitive = true
+  description = "Standard kubeconfig for kubectl"
+  value       = talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw
+  sensitive   = true
 }
 
 output "kubeconfig_tailscale" {

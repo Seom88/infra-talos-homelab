@@ -27,5 +27,4 @@ nodes = [
     proxmox_node  = "pve"
   }
 ]
-cluster_vip = "192.168.2.210"
-tailscale_domain = "lonk-mirfak.ts.net"
+
