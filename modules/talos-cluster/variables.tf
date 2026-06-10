@@ -1,10 +1,20 @@
-variable "node_ips" {
+variable "cp_ips" {
   description = "IP addresses of all control plane nodes"
   type        = list(string)
 }
 
-variable "node_hostnames" {
+variable "cp_hostnames" {
   description = "Hostnames of all control plane nodes (used for certSANs)"
+  type        = list(string)
+}
+
+variable "worker_ips" {
+  description = "IP addresses of all worker nodes"
+  type        = list(string)
+}
+
+variable "worker_hostnames" {
+  description = "Hostnames of all worker nodes"
   type        = list(string)
 }
 

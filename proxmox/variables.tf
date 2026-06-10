@@ -56,9 +56,23 @@ variable "datastore_vm" {
   default     = "local-lvm"
 }
 
-variable "nodes" {
+variable "nodes_cp" {
   description = <<-EOF
-    List of nodes and their configurations.
+    Control plane nodes and their configurations.
+    Each node requires: hostname, ip, cores, memory, proxmox_node.
+  EOF
+  type = list(object({
+    hostname      = string
+    ip            = string
+    cores         = number
+    memory        = number
+    proxmox_node  = string
+  }))
+}
+
+variable "nodes_worker" {
+  description = <<-EOF
+    Worker nodes and their configurations.
     Each node requires: hostname, ip, cores, memory, proxmox_node.
   EOF
   type = list(object({

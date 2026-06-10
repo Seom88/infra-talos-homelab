@@ -1,29 +1,39 @@
 # infra-homelab — Talos Kubernetes on Proxmox with Terraform
 
-Provision a highly available Kubernetes cluster (Talos Linux) on Proxmox VE using Terraform modules. Tailscale-enabled for secure access across networks.
+Provision a Kubernetes cluster (Talos Linux) on Proxmox VE using Terraform modules — 1 control plane + 3 workers, designed for HA with additional CP nodes. Tailscale-enabled for secure access across networks.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Proxmox VE                         │
-│  ┌──────────────────┐  ┌──────────────────┐        │
-│  │  talos-cp1        │  │  talos-cp2       │  ...   │
-│  │  192.168.2.211    │  │  192.168.2.212   │        │
-│  │  4 cores / 4GB    │  │  4 cores / 4GB   │        │
-│  └────────┬─────────┘  └────────┬─────────┘        │
-│           │                     │                   │
-│           └──────────┬──────────┘                   │
-│                      │                              │
-│                 ┌────┴────┐                         │
-│                 │  VIP    │                         │
-│                 │ .2.210  │ (L2, internal)          │
-│                 └─────────┘                         │
-│                      │                              │
-│                 ┌────┴────┐   ┌──────────────────┐  │
-│                 │ Tailscale│──│ MagicDNS (external)│ │
-│                 └─────────┘   └──────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        Proxmox VE                            │
+│  ┌────────────┐  ┌───────────┐  ┌───────────┐  ┌────────┐ │
+│  │ talos-cp1   │  │ talos-cp2 │  │ talos-cp3 │  │ ...    │ │
+│  │ (control    │  │ (control  │  │ (control  │  │ (HA)   │ │
+│  │  plane)     │  │  plane)   │  │  plane)   │  │        │ │
+│  └──────┬──────┘  └─────┬─────┘  └─────┬─────┘  └───┬────┘ │
+│         │               │               │            │      │
+│         └───────┬───────┴───────┬───────┘            │      │
+│                 │               │                     │      │
+│            ┌────┴─────┐   ┌────┴──────┐               │      │
+│            │ L2 VIP   │   │  etcd     │               │      │
+│            │  .2.210   │   │ (CP only) │               │      │
+│            └────┬─────┘   └───────────┘               │      │
+│                 │                                      │      │
+│                 │                                      │      │
+│  ┌────────────┐ │ ┌───────────┐ ┌───────────┐ ┌───────┴───┐ │
+│  │ talos-w1   │ │ │ talos-w2  │ │ talos-w3  │ │ ...       │ │
+│  │ (worker)   │ │ │ (worker)  │ │ (worker)  │ │ (scale)   │ │
+│  └──────┬─────┘ │ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ │
+│         │       │       │             │             │       │
+│         └───┬───┴───┬───┴──────┬──────┘             │       │
+│             │       │          │                      │      │
+│        ┌────┴────┐  │    ┌────┴────┐                  │      │
+│        │ Tailscale│  │    │ MagicDNS│                  │      │
+│        │ (secure  │  │    │ (multi- │                  │      │
+│        │  access) │  │    │ network)│                  │      │
+│        └─────────┘  │    └─────────┘                  │      │
+└──────────────────────────────────────────────────────────────┘
          │
          │ terraform apply
          ▼
@@ -32,7 +42,7 @@ Provision a highly available Kubernetes cluster (Talos Linux) on Proxmox VE usin
 │  ┌────────────────────────────────────┐  │
 │  │  talos-cluster module              │  │
 │  │  - Machine secrets                 │  │
-│  │  - Machine config + patches        │  │
+│  │  - CP + Worker configs             │  │
 │  │  - Bootstrap                       │  │
 │  │  - Kubeconfig (standard + Tailscale)│  │
 │  └────────────────────────────────────┘  │
@@ -64,10 +74,10 @@ schematic.yaml                   # Talos Image Factory extensions
 | Area | What it does |
 |------|-------------|
 | **Terraform modules** | `talos-cluster` is fully reusable — works with any provider that gives you VMs and IPs |
-| **HA control plane** | 3-node etcd + Kubernetes control plane with L2 VIP |
+| **Control plane** | Single node (homelab) — designed for HA with 3+ nodes; L2 VIP |
+| **Dedicated workers** | 3 worker nodes, 100 GB disk each — workloads stay off the CP |
 | **Tailscale integration** | Optional MagicDNS for multi-network access, with per-node kubeconfig contexts |
 | **Custom Talos image** | Image Factory schematic with extensions (iscsi-tools, qemu-guest-agent, tailscale, util-linux) |
-| **No workers (yet)** | Designed for control plane only — worker nodes are a future extension |
 
 ## Requirements
 
@@ -106,7 +116,8 @@ just setup-cli
 | `endpoint` | Proxmox API URL | — |
 | `insecure` | Skip TLS verify | `false` |
 | `gateway` | VM default gateway | — |
-| `nodes` | List of VM definitions | — |
+| `nodes_cp` | List of control plane VM definitions | — |
+| `nodes_worker` | List of worker VM definitions | — |
 
 ### Talos
 

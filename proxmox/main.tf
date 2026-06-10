@@ -11,8 +11,51 @@ resource "proxmox_download_file" "talos_image" {
 resource "proxmox_virtual_environment_vm" "talos" {
   on_boot         = true
   stop_on_destroy = true
-  tags            = ["terraform", "talos"]
-  for_each        = { for node in var.nodes : node.hostname => node }
+  tags            = ["terraform", "talos", "control-plane"]
+  for_each        = { for node in var.nodes_cp : node.hostname => node }
+  name            = each.key
+  node_name       = each.value.proxmox_node
+  initialization {
+    datastore_id = var.datastore_vm
+    ip_config {
+      ipv4 {
+        address = "${each.value.ip}/24"
+        gateway = var.gateway
+      }
+    }
+  }
+  agent {
+    enabled = true
+  }
+  disk {
+    datastore_id = var.datastore_vm
+    file_id      = proxmox_download_file.talos_image.id
+    interface    = "virtio0"
+    iothread     = true
+    discard      = "on"
+    size         = 20
+  }
+  cpu {
+    cores = each.value.cores
+    type  = "x86-64-v2-AES"
+  }
+  memory {
+    dedicated = each.value.memory
+    floating  = each.value.memory
+  }
+  network_device {
+    bridge = var.network_bridge
+  }
+  operating_system {
+    type = "l26"
+  }
+}
+
+resource "proxmox_virtual_environment_vm" "talos_worker" {
+  on_boot         = true
+  stop_on_destroy = true
+  tags            = ["terraform", "talos", "worker"]
+  for_each        = { for node in var.nodes_worker : node.hostname => node }
   name            = each.key
   node_name       = each.value.proxmox_node
   initialization {
@@ -59,8 +102,10 @@ locals {
 module "talos" {
   source = "../modules/talos-cluster"
 
-  node_ips           = [for node in var.nodes : node.ip]
-  node_hostnames     = [for node in var.nodes : node.hostname]
+  cp_ips           = [for node in var.nodes_cp : node.ip]
+  cp_hostnames     = [for node in var.nodes_cp : node.hostname]
+  worker_ips       = [for node in var.nodes_worker : node.ip]
+  worker_hostnames = [for node in var.nodes_worker : node.hostname]
   cluster_vip        = local.cluster_vip
   talos_version      = var.talos_version
   talos_image_id     = var.talos_image_factory_id
@@ -68,6 +113,7 @@ module "talos" {
   tailscale_auth_key = var.tailscale_auth_key
 
   depends_on = [
-    proxmox_virtual_environment_vm.talos
+    proxmox_virtual_environment_vm.talos,
+    proxmox_virtual_environment_vm.talos_worker
   ]
 }

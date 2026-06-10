@@ -18,7 +18,7 @@ output "kubeconfig_tailscale" {
     kind       = "Config"
     current-context = "${var.cluster_name}-0"
     clusters = [
-      for i, host in local.tailscale_names : {
+      for i, host in local.all_tailscale_names : {
         name = "${var.cluster_name}-${i}"
         cluster = {
           server                   = "https://${host}:6443"
@@ -27,7 +27,7 @@ output "kubeconfig_tailscale" {
       }
     ]
     contexts = [
-      for i, host in local.tailscale_names : {
+      for i, host in local.all_tailscale_names : {
         name = "${var.cluster_name}-${i}"
         context = {
           cluster = "${var.cluster_name}-${i}"
@@ -36,7 +36,7 @@ output "kubeconfig_tailscale" {
       }
     ]
     users = [
-      for i, host in local.tailscale_names : {
+      for i, host in local.all_tailscale_names : {
         name = "${var.cluster_name}-${i}"
         user = {
           client-certificate-data = yamldecode(talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw).users[0].user["client-certificate-data"]
