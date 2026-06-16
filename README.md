@@ -1,109 +1,72 @@
-# infra-homelab — Talos Kubernetes on Proxmox with Terraform
+# infra-homelab-talos
 
-Provision a Kubernetes cluster (Talos Linux) on Proxmox VE using Terraform modules — 1 control plane + 3 workers, designed for HA with additional CP nodes. Tailscale-enabled for secure access across networks.
+Terraform modules that provision a Talos Linux Kubernetes cluster on Proxmox VE. One `terraform apply` goes from bare hypervisor to a working cluster with Tailscale mesh networking.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Proxmox VE                            │
-│  ┌────────────┐  ┌───────────┐  ┌───────────┐  ┌────────┐ │
-│  │ talos-cp1   │  │ talos-cp2 │  │ talos-cp3 │  │ ...    │ │
-│  │ (control    │  │ (control  │  │ (control  │  │ (HA)   │ │
-│  │  plane)     │  │  plane)   │  │  plane)   │  │        │ │
-│  └──────┬──────┘  └─────┬─────┘  └─────┬─────┘  └───┬────┘ │
-│         │               │               │            │      │
-│         └───────┬───────┴───────┬───────┘            │      │
-│                 │               │                     │      │
-│            ┌────┴─────┐   ┌────┴──────┐               │      │
-│            │ L2 VIP   │   │  etcd     │               │      │
-│            │  .2.210   │   │ (CP only) │               │      │
-│            └────┬─────┘   └───────────┘               │      │
-│                 │                                      │      │
-│                 │                                      │      │
-│  ┌────────────┐ │ ┌───────────┐ ┌───────────┐ ┌───────┴───┐ │
-│  │ talos-w1   │ │ │ talos-w2  │ │ talos-w3  │ │ ...       │ │
-│  │ (worker)   │ │ │ (worker)  │ │ (worker)  │ │ (scale)   │ │
-│  └──────┬─────┘ │ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ │
-│         │       │       │             │             │       │
-│         └───┬───┴───┬───┴──────┬──────┘             │       │
-│             │       │          │                      │      │
-│        ┌────┴────┐  │    ┌────┴────┐                  │      │
-│        │ Tailscale│  │    │ MagicDNS│                  │      │
-│        │ (secure  │  │    │ (multi- │                  │      │
-│        │  access) │  │    │ network)│                  │      │
-│        └─────────┘  │    └─────────┘                  │      │
-└──────────────────────────────────────────────────────────────┘
-         │
-         │ terraform apply
-         ▼
-┌──────────────────────────────────────────┐
-│         Terraform (proxmox/)             │
-│  ┌────────────────────────────────────┐  │
-│  │  talos-cluster module              │  │
-│  │  - Machine secrets                 │  │
-│  │  - CP + Worker configs             │  │
-│  │  - Bootstrap                       │  │
-│  │  - Kubeconfig (standard + Tailscale)│  │
-│  └────────────────────────────────────┘  │
-└──────────────────────────────────────────┘
+Proxmox VE
+├── talos-cp1         (control plane, L2 VIP .2.210)
+├── talos-w1          (worker)
+├── talos-w2          (worker)
+└── talos-w3          (worker)
+
+Terraform (proxmox/)
+└── modules/talos-cluster/
+    ├── Machine secrets (CA, tokens)
+    ├── CP config      (L2 VIP, Tailscale)
+    ├── Worker config  (Tailscale)
+    ├── Bootstrap
+    └── Kubeconfig     (LAN + Tailscale contexts)
 ```
 
 ## Structure
 
 ```
 proxmox/                        # Root module
-├── provider.tf                  # bpg/proxmox provider
+├── provider.tf                  # bpg/proxmox v0.109.0
 ├── main.tf                      # VMs + talos-cluster module call
-├── variables.tf                 # All root variables
+├── variables.tf
 ├── outputs.tf                   # talosconfig, kubeconfig, kubeconfig_tailscale
-├── terraform.tfvars             # Environment config (IPs, nodes, storage)
-└── secret.auto.tfvars           # Proxmox credentials
+└── environments/{dev,prod}/     # Per-environment node definitions and state
 
 modules/
-└── talos-cluster/               # Reusable child module
-    ├── main.tf                  # Talos resources (secrets, config, bootstrap)
-    ├── variables.tf             # Talos-specific variables
-    └── outputs.tf               # talosconfig, kubeconfig, kubeconfig_tailscale
+└── talos-cluster/               # Provider-agnostic child module
+    ├── main.tf                  # Talos resources
+    ├── variables.tf
+    └── outputs.tf
 
-schematic.yaml                   # Talos Image Factory extensions
+schematic.yaml                   # Image Factory extensions list
 ```
 
 ## Highlights
 
-| Area | What it does |
-|------|-------------|
-| **Terraform modules** | `talos-cluster` is fully reusable — works with any provider that gives you VMs and IPs |
-| **Control plane** | Single node (homelab) — designed for HA with 3+ nodes; L2 VIP |
-| **Dedicated workers** | 3 worker nodes, 100 GB disk each — workloads stay off the CP |
-| **Tailscale integration** | Optional MagicDNS for multi-network access, with per-node kubeconfig contexts |
-| **Custom Talos image** | Image Factory schematic with extensions (iscsi-tools, qemu-guest-agent, tailscale, util-linux) |
+- **Modular design** — infrastructure (VMs) and configuration (Talos/K8s) are separated; `talos-cluster` module works with any provider
+- **Control plane** — single node for homelab, supports HA with 3+ nodes and L2 VIP
+- **Dedicated workers** — 3 workers with 100 GB disks; workloads stay off the control plane
+- **Tailscale integration** — optional MagicDNS for multi-network access with per-node kubeconfig contexts
+- **Custom Talos image** — Image Factory schematic bundles `iscsi-tools`, `qemu-guest-agent`, `tailscale`, `util-linux-tools`
 
 ## Requirements
 
-- Proxmox VE 8.x
-- Terraform 1.x
-- [Talos Image Factory](https://factory.talos.dev) schematic ID
+- Proxmox VE 8.x with API access
+- Terraform >= 1.5
+- Talos Image Factory schematic ID
 
 ## Quick start
 
 ```bash
-# 1. Set Tailscale auth key (optional — skip if you don't need Tailscale)
+# (Optional) enable Tailscale
 export TF_VAR_tailscale_auth_key="tskey-auth-..."
 
-# 2. Bootstrap the cluster
-cd proxmox
-terraform init && terraform apply
+# Bootstrap the cluster (auto-inits, uses prod by default)
+just tf-apply
 
-# 3. Extract credentials (or use `just gen-secrets` later)
-terraform output -raw talosconfig > ../secrets/talosconfig.yaml
-terraform output -raw kubeconfig  > ../secrets/kubeconfig.yaml
-
-# 4. Merge into local config
+# Extract credentials and merge into local ~/.talos/config and ~/.kube/config
 just setup-cli
 ```
 
-> All `just` commands run from the repo root. See `justfile` for available tasks.
+All `just` commands run from the repo root. Set `tf_env=dev` to target the dev environment instead.
 
 ## Variables
 
@@ -111,13 +74,13 @@ just setup-cli
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `endpoint` | Proxmox API URL | — |
 | `username` | Proxmox API user | — |
 | `password` | Proxmox API token secret | — |
-| `endpoint` | Proxmox API URL | — |
 | `insecure` | Skip TLS verify | `false` |
 | `gateway` | VM default gateway | — |
-| `nodes_cp` | List of control plane VM definitions | — |
-| `nodes_worker` | List of worker VM definitions | — |
+| `nodes_cp` | Control plane VM definitions | — |
+| `nodes_worker` | Worker VM definitions | — |
 
 ### Talos
 
@@ -129,23 +92,32 @@ just setup-cli
 
 ## Access
 
-```bash
-# Via LAN (L2 VIP)
-talosctl --talosconfig secrets/talosconfig.yaml version
+Use dev instead prod on dev enviroments.
 
-# Via Tailscale (per-node contexts)
-kubectl --kubeconfig secrets/kubeconfig.yaml get nodes
-kubectl --kubeconfig secrets/kubeconfig.yaml config use-context talos-cluster-0
+```bash
+# LAN (L2 VIP)
+talosctl --talosconfig secrets/prod/talosconfig.yaml version
+
+# Tailscale (per-node contexts)
+kubectl --kubeconfig secrets/prod/kubeconfig.yaml get nodes
+kubectl --kubeconfig secrets/prod/kubeconfig.yaml config use-context talos-cluster-0
 ```
 
-## Why this exists
+## Why
 
-This is a hands-on Terraform project to practice infrastructure-as-code with real hardware. It's designed to be:
+Hands-on infrastructure-as-code with real hardware. Designed to be modular, reproducible, and portable.
 
-- **Modular** — separate concerns between infrastructure (VMs) and configuration (Talos/K8s)
-- **Reproducible** — one `terraform apply` from bare Proxmox to a working cluster
-- **Portable** — the `talos-cluster` module is provider-agnostic
+## Available `just` tasks
 
----
+| Task | Description |
+|------|-------------|
+| `tf-plan` | Plan changes for the target environment |
+| `tf-apply` | Apply changes (bootstrap or update the cluster) |
+| `tf-destroy` | Tear down the entire environment |
+| `gen-secrets` | Extract talosconfig + kubeconfig from Terraform state |
+| `setup-cli` | gen-secrets + merge into local `~/.talos/config` and `~/.kube/config` |
+| `status` | Show Talos version, extensions, and cluster members |
+| `get-schematic-id` | Compute schematic ID from `schematic.yaml` via the Image Factory API |
+| `cluster-schematic-id` | Read the active schematic ID from the running cluster |
 
-*Built with Terraform, Talos Linux, and Proxmox.*
+Set `tf_env=dev` for any task to target the dev environment (default: `prod`).
