@@ -1,4 +1,4 @@
-# infra-homelab-talos
+# infra-talos-homelab
 
 Terraform modules that provision a Talos Linux Kubernetes cluster on Proxmox VE. One `terraform apply` goes from bare hypervisor to a working cluster with Tailscale mesh networking.
 
