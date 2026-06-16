@@ -1,3 +1,4 @@
+env_name = "prod"
 endpoint = "https://node.lonk-mirfak.ts.net:8006"
 gateway = "192.168.2.1"
 node_name = "pve"

@@ -4,7 +4,7 @@ resource "proxmox_download_file" "talos_image" {
   node_name               = var.node_name
   url                     = "https://factory.talos.dev/image/${var.talos_image_factory_id}/v${var.talos_version}/nocloud-amd64.raw.xz"
   decompression_algorithm = "zst"
-  file_name               = "talos-v${var.talos_version}-nocloud-amd64.img"
+  file_name               = "talos-${var.env_name}-v${var.talos_version}-nocloud-amd64.img"
   overwrite               = false
 }
 

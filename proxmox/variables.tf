@@ -2,6 +2,11 @@
 # Proxmox Provider — credentials and endpoint
 # ============================================================
 
+variable "env_name" {
+  description = "Environment name for resource naming (e.g. prod, dev). Each env gets its own download + VMs so they coexist on the same PVE node."
+  type        = string
+}
+
 variable "username" {
   description = "Proxmox API user (e.g. root@pam or an API token name)"
   type        = string

@@ -2,73 +2,119 @@
 #  infra-homelab — Talos + Proxmox helper tasks
 # ──────────────────────────────────────────────
 #  All commands run from the repo root.
-#  Terraform state lives in proxmox/.
-#  Generated secrets go to ./secrets/ (.gitignored).
+#  Terraform:  proxmox/environments/<env>/
+#  Secrets:    ./secrets/<env>/          (.gitignored)
+#  Usage:      just tf_env=dev <task>    (default: prod)
+#
+#  plan/apply/gen-secrets auto-init before running,
+#  so you can switch environments freely:
+#    just tf_env=dev tf-apply   # work on dev
+#    just tf_apply              # work on prod (no cross-talk)
 
-tf_root    := "./proxmox"
-secrets    := "./secrets"
-talosconfig := secrets + "/talosconfig.yaml"
-kubeconfig  := secrets + "/kubeconfig.yaml"
+tf_root := "./proxmox"
+tf_env := "prod"
 
-# LAN IPs from terraform.tfvars (fallback when cluster is unreachable)
-lan_first := `grep -A2 'hostname = "talos-cp1"' ./proxmox/terraform.tfvars | awk -F'"' '/ip/{print $2}'`
-lan_nodes := `awk -F'"' '/ip/{printf "%s%s", sep, $2; sep=","}' ./proxmox/terraform.tfvars`
+# ── Terraform ──────────────────────────────────
+
+# Init terraform with local backend for an environment
+tf-init:
+    terraform -chdir={{ tf_root }} init -reconfigure \
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+
+# Plan changes (auto-inits to ensure correct backend)
+tf-plan:
+    terraform -chdir={{ tf_root }} init -reconfigure \
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+    terraform -chdir={{ tf_root }} plan \
+      -var-file=environments/{{ tf_env }}/terraform.tfvars
+
+# Apply changes (auto-inits to ensure correct backend)
+tf-apply:
+    terraform -chdir={{ tf_root }} init -reconfigure \
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+    terraform -chdir={{ tf_root }} apply \
+      -var-file=environments/{{ tf_env }}/terraform.tfvars
+
+# Destroy an environment (auto-inits to ensure correct backend)
+tf-destroy:
+    terraform -chdir={{ tf_root }} init -reconfigure \
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+    terraform -chdir={{ tf_root }} destroy \
+      -var-file=environments/{{ tf_env }}/terraform.tfvars
+
+# ── Secrets ────────────────────────────────────
 
 # Generate talosconfig + kubeconfig from terraform state
 gen-secrets:
     #!/usr/bin/env bash
     set -euo pipefail
-    mkdir -p {{secrets}}
-    cd {{tf_root}}
-    terraform output -raw talosconfig > {{talosconfig}}
-    terraform output -raw kubeconfig  > {{kubeconfig}}
-    echo "✓ secrets regenerated"
+    ROOT="$PWD"
+    SECRETS="$ROOT/secrets/{{ tf_env }}"
+    mkdir -p "$SECRETS"
+    terraform -chdir={{ tf_root }} init -reconfigure \
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+    terraform -chdir={{ tf_root }} output -raw talosconfig > "$SECRETS/talosconfig.yaml"
+    terraform -chdir={{ tf_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
+    echo "✓ secrets regenerated ({{ tf_env }})"
 
 # Merge secrets into local talosctl and kubectl config
 setup-cli:
     #!/usr/bin/env bash
     set -euo pipefail
-    just gen-secrets
+    ROOT="$PWD"
+    just tf_env="{{ tf_env }}" gen-secrets
+    SECRETS="$ROOT/secrets/{{ tf_env }}"
+    TC="$SECRETS/talosconfig.yaml"
+    KC="$SECRETS/kubeconfig.yaml"
     # talosctl
     mkdir -p ~/.talos
     if [[ -f ~/.talos/config ]]; then
-        talosctl config merge {{talosconfig}}
+        talosctl config merge "$TC"
     else
-        cp {{talosconfig}} ~/.talos/config
+        cp "$TC" ~/.talos/config
     fi
-    echo "✓ talosctl configured"
+    echo "✓ talosctl configured ({{ tf_env }})"
     # kubectl
     mkdir -p ~/.kube
-    KUBECONFIG=~/.kube/config:{{kubeconfig}} \
+    KUBECONFIG=~/.kube/config:"$KC" \
       kubectl config view --flatten > /tmp/kube-merge
     mv /tmp/kube-merge ~/.kube/config
-    echo "✓ kubectl configured"
+    echo "✓ kubectl configured ({{ tf_env }})"
 
-# Show cluster info: Talos version, extensions, schematic, nodes
+# ── Cluster Status ─────────────────────────────
+
+# Show Talos version, extensions, and nodes
 status:
     #!/usr/bin/env bash
     set -euo pipefail
-    FIRST=$(talosctl --talosconfig {{talosconfig}} get members -o json -n {{lan_first}} 2>/dev/null \
-      | jq -rs '.[0].spec.addresses[0]' 2>/dev/null || echo "{{lan_first}}")
+    TC="./secrets/{{ tf_env }}/talosconfig.yaml"
+    ENV_DIR="{{ tf_root }}/environments/{{ tf_env }}"
+    FIRST=$(awk -F'"' '/ip/{print $2; exit}' "$ENV_DIR/terraform.tfvars")
+    FIRST=$(talosctl --talosconfig "$TC" get members -o json -n "$FIRST" 2>/dev/null \
+      | jq -rs '.[0].spec.addresses[0]' 2>/dev/null || echo "$FIRST")
     echo "── Version ──"
-    talosctl --talosconfig {{talosconfig}} version --short -n "$FIRST"
+    talosctl --talosconfig "$TC" version --short -n "$FIRST"
     echo ""
     echo "── Extensions ──"
-    talosctl --talosconfig {{talosconfig}} get extensions -n "$FIRST"
+    talosctl --talosconfig "$TC" get extensions -n "$FIRST"
     echo ""
     echo "── Nodes ──"
-    talosctl --talosconfig {{talosconfig}} get members -n "$FIRST"
+    talosctl --talosconfig "$TC" get members -n "$FIRST"
 
-# Compute schematic ID from schematic.yaml via Talos Image Factory API
+# Compute schematic ID via Talos Image Factory API
 get-schematic-id:
-    curl -sf -X POST --data-binary @schematic.yaml https://factory.talos.dev/schematics | jq -r '.id'
+    curl -sf -X POST --data-binary @schematic.yaml \
+      https://factory.talos.dev/schematics | jq -r '.id'
 
-# Read schematic ID from the running cluster (for upgrade planning)
+# Read schematic ID from the running cluster
 cluster-schematic-id:
     #!/usr/bin/env bash
     set -euo pipefail
-    FIRST=$(talosctl --talosconfig {{talosconfig}} get members -o json -n {{lan_first}} 2>/dev/null \
-      | jq -rs '.[0].spec.addresses[0]' 2>/dev/null || echo "{{lan_first}}")
-    echo "Schematic ID (cluster):"
-    talosctl --talosconfig {{talosconfig}} get extensions -n "$FIRST" \
+    TC="./secrets/{{ tf_env }}/talosconfig.yaml"
+    ENV_DIR="{{ tf_root }}/environments/{{ tf_env }}"
+    FIRST=$(awk -F'"' '/ip/{print $2; exit}' "$ENV_DIR/terraform.tfvars")
+    FIRST=$(talosctl --talosconfig "$TC" get members -o json -n "$FIRST" 2>/dev/null \
+      | jq -rs '.[0].spec.addresses[0]' 2>/dev/null || echo "$FIRST")
+    echo "Schematic ID ({{ tf_env }}):"
+    talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
