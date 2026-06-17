@@ -7,7 +7,7 @@ datastore_iso = "hdd"
 insecure = true
 network_bridge = "vnet1"
 cluster_vip      = "10.10.10.171"
-disk_size_cp     = 20
+disk_size_cp     = 30
 nodes_cp = [
   {
     hostname     = "talos-cp1"

@@ -14,15 +14,14 @@ locals {
   cluster_endpoint      = "https://${var.cluster_vip}:6443"
   install_image         = "factory.talos.dev/installer/${var.talos_image_id}:v${var.talos_version}"
   dns_patch = yamlencode({
-    machine = {
-      network = {
-        nameservers = compact([
-          "1.1.1.1",
-          "1.0.0.1",
-          var.tailscale_auth_key != "" ? "100.100.100.100" : "",
-        ])
-      }
-    }
+    apiVersion = "v1alpha1"
+    kind       = "ResolverConfig"
+    nameservers = var.tailscale_auth_key != "" ? [
+      { address = "100.100.100.100" },
+    ] : [
+      { address = "1.1.1.1" },
+      { address = "1.0.0.1" },
+    ]
   })
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
