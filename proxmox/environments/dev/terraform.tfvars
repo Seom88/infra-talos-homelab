@@ -1,14 +1,16 @@
 env_name = "dev"
 endpoint = "https://node.lonk-mirfak.ts.net:8006"
-gateway = "192.168.2.1"
+gateway = "10.10.10.1"
 node_name = "pve"
 datastore_vm = "ssd"
 datastore_iso = "hdd"
 insecure = true
+network_bridge = "vnet1"
+cluster_vip      = "10.10.10.151"
 nodes_cp = [
   {
     hostname     = "talos-dev-cp1"
-    ip           = "192.168.2.231"
+    ip           = "10.10.10.152"
     cores        = 2
     memory       = 2 * 1024
     proxmox_node = "pve"
@@ -18,25 +20,23 @@ nodes_cp = [
 nodes_worker = [
   {
     hostname     = "talos-dev-w1"
-    ip           = "192.168.2.241"
+    ip           = "10.10.10.161"
     cores        = 2
     memory       = 2 * 1024
     proxmox_node = "pve"
   },
   {
     hostname     = "talos-dev-w2"
-    ip           = "192.168.2.242"
+    ip           = "10.10.10.162"
     cores        = 2
     memory       = 2 * 1024
     proxmox_node = "pve"
   },
   {
     hostname     = "talos-dev-w3"
-    ip           = "192.168.2.243"
+    ip           = "10.10.10.163"
     cores        = 2
     memory       = 2 * 1024
     proxmox_node = "pve"
   }
 ]
-
-cluster_vip      = "192.168.2.230"
