@@ -120,3 +120,9 @@ variable "tailscale_auth_key" {
   default     = ""
   sensitive   = true
 }
+
+variable "allow_scheduling_on_control_planes" {
+  description = "Allow workload pods to be scheduled on control plane nodes. Pass-through to talos-cluster module."
+  type        = bool
+  default     = false
+}

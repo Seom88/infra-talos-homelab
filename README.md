@@ -45,6 +45,7 @@ schematic.yaml                   # Image Factory extensions list
 - **Control plane** — single node for homelab, supports HA with 3+ nodes and L2 VIP
 - **Dedicated workers** — 3 workers with 100 GB disks; workloads stay off the control plane
 - **Tailscale integration** — optional MagicDNS for multi-network access with per-node kubeconfig contexts
+- **Longhorn-ready** — kubelet extraMounts for `/var/lib/longhorn` injected by default on all nodes; system extensions (`iscsi-tools`, `util-linux-tools`) bundled in the Image Factory schematic
 - **Custom Talos image** — Image Factory schematic bundles `iscsi-tools`, `qemu-guest-agent`, `tailscale`, `util-linux-tools`
 
 ## Requirements
@@ -89,6 +90,8 @@ All `just` commands run from the repo root. Set `tf_env=dev` to target the dev e
 | `talos_version` | Talos version | `1.13.3` |
 | `talos_image_factory_id` | Image Factory schematic ID | `077514...` |
 | `tailscale_auth_key` | Tailscale auth key (env var) | `""` (opt-in) |
+| `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
+| `extra_config_patches` | Additional Talos machine config patches (list of YAML) | `[]` |
 
 ## Access
 
@@ -121,3 +124,12 @@ Hands-on infrastructure-as-code with real hardware. Designed to be modular, repr
 | `cluster-schematic-id` | Read the active schematic ID from the running cluster |
 
 Set `tf_env=dev` for any task to target the dev environment (default: `prod`).
+
+---
+
+## 🔗 Related Projects
+
+| Repo | Role |
+|------|------|
+| `homelab-talos-infra`_(this repo)_ | Cluster provisioning — Terraform + Talos, machine config patches, system extensions |
+| [`secured-gitops-tailscale-homelab`](https://github.com/Seom88/secured-gitops-tailscale-homelab) | GitOps layer — ArgoCD, Vault, Tailscale, storage, platform apps |

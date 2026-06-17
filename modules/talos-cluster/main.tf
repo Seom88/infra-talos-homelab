@@ -13,6 +13,31 @@ locals {
   all_tailscale_names   = concat(local.tailscale_cp_names, local.tailscale_worker_names)
   cluster_endpoint      = "https://${var.cluster_vip}:6443"
   install_image         = "factory.talos.dev/installer/${var.talos_image_id}:v${var.talos_version}"
+  dns_patch = yamlencode({
+    machine = {
+      network = {
+        nameservers = compact([
+          "1.1.1.1",
+          "1.0.0.1",
+          var.tailscale_auth_key != "" ? "100.100.100.100" : "",
+        ])
+      }
+    }
+  })
+  longhorn_patch = var.longhorn_enabled ? yamlencode({
+    machine = {
+      kubelet = {
+        extraMounts = [
+          {
+            destination = "/var/lib/longhorn"
+            type        = "bind"
+            source      = "/var/lib/longhorn"
+            options     = ["bind", "rshared", "rw"]
+          }
+        ]
+      }
+    }
+  }) : ""
 }
 
 resource "talos_machine_secrets" "machine_secrets" {
@@ -35,7 +60,7 @@ data "talos_machine_configuration" "control_machine_config" {
   machine_secrets    = talos_machine_secrets.machine_secrets.machine_secrets
   kubernetes_version = "v${var.kubernetes_version}"
   talos_version      = "v${var.talos_version}"
-  config_patches = compact([
+  config_patches = compact(concat([
     yamlencode({
       machine = {
         certSANs = concat(local.tailscale_cp_names, var.cp_ips)
@@ -45,11 +70,12 @@ data "talos_machine_configuration" "control_machine_config" {
         }
       }
     }),
-    # yamlencode({
-    #   cluster = {
-    #     allowSchedulingOnControlPlanes = true
-    #   }
-    # }),
+    var.allow_scheduling_on_control_planes ? yamlencode({
+      cluster = {
+        allowSchedulingOnControlPlanes = true
+      }
+    }) : "",
+    local.dns_patch,
     yamlencode({
       apiVersion = "v1alpha1"
       kind       = "Layer2VIPConfig"
@@ -65,7 +91,8 @@ data "talos_machine_configuration" "control_machine_config" {
         "TS_ACCEPT_DNS=false"
       ]
     }) : "",
-  ])
+    local.longhorn_patch,
+  ], var.extra_config_patches))
 }
 
 resource "talos_machine_configuration_apply" "control_machine_config_apply" {
@@ -84,7 +111,7 @@ data "talos_machine_configuration" "worker_machine_config" {
   machine_secrets    = talos_machine_secrets.machine_secrets.machine_secrets
   kubernetes_version = "v${var.kubernetes_version}"
   talos_version      = "v${var.talos_version}"
-  config_patches = compact([
+  config_patches = compact(concat([
     yamlencode({
       machine = {
         certSANs = local.tailscale_worker_names
@@ -103,7 +130,9 @@ data "talos_machine_configuration" "worker_machine_config" {
         "TS_ACCEPT_DNS=false"
       ]
     }) : "",
-  ])
+    local.dns_patch,
+    local.longhorn_patch,
+  ], var.extra_config_patches))
 }
 
 resource "talos_machine_configuration_apply" "worker_machine_config_apply" {

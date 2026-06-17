@@ -101,15 +101,16 @@ locals {
 module "talos" {
   source = "../modules/talos-cluster"
 
-  cp_ips           = [for node in var.nodes_cp : node.ip]
-  cp_hostnames     = [for node in var.nodes_cp : node.hostname]
-  worker_ips       = [for node in var.nodes_worker : node.ip]
-  worker_hostnames = [for node in var.nodes_worker : node.hostname]
-  cluster_vip        = var.cluster_vip
-  talos_version      = var.talos_version
-  talos_image_id     = var.talos_image_factory_id
-  tailscale_domain   = local.tailscale_domain
-  tailscale_auth_key = var.tailscale_auth_key
+  cp_ips                             = [for node in var.nodes_cp : node.ip]
+  cp_hostnames                       = [for node in var.nodes_cp : node.hostname]
+  worker_ips                         = [for node in var.nodes_worker : node.ip]
+  worker_hostnames                   = [for node in var.nodes_worker : node.hostname]
+  cluster_vip                        = var.cluster_vip
+  talos_version                      = var.talos_version
+  talos_image_id                     = var.talos_image_factory_id
+  tailscale_domain                   = local.tailscale_domain
+  tailscale_auth_key                 = var.tailscale_auth_key
+  allow_scheduling_on_control_planes = var.allow_scheduling_on_control_planes
 
   depends_on = [
     proxmox_virtual_environment_vm.talos,
