@@ -7,6 +7,7 @@ datastore_iso = "hdd"
 insecure = true
 network_bridge = "vnet1"
 cluster_vip      = "10.10.10.171"
+disk_size_cp     = 20
 nodes_cp = [
   {
     hostname     = "talos-cp1"
@@ -16,7 +17,7 @@ nodes_cp = [
     proxmox_node = "pve"
   }
 ]
-
+disk_size_worker = 100
 nodes_worker = [
   {
     hostname     = "talos-w1"

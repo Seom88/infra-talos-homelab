@@ -95,6 +95,22 @@ variable "cluster_vip" {
 }
 
 # ============================================================
+# VM disk sizes — per node type
+# ============================================================
+
+variable "disk_size_cp" {
+  description = "Disk size in GB for control plane nodes"
+  type        = number
+  default     = 20
+}
+
+variable "disk_size_worker" {
+  description = "Disk size in GB for worker nodes"
+  type        = number
+  default     = 100
+}
+
+# ============================================================
 # Talos — shared between Proxmox image download and talos-cluster module
 # ============================================================
 

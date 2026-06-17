@@ -6,7 +6,8 @@ datastore_vm = "ssd"
 datastore_iso = "hdd"
 insecure = true
 network_bridge = "vnet1"
-cluster_vip                    = "10.10.10.151"
+cluster_vip                        = "10.10.10.151"
+disk_size_cp                       = 50
 allow_scheduling_on_control_planes = true
 nodes_cp = [
   {
@@ -31,7 +32,7 @@ nodes_cp = [
     proxmox_node = "pve"
   }
 ]
-
+# disk_size_worker = 100
 nodes_worker = [
   # {
   #   hostname     = "talos-dev-w1"

@@ -33,11 +33,11 @@ resource "proxmox_virtual_environment_vm" "talos" {
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
-    size         = 20
+    size         = var.disk_size_cp
   }
   cpu {
     cores = each.value.cores
-    type  = "x86-64-v2-AES"
+    type  = "host"
   }
   memory {
     dedicated = each.value.memory
@@ -76,11 +76,11 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
-    size         = 100
+    size         = var.disk_size_worker
   }
   cpu {
     cores = each.value.cores
-    type  = "x86-64-v2-AES"
+    type  = "host"
   }
   memory {
     dedicated = each.value.memory
