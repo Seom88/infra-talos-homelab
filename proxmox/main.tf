@@ -95,7 +95,6 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
 }
 
 locals {
-  cluster_vip      = "192.168.2.210"
   tailscale_domain = "lonk-mirfak.ts.net"
 }
 
@@ -106,7 +105,7 @@ module "talos" {
   cp_hostnames     = [for node in var.nodes_cp : node.hostname]
   worker_ips       = [for node in var.nodes_worker : node.ip]
   worker_hostnames = [for node in var.nodes_worker : node.hostname]
-  cluster_vip        = local.cluster_vip
+  cluster_vip        = var.cluster_vip
   talos_version      = var.talos_version
   talos_image_id     = var.talos_image_factory_id
   tailscale_domain   = local.tailscale_domain

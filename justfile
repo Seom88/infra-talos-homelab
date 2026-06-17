@@ -76,7 +76,7 @@ setup-cli:
     echo "✓ talosctl configured ({{ tf_env }})"
     # kubectl
     mkdir -p ~/.kube
-    KUBECONFIG=~/.kube/config:"$KC" \
+    KUBECONFIG="$KC":~/.kube/config \
       kubectl config view --flatten > /tmp/kube-merge
     mv /tmp/kube-merge ~/.kube/config
     echo "✓ kubectl configured ({{ tf_env }})"

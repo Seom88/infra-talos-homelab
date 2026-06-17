@@ -89,6 +89,11 @@ variable "nodes_worker" {
   }))
 }
 
+variable "cluster_vip" {
+  description = "Virtual IP for the cluster control plane (e.g. 10.1.3.10)"
+  type        = string
+}
+
 # ============================================================
 # Talos — shared between Proxmox image download and talos-cluster module
 # ============================================================
