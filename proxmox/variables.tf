@@ -114,12 +114,6 @@ variable "disk_size_worker" {
 # Talos — shared between Proxmox image download and talos-cluster module
 # ============================================================
 
-variable "talos_image_factory_id" {
-  description = "Schematic ID from the Talos Image Factory for the custom image to use"
-  type        = string
-  default     = "077514df2c1b6436460bc60faabc976687b16193b8a1290fda4366c69024fec2"
-}
-
 variable "talos_version" {
   description = "Talos Linux version to install on the nodes (e.g. 1.13.3)"
   type        = string

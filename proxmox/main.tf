@@ -1,8 +1,14 @@
+# ── Talos Schematic ──────────────────────────────
+resource "talos_image_factory_schematic" "this" {
+  schematic = file("${path.module}/../schematic-${var.env_name}.yaml")
+}
+
+# ── Proxmox Image ────────────────────────────────
 resource "proxmox_download_file" "talos_image" {
   content_type            = "iso"
   datastore_id            = var.datastore_iso
   node_name               = var.node_name
-  url                     = "https://factory.talos.dev/image/${var.talos_image_factory_id}/v${var.talos_version}/nocloud-amd64.raw.xz"
+  url                     = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64.raw.xz"
   decompression_algorithm = "zst"
   file_name               = "talos-${var.env_name}-v${var.talos_version}-nocloud-amd64.img"
   overwrite               = false
@@ -95,7 +101,9 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
 }
 
 locals {
-  tailscale_domain = "lonk-mirfak.ts.net"
+  # Solo prod usa Tailscale (el schematic lo incluye como extensión).
+  # Dev no tiene tailscale ni en el schematic ni en la configuración.
+  tailscale_domain = var.env_name == "prod" ? "lonk-mirfak.ts.net" : ""
 }
 
 module "talos" {
@@ -107,9 +115,9 @@ module "talos" {
   worker_hostnames                   = [for node in var.nodes_worker : node.hostname]
   cluster_vip                        = var.cluster_vip
   talos_version                      = var.talos_version
-  talos_image_id                     = var.talos_image_factory_id
+  talos_image_id                     = talos_image_factory_schematic.this.id
   tailscale_domain                   = local.tailscale_domain
-  tailscale_auth_key                 = var.tailscale_auth_key
+  tailscale_auth_key                 = var.env_name == "prod" ? var.tailscale_auth_key : ""
   allow_scheduling_on_control_planes = var.allow_scheduling_on_control_planes
 
   depends_on = [

@@ -101,9 +101,9 @@ status:
     echo "── Nodes ──"
     talosctl --talosconfig "$TC" get members -n "$FIRST"
 
-# Compute schematic ID via Talos Image Factory API
-get-schematic-id:
-    curl -sf -X POST --data-binary @schematic.yaml \
+# Compute schematic ID via Talos Image Factory API for a given env
+get-schematic-id env="prod":
+    curl -sf -X POST --data-binary @schematic-{{ env }}.yaml \
       https://factory.talos.dev/schematics | jq -r '.id'
 
 # Read schematic ID from the running cluster
