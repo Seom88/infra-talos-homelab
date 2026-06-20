@@ -2,6 +2,11 @@
 # Proxmox Provider — credentials and endpoint
 # ============================================================
 
+variable "env_name" {
+  description = "Environment name for resource naming (e.g. prod, dev). Each env gets its own download + VMs so they coexist on the same PVE node."
+  type        = string
+}
+
 variable "username" {
   description = "Proxmox API user (e.g. root@pam or an API token name)"
   type        = string
@@ -84,15 +89,30 @@ variable "nodes_worker" {
   }))
 }
 
+variable "cluster_vip" {
+  description = "Virtual IP for the cluster control plane (e.g. 10.1.3.10)"
+  type        = string
+}
+
+# ============================================================
+# VM disk sizes — per node type
+# ============================================================
+
+variable "disk_size_cp" {
+  description = "Disk size in GB for control plane nodes"
+  type        = number
+  default     = 20
+}
+
+variable "disk_size_worker" {
+  description = "Disk size in GB for worker nodes"
+  type        = number
+  default     = 100
+}
+
 # ============================================================
 # Talos — shared between Proxmox image download and talos-cluster module
 # ============================================================
-
-variable "talos_image_factory_id" {
-  description = "Schematic ID from the Talos Image Factory for the custom image to use"
-  type        = string
-  default     = "077514df2c1b6436460bc60faabc976687b16193b8a1290fda4366c69024fec2"
-}
 
 variable "talos_version" {
   description = "Talos Linux version to install on the nodes (e.g. 1.13.3)"
@@ -109,4 +129,10 @@ variable "tailscale_auth_key" {
   type        = string
   default     = ""
   sensitive   = true
+}
+
+variable "allow_scheduling_on_control_planes" {
+  description = "Allow workload pods to be scheduled on control plane nodes. Pass-through to talos-cluster module."
+  type        = bool
+  default     = false
 }

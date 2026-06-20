@@ -57,3 +57,21 @@ variable "tailscale_auth_key" {
   default     = ""
   sensitive   = true
 }
+
+variable "allow_scheduling_on_control_planes" {
+  description = "Allow workload pods to be scheduled on control plane nodes"
+  type        = bool
+  default     = false
+}
+
+variable "longhorn_enabled" {
+  description = "Enable Longhorn support: inject kubelet extraMounts for /var/lib/longhorn on all nodes"
+  type        = bool
+  default     = true
+}
+
+variable "extra_config_patches" {
+  description = "Additional Talos machine configuration patches (raw YAML strings) applied to all nodes (control plane + workers)"
+  type        = list(string)
+  default     = []
+}
