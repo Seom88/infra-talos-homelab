@@ -2,13 +2,13 @@
 # Libvirt / Talos Homelab — tfvars
 # ============================================================
 
-cluster_vip = "192.168.122.210"
+cluster_vip = "10.0.1.10"
 
 nodes_cp = [
   {
     hostname = "talos-cp1"
     mac      = "52:54:00:aa:00:01"
-    ip       = "192.168.122.211"
+    ip       = "10.0.1.11"
     cores    = 4
     memory   = 4 * 1024
   },
@@ -18,7 +18,7 @@ nodes_worker = [
   {
     hostname  = "talos-w1"
     mac       = "52:54:00:aa:00:02"
-    ip        = "192.168.122.221"
+    ip        = "10.0.1.21"
     cores     = 4
     memory    = 4 * 1024
     disk_size = 100
@@ -26,7 +26,7 @@ nodes_worker = [
   {
     hostname  = "talos-w2"
     mac       = "52:54:00:aa:00:03"
-    ip        = "192.168.122.222"
+    ip        = "10.0.1.22"
     cores     = 4
     memory    = 4 * 1024
     disk_size = 100
@@ -34,7 +34,7 @@ nodes_worker = [
   {
     hostname  = "talos-w3"
     mac       = "52:54:00:aa:00:04"
-    ip        = "192.168.122.223"
+    ip        = "10.0.1.23"
     cores     = 4
     memory    = 4 * 1024
     disk_size = 100

@@ -1,4 +1,46 @@
 # ============================================================
+# Libvirt Network — NAT with DHCP reservations for Talos nodes
+# ============================================================
+
+resource "libvirt_network" "talos" {
+  name      = "talos-net"
+  autostart = true
+
+  forward = { mode = "nat" }
+
+  bridge = {
+    name = "virbr-talos"
+    stp  = "on"
+  }
+
+  ips = [
+    {
+      address = "10.0.1.1"
+      netmask = "255.255.255.0"
+      dhcp = {
+        hosts = [
+          for n in concat(var.nodes_cp, var.nodes_worker) : {
+            mac  = n.mac
+            name = n.hostname
+            ip   = n.ip
+          }
+        ]
+      }
+    }
+  ]
+
+  dns = {
+    enable = "yes"
+    host = [
+      for n in concat(var.nodes_cp, var.nodes_worker) : {
+        ip = n.ip
+        hostnames = [{ hostname = n.hostname }]
+      }
+    ]
+  }
+}
+
+# ============================================================
 # Talos Schematic
 # ============================================================
 
@@ -7,7 +49,15 @@ resource "talos_image_factory_schematic" "this" {
 }
 
 # ============================================================
-# Locals
+# Talos Machine Secrets (shared with module)
+# ============================================================
+
+resource "talos_machine_secrets" "this" {
+  talos_version = "v${var.talos_version}"
+}
+
+# ============================================================
+# Locals — libvirt-specific + Talos patches
 # ============================================================
 
 locals {
@@ -30,18 +80,21 @@ locals {
     } },
   )
 
-  cp_ips           = [for n in var.nodes_cp : n.ip]
-  worker_ips       = [for n in var.nodes_worker : n.ip]
-  all_ips          = concat(local.cp_ips, local.worker_ips)
+  cp_ips  = [for n in var.nodes_cp : n.ip]
+  netmask = cidrnetmask("${local.cp_ips[0]}/${var.network_prefix}")
+
   cluster_endpoint = "https://${var.cluster_vip}:6443"
-  netmask          = cidrnetmask("${local.cp_ips[0]}/${var.network_prefix}")
+  install_image    = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
+
+  tailscale_cp_names     = var.tailscale_domain != "" ? [for n in var.nodes_cp : "${n.hostname}.${var.tailscale_domain}"] : []
+  tailscale_worker_names = var.tailscale_domain != "" ? [for n in var.nodes_worker : "${n.hostname}.${var.tailscale_domain}"] : []
 
   dns_patch = yamlencode({
     apiVersion = "v1alpha1"
     kind       = "ResolverConfig"
     nameservers = var.tailscale_auth_key != "" ? [
       { address = "100.100.100.100" },
-    ] : [
+      ] : [
       { address = "1.1.1.1" },
       { address = "1.0.0.1" },
     ]
@@ -74,22 +127,7 @@ locals {
 }
 
 # ============================================================
-# Talos Machine Secrets
-# ============================================================
-
-resource "talos_machine_secrets" "this" {
-  talos_version = "v${var.talos_version}"
-}
-
-data "talos_client_configuration" "this" {
-  cluster_name         = var.cluster_name
-  client_configuration = talos_machine_secrets.this.client_configuration
-  endpoints            = local.cp_ips
-  nodes                = local.all_ips
-}
-
-# ============================================================
-# Control Plane machine config
+# Talos Machine Configuration — for cloud-init user-data
 # ============================================================
 
 data "talos_machine_configuration" "cp" {
@@ -104,11 +142,11 @@ data "talos_machine_configuration" "cp" {
       machine = {
         certSANs = concat(
           local.cp_ips,
-          var.tailscale_domain != "" ? [for n in var.nodes_cp : "${n.hostname}.${var.tailscale_domain}"] : []
+          local.tailscale_cp_names,
         )
         install = {
           disk  = "/dev/vda"
-          image = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
+          image = local.install_image
         }
       }
     }),
@@ -129,10 +167,6 @@ data "talos_machine_configuration" "cp" {
   ], var.extra_config_patches))
 }
 
-# ============================================================
-# Worker machine config
-# ============================================================
-
 data "talos_machine_configuration" "worker" {
   cluster_name       = var.cluster_name
   cluster_endpoint   = local.cluster_endpoint
@@ -143,10 +177,10 @@ data "talos_machine_configuration" "worker" {
   config_patches = compact(concat([
     yamlencode({
       machine = {
-        certSANs = var.tailscale_domain != "" ? [for n in var.nodes_worker : "${n.hostname}.${var.tailscale_domain}"] : []
+        certSANs = local.tailscale_worker_names
         install = {
           disk  = "/dev/vda"
-          image = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
+          image = local.install_image
         }
       }
     }),
@@ -206,79 +240,45 @@ resource "libvirt_volume" "boot" {
 }
 
 # ============================================================
-# Cidata ISO — per node: meta-data, network-config, user-data
+# Cloud-init — network-config + Talos machine config (user-data)
 # ============================================================
 
-resource "terraform_data" "cidata_iso" {
+resource "libvirt_cloudinit_disk" "cloud_init" {
   for_each = local.nodes_all
+  name     = "${each.key}-cloudinit"
 
-  triggers_replace = {
-    network       = "${each.value.ip}/${each.value.mac}/${var.gateway}/${var.network_prefix}"
-    role          = each.value.role
-    talos_version = var.talos_version
-  }
+  meta_data = yamlencode({
+    instance-id    = each.key
+    local-hostname = each.key
+  })
 
-  provisioner "local-exec" {
-    command = <<-EOT
-      set -euo pipefail
-      IDIR="/tmp/cidata-${each.key}"
-      mkdir -p "$${IDIR}"
+  network_config = yamlencode({
+    version = 1
+    config = [{
+      type        = "physical"
+      name        = "eth0"
+      mac_address = each.value.mac
+      subnets = [{
+        type    = "static"
+        address = "${each.value.ip}/${local.netmask}"
+        gateway = var.gateway
+      }]
+    }]
+  })
 
-      cat > "$${IDIR}/meta-data" << 'METAEOF'
-instance-id: "${each.key}"
-local-hostname: ${each.key}
-METAEOF
-
-      cat > "$${IDIR}/network-config" << NETEOF
-version: 1
-config:
-  - type: physical
-    name: eth0
-    mac_address: "${each.value.mac}"
-    subnets:
-      - type: static
-        address: "${each.value.ip}"
-        netmask: "${local.netmask}"
-        gateway: "${var.gateway}"
-NETEOF
-
-      printf '%s\n' "$USER_DATA" > "$${IDIR}/user-data"
-
-      rm -f /tmp/cidata-${each.key}.iso
-      genisoimage -quiet -output /tmp/cidata-${each.key}.iso \
-        -V cidata -r -J \
-        "$${IDIR}/meta-data" \
-        "$${IDIR}/network-config" \
-        "$${IDIR}/user-data"
-    EOT
-
-    environment = {
-      USER_DATA = each.value.role == "cp" ? data.talos_machine_configuration.cp.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
-    }
-  }
-
-  depends_on = [
-    data.talos_machine_configuration.cp,
-    data.talos_machine_configuration.worker,
-  ]
+  user_data = each.value.role == "cp" ? data.talos_machine_configuration.cp.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
 }
 
-# ============================================================
-# Cidata ISO volumes
-# ============================================================
-
-resource "libvirt_volume" "cidata" {
+resource "libvirt_volume" "cloud_init" {
   for_each = local.nodes_all
-  name     = "${each.key}-cidata.iso"
+  name     = "${each.key}-cloudinit.iso"
   pool     = "default"
 
   create = {
     content = {
-      url = "file:///tmp/cidata-${each.key}.iso"
+      url = libvirt_cloudinit_disk.cloud_init[each.key].path
     }
   }
-
-  depends_on = [terraform_data.cidata_iso]
 }
 
 # ============================================================
@@ -342,8 +342,8 @@ resource "libvirt_domain" "node" {
         readonly = true
         source = {
           volume = {
-            pool   = libvirt_volume.cidata[each.key].pool
-            volume = libvirt_volume.cidata[each.key].name
+            pool   = libvirt_volume.cloud_init[each.key].pool
+            volume = libvirt_volume.cloud_init[each.key].name
           }
         }
         target = {
@@ -368,7 +368,7 @@ resource "libvirt_domain" "node" {
         model = { type = "virtio" }
         source = {
           network = {
-            network = "default"
+            network = libvirt_network.talos.name
           }
         }
       },
@@ -377,7 +377,7 @@ resource "libvirt_domain" "node" {
 
   depends_on = [
     libvirt_volume.boot,
-    libvirt_volume.cidata,
+    libvirt_volume.cloud_init,
   ]
 }
 
@@ -405,28 +405,30 @@ resource "terraform_data" "wait_for_cp" {
 }
 
 # ============================================================
-# Bootstrap etcd
+# Talos Cluster — apply, bootstrap, kubeconfig
 # ============================================================
 
-resource "talos_machine_bootstrap" "this" {
+module "talos_cluster" {
+  source = "../modules/talos-cluster"
+
+  machine_secrets                    = talos_machine_secrets.this.machine_secrets
+  client_configuration               = talos_machine_secrets.this.client_configuration
+  cp_ips                             = local.cp_ips
+  cp_hostnames                       = [for n in var.nodes_cp : n.hostname]
+  worker_ips                         = [for n in var.nodes_worker : n.ip]
+  worker_hostnames                   = [for n in var.nodes_worker : n.hostname]
+  cluster_name                       = var.cluster_name
+  cluster_vip                        = var.cluster_vip
+  talos_version                      = var.talos_version
+  kubernetes_version                 = var.kubernetes_version
+  talos_image_id                     = talos_image_factory_schematic.this.id
+  tailscale_domain                   = var.tailscale_domain
+  tailscale_auth_key                 = var.tailscale_auth_key
+  allow_scheduling_on_control_planes = var.allow_scheduling_on_control_planes
+  longhorn_enabled                   = var.longhorn_enabled
+  extra_config_patches               = var.extra_config_patches
+
   depends_on = [
     terraform_data.wait_for_cp,
   ]
-
-  client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = local.cp_ips[0]
-  endpoint             = local.cp_ips[0]
-}
-
-# ============================================================
-# Kubeconfig
-# ============================================================
-
-resource "talos_cluster_kubeconfig" "this" {
-  depends_on = [
-    talos_machine_bootstrap.this,
-  ]
-
-  client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = local.cp_ips[0]
 }

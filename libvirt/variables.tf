@@ -41,7 +41,7 @@ variable "nodes_worker" {
 variable "gateway" {
   description = "Default gateway IPv4"
   type        = string
-  default     = "192.168.122.1"
+  default     = "10.0.1.1"
 }
 
 variable "network_prefix" {
@@ -51,7 +51,27 @@ variable "network_prefix" {
 }
 
 # ============================================================
-# Cluster
+# Environment
+# ============================================================
+
+variable "env_name" {
+  description = "Environment name. Selects which schematic YAML to use (e.g. schematic-dev.yaml or schematic-prod.yaml)."
+  type        = string
+  default     = "dev"
+}
+
+# ============================================================
+# Talos image cache (libvirt-specific)
+# ============================================================
+
+variable "talos_image_cache_dir" {
+  description = "Local directory for cached Talos raw images. Must be readable by libvirtd."
+  type        = string
+  default     = "/tmp/talos-images"
+}
+
+# ============================================================
+# Pass-through — forwarded to talos-cluster module
 # ============================================================
 
 variable "cluster_name" {
@@ -66,20 +86,6 @@ variable "cluster_vip" {
   default     = "192.168.122.210"
 }
 
-# ============================================================
-# Environment
-# ============================================================
-
-variable "env_name" {
-  description = "Environment name. Selects which schematic YAML to use (e.g. schematic-dev.yaml or schematic-prod.yaml)."
-  type        = string
-  default     = "dev"
-}
-
-# ============================================================
-# Talos versions
-# ============================================================
-
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.13.3)"
   type        = string
@@ -91,10 +97,6 @@ variable "kubernetes_version" {
   type        = string
   default     = "1.36.1"
 }
-
-# ============================================================
-# Tailscale
-# ============================================================
 
 variable "tailscale_auth_key" {
   description = "Tailscale pre-authentication key. Omit or empty to skip."
@@ -108,10 +110,6 @@ variable "tailscale_domain" {
   type        = string
   default     = "lonk-mirfak.ts.net"
 }
-
-# ============================================================
-# Scheduling & extras
-# ============================================================
 
 variable "allow_scheduling_on_control_planes" {
   description = "Allow workloads on control plane nodes"
@@ -129,14 +127,4 @@ variable "extra_config_patches" {
   description = "Additional Talos machine configuration patches (raw YAML strings)"
   type        = list(string)
   default     = []
-}
-
-# ============================================================
-# Libvirt paths
-# ============================================================
-
-variable "talos_image_cache_dir" {
-  description = "Local directory for cached Talos raw images. Must be readable by libvirtd."
-  type        = string
-  default     = "/tmp/talos-images"
 }
