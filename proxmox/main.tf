@@ -106,9 +106,16 @@ locals {
   tailscale_domain = var.env_name == "prod" ? "lonk-mirfak.ts.net" : ""
 }
 
+# ── Talos Machine Secrets ────────────────────────
+resource "talos_machine_secrets" "this" {
+  talos_version = "v${var.talos_version}"
+}
+
 module "talos" {
   source = "../modules/talos-cluster"
 
+  machine_secrets                    = talos_machine_secrets.this.machine_secrets
+  client_configuration               = talos_machine_secrets.this.client_configuration
   cp_ips                             = [for node in var.nodes_cp : node.ip]
   cp_hostnames                       = [for node in var.nodes_cp : node.hostname]
   worker_ips                         = [for node in var.nodes_worker : node.ip]

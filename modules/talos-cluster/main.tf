@@ -8,17 +8,17 @@ terraform {
 }
 
 locals {
-  tailscale_cp_names    = var.tailscale_domain != "" ? [for hostname in var.cp_hostnames : "${hostname}.${var.tailscale_domain}"] : []
+  tailscale_cp_names     = var.tailscale_domain != "" ? [for hostname in var.cp_hostnames : "${hostname}.${var.tailscale_domain}"] : []
   tailscale_worker_names = var.tailscale_domain != "" ? [for hostname in var.worker_hostnames : "${hostname}.${var.tailscale_domain}"] : []
-  all_tailscale_names   = concat(local.tailscale_cp_names, local.tailscale_worker_names)
-  cluster_endpoint      = "https://${var.cluster_vip}:6443"
-  install_image         = "factory.talos.dev/installer/${var.talos_image_id}:v${var.talos_version}"
+  all_tailscale_names    = concat(local.tailscale_cp_names, local.tailscale_worker_names)
+  cluster_endpoint       = "https://${var.cluster_vip}:6443"
+  install_image          = "factory.talos.dev/installer/${var.talos_image_id}:v${var.talos_version}"
   dns_patch = yamlencode({
     apiVersion = "v1alpha1"
     kind       = "ResolverConfig"
     nameservers = var.tailscale_auth_key != "" ? [
       { address = "100.100.100.100" },
-    ] : [
+      ] : [
       { address = "1.1.1.1" },
       { address = "1.0.0.1" },
     ]
@@ -39,13 +39,9 @@ locals {
   }) : ""
 }
 
-resource "talos_machine_secrets" "machine_secrets" {
-  talos_version = "v${var.talos_version}"
-}
-
 data "talos_client_configuration" "client_config" {
   cluster_name         = var.cluster_name
-  client_configuration = talos_machine_secrets.machine_secrets.client_configuration
+  client_configuration = var.client_configuration
   endpoints            = var.cp_ips
   nodes                = local.all_tailscale_names
 }
@@ -56,7 +52,7 @@ data "talos_machine_configuration" "control_machine_config" {
   cluster_name       = var.cluster_name
   cluster_endpoint   = local.cluster_endpoint
   machine_type       = "controlplane"
-  machine_secrets    = talos_machine_secrets.machine_secrets.machine_secrets
+  machine_secrets    = var.machine_secrets
   kubernetes_version = "v${var.kubernetes_version}"
   talos_version      = "v${var.talos_version}"
   config_patches = compact(concat([
@@ -96,7 +92,7 @@ data "talos_machine_configuration" "control_machine_config" {
 
 resource "talos_machine_configuration_apply" "control_machine_config_apply" {
   for_each                    = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
-  client_configuration        = talos_machine_secrets.machine_secrets.client_configuration
+  client_configuration        = var.client_configuration
   machine_configuration_input = data.talos_machine_configuration.control_machine_config.machine_configuration
   node                        = each.value
 }
@@ -107,7 +103,7 @@ data "talos_machine_configuration" "worker_machine_config" {
   cluster_name       = var.cluster_name
   cluster_endpoint   = local.cluster_endpoint
   machine_type       = "worker"
-  machine_secrets    = talos_machine_secrets.machine_secrets.machine_secrets
+  machine_secrets    = var.machine_secrets
   kubernetes_version = "v${var.kubernetes_version}"
   talos_version      = "v${var.talos_version}"
   config_patches = compact(concat([
@@ -136,7 +132,7 @@ data "talos_machine_configuration" "worker_machine_config" {
 
 resource "talos_machine_configuration_apply" "worker_machine_config_apply" {
   for_each                    = { for i, hostname in var.worker_hostnames : hostname => var.worker_ips[i] }
-  client_configuration        = talos_machine_secrets.machine_secrets.client_configuration
+  client_configuration        = var.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker_machine_config.machine_configuration
   node                        = each.value
 }
@@ -145,13 +141,13 @@ resource "talos_machine_configuration_apply" "worker_machine_config_apply" {
 
 resource "talos_machine_bootstrap" "bootstrap" {
   depends_on           = [talos_machine_configuration_apply.control_machine_config_apply]
-  client_configuration = talos_machine_secrets.machine_secrets.client_configuration
+  client_configuration = var.client_configuration
   node                 = var.cp_ips[0]
   endpoint             = var.cp_ips[0]
 }
 
 resource "talos_cluster_kubeconfig" "kubeconfig" {
   depends_on           = [talos_machine_bootstrap.bootstrap]
-  client_configuration = talos_machine_secrets.machine_secrets.client_configuration
+  client_configuration = var.client_configuration
   node                 = var.cp_ips[0]
 }

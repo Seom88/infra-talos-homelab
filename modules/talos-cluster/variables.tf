@@ -1,3 +1,13 @@
+variable "machine_secrets" {
+  description = "Talos machine secrets (from talos_machine_secrets resource)"
+  type        = any
+}
+
+variable "client_configuration" {
+  description = "Talos client configuration (from talos_machine_secrets resource)"
+  type        = any
+}
+
 variable "cp_ips" {
   description = "IP addresses of all control plane nodes"
   type        = list(string)

@@ -67,11 +67,11 @@ variable "nodes_cp" {
     Each node requires: hostname, ip, cores, memory, proxmox_node.
   EOF
   type = list(object({
-    hostname      = string
-    ip            = string
-    cores         = number
-    memory        = number
-    proxmox_node  = string
+    hostname     = string
+    ip           = string
+    cores        = number
+    memory       = number
+    proxmox_node = string
   }))
 }
 
@@ -81,11 +81,11 @@ variable "nodes_worker" {
     Each node requires: hostname, ip, cores, memory, proxmox_node.
   EOF
   type = list(object({
-    hostname      = string
-    ip            = string
-    cores         = number
-    memory        = number
-    proxmox_node  = string
+    hostname     = string
+    ip           = string
+    cores        = number
+    memory       = number
+    proxmox_node = string
   }))
 }
 
