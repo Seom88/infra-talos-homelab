@@ -1,11 +1,20 @@
 # ============================================================
-# Locals — merge all nodes into one map for for_each
+# Talos Schematic
+# ============================================================
+
+resource "talos_image_factory_schematic" "this" {
+  schematic = file("${path.module}/../schematic-${var.env_name}.yaml")
+}
+
+# ============================================================
+# Locals
 # ============================================================
 
 locals {
   nodes_all = merge(
     { for n in var.nodes_cp : n.hostname => {
       role      = "cp"
+      mac       = n.mac
       ip        = n.ip
       cores     = n.cores
       memory    = n.memory
@@ -13,6 +22,7 @@ locals {
     } },
     { for n in var.nodes_worker : n.hostname => {
       role      = "worker"
+      mac       = n.mac
       ip        = n.ip
       cores     = n.cores
       memory    = n.memory
@@ -21,111 +31,258 @@ locals {
   )
 
   cp_ips           = [for n in var.nodes_cp : n.ip]
-  cp_hostnames     = [for n in var.nodes_cp : n.hostname]
   worker_ips       = [for n in var.nodes_worker : n.ip]
-  worker_hostnames = [for n in var.nodes_worker : n.hostname]
+  all_ips          = concat(local.cp_ips, local.worker_ips)
+  cluster_endpoint = "https://${var.cluster_vip}:6443"
+  netmask          = cidrnetmask("${local.cp_ips[0]}/${var.network_prefix}")
+
+  dns_patch = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "ResolverConfig"
+    nameservers = var.tailscale_auth_key != "" ? [
+      { address = "100.100.100.100" },
+    ] : [
+      { address = "1.1.1.1" },
+      { address = "1.0.0.1" },
+    ]
+  })
+
+  longhorn_patch = var.longhorn_enabled ? yamlencode({
+    machine = {
+      kubelet = {
+        extraMounts = [
+          {
+            destination = "/var/lib/longhorn"
+            type        = "bind"
+            source      = "/var/lib/longhorn"
+            options     = ["bind", "rshared", "rw"]
+          }
+        ]
+      }
+    }
+  }) : ""
+
+  tailscale_patch = var.tailscale_auth_key != "" ? yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "ExtensionServiceConfig"
+    name       = "tailscale"
+    environment = [
+      "TS_AUTHKEY=${var.tailscale_auth_key}",
+      "TS_ACCEPT_DNS=false"
+    ]
+  }) : ""
 }
 
 # ============================================================
-# 1. Image cache — download Talos qcow2 once
+# Talos Machine Secrets
 # ============================================================
 
-resource "terraform_data" "talos_image" {
+resource "talos_machine_secrets" "this" {
+  talos_version = "v${var.talos_version}"
+}
+
+data "talos_client_configuration" "this" {
+  cluster_name         = var.cluster_name
+  client_configuration = talos_machine_secrets.this.client_configuration
+  endpoints            = local.cp_ips
+  nodes                = local.all_ips
+}
+
+# ============================================================
+# Control Plane machine config
+# ============================================================
+
+data "talos_machine_configuration" "cp" {
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = local.cluster_endpoint
+  machine_type       = "controlplane"
+  machine_secrets    = talos_machine_secrets.this.machine_secrets
+  kubernetes_version = "v${var.kubernetes_version}"
+  talos_version      = "v${var.talos_version}"
+  config_patches = compact(concat([
+    yamlencode({
+      machine = {
+        certSANs = concat(
+          local.cp_ips,
+          var.tailscale_domain != "" ? [for n in var.nodes_cp : "${n.hostname}.${var.tailscale_domain}"] : []
+        )
+        install = {
+          disk  = "/dev/vda"
+          image = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
+        }
+      }
+    }),
+    var.allow_scheduling_on_control_planes ? yamlencode({
+      cluster = {
+        allowSchedulingOnControlPlanes = true
+      }
+    }) : "",
+    local.dns_patch,
+    yamlencode({
+      apiVersion = "v1alpha1"
+      kind       = "Layer2VIPConfig"
+      name       = var.cluster_vip
+      link       = "eth0"
+    }),
+    local.tailscale_patch,
+    local.longhorn_patch,
+  ], var.extra_config_patches))
+}
+
+# ============================================================
+# Worker machine config
+# ============================================================
+
+data "talos_machine_configuration" "worker" {
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = local.cluster_endpoint
+  machine_type       = "worker"
+  machine_secrets    = talos_machine_secrets.this.machine_secrets
+  kubernetes_version = "v${var.kubernetes_version}"
+  talos_version      = "v${var.talos_version}"
+  config_patches = compact(concat([
+    yamlencode({
+      machine = {
+        certSANs = var.tailscale_domain != "" ? [for n in var.nodes_worker : "${n.hostname}.${var.tailscale_domain}"] : []
+        install = {
+          disk  = "/dev/vda"
+          image = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
+        }
+      }
+    }),
+    local.dns_patch,
+    local.tailscale_patch,
+    local.longhorn_patch,
+  ], var.extra_config_patches))
+}
+
+# ============================================================
+# Nocloud disk image — download + decompress
+# ============================================================
+
+resource "terraform_data" "talos_nocloud_image" {
   triggers_replace = var.talos_version
 
   provisioner "local-exec" {
     command = <<-EOT
       set -euo pipefail
-      IMAGE_DIR="${var.talos_image_cache_dir}"
-      QCOW2_PATH="$${IMAGE_DIR}/talos-v${var.talos_version}.qcow2"
-      QCOW2_XZ_PATH="$${QCOW2_PATH}.xz"
-      mkdir -p "$${IMAGE_DIR}"
-      if [ -f "$${QCOW2_PATH}" ]; then
-        echo "qcow2 image already exists: $${QCOW2_PATH}"
+      CACHE_DIR="${var.talos_image_cache_dir}"
+      RAW_PATH="$${CACHE_DIR}/talos-nocloud-v${var.talos_version}.raw"
+      mkdir -p "$${CACHE_DIR}"
+
+      if [ -f "$${RAW_PATH}" ]; then
+        echo "Image already cached: $${RAW_PATH}"
         exit 0
       fi
-      echo "Downloading Talos qcow2 image v${var.talos_version}..."
-      curl -fsSL -o "$${QCOW2_XZ_PATH}" \
-        "https://factory.talos.dev/image/${var.talos_image_factory_id}/v${var.talos_version}/nocloud-amd64.qcow2.xz"
-      echo "Decompressing..."
-      xz -d -f "$${QCOW2_XZ_PATH}"
-      echo "Done: $${QCOW2_PATH}"
+
+      curl -fsSL "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64.raw.xz" \
+        | xz -d > "$${RAW_PATH}"
     EOT
   }
 }
 
 # ============================================================
-# 2. Root disks per node — full copy from cached qcow2
-#    (backing_store not supported by the default pool)
+# Boot volumes — one per node from the nocloud raw image
 # ============================================================
 
-resource "libvirt_volume" "node_root" {
+resource "libvirt_volume" "boot" {
   for_each = local.nodes_all
-  name     = "${each.key}.qcow2"
+  name     = "${each.key}.raw"
   pool     = "default"
-  create = {
-    content = {
-      url = "file://${var.talos_image_cache_dir}/talos-v${var.talos_version}.qcow2"
+
+  target = {
+    format = {
+      type = "raw"
     }
   }
-  depends_on = [terraform_data.talos_image]
-}
 
-# ============================================================
-# 3. Cloud-init per node — network config + minimal user_data
-#    Talos NoCloud reads network-config from this ISO
-# ============================================================
-
-resource "libvirt_cloudinit_disk" "node" {
-  for_each = local.nodes_all
-  name     = "${each.key}-init"
-
-  meta_data = yamlencode({
-    instance-id    = each.key
-    local-hostname = each.key
-  })
-
-  # v1 format — matches Talos nocloud docs example
-  network_config = yamlencode({
-    version = 1
-    config = [
-      {
-        type = "physical"
-        name = "eth0"
-        subnets = [
-          {
-            type    = "static"
-            address = each.value.ip
-            netmask = "255.255.255.0"
-            gateway = var.gateway
-          }
-        ]
-      }
-    ]
-  })
-
-  user_data = "# Talos machine config applied by talos-cluster module\n"
-}
-
-resource "libvirt_volume" "node_cloudinit" {
-  for_each = local.nodes_all
-  name     = "${each.key}-init.iso"
-  pool     = "default"
   create = {
     content = {
-      url = libvirt_cloudinit_disk.node[each.key].path
+      url = "file://${var.talos_image_cache_dir}/talos-nocloud-v${var.talos_version}.raw"
     }
   }
-  lifecycle {
-    ignore_changes = [target]
-  }
+
+  depends_on = [terraform_data.talos_nocloud_image]
 }
 
 # ============================================================
-# 4. VM domains per node
-#    UEFI firmware — required to pass talos.platform=nocloud
-#    via <os cmdline> (SeaBIOS doesn't support -append without
-#    -kernel). Mirrors rgl/terraform-libvirt-talos approach.
+# Cidata ISO — per node: meta-data, network-config, user-data
+# ============================================================
+
+resource "terraform_data" "cidata_iso" {
+  for_each = local.nodes_all
+
+  triggers_replace = {
+    network       = "${each.value.ip}/${each.value.mac}/${var.gateway}/${var.network_prefix}"
+    role          = each.value.role
+    talos_version = var.talos_version
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -euo pipefail
+      IDIR="/tmp/cidata-${each.key}"
+      mkdir -p "$${IDIR}"
+
+      cat > "$${IDIR}/meta-data" << 'METAEOF'
+instance-id: "${each.key}"
+local-hostname: ${each.key}
+METAEOF
+
+      cat > "$${IDIR}/network-config" << NETEOF
+version: 1
+config:
+  - type: physical
+    name: eth0
+    mac_address: "${each.value.mac}"
+    subnets:
+      - type: static
+        address: "${each.value.ip}"
+        netmask: "${local.netmask}"
+        gateway: "${var.gateway}"
+NETEOF
+
+      printf '%s\n' "$USER_DATA" > "$${IDIR}/user-data"
+
+      rm -f /tmp/cidata-${each.key}.iso
+      genisoimage -quiet -output /tmp/cidata-${each.key}.iso \
+        -V cidata -r -J \
+        "$${IDIR}/meta-data" \
+        "$${IDIR}/network-config" \
+        "$${IDIR}/user-data"
+    EOT
+
+    environment = {
+      USER_DATA = each.value.role == "cp" ? data.talos_machine_configuration.cp.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
+    }
+  }
+
+  depends_on = [
+    data.talos_machine_configuration.cp,
+    data.talos_machine_configuration.worker,
+  ]
+}
+
+# ============================================================
+# Cidata ISO volumes
+# ============================================================
+
+resource "libvirt_volume" "cidata" {
+  for_each = local.nodes_all
+  name     = "${each.key}-cidata.iso"
+  pool     = "default"
+
+  create = {
+    content = {
+      url = "file:///tmp/cidata-${each.key}.iso"
+    }
+  }
+
+  depends_on = [terraform_data.cidata_iso]
+}
+
+# ============================================================
+# VM Domains
 # ============================================================
 
 resource "libvirt_domain" "node" {
@@ -151,21 +308,28 @@ resource "libvirt_domain" "node" {
     type         = "hvm"
     type_arch    = "x86_64"
     type_machine = "q35"
-    firmware     = "efi"
     boot_devices = [
-      { dev = "hd" }
+      { dev = "hd" },
     ]
-    # No cmdline — Image Factory's nocloud image has
-    # talos.platform=nocloud baked into the bootloader,
-    # which triggers cidata CDROM detection automatically
   }
 
   devices = {
+    consoles = [
+      {
+        type = "pty"
+        target = {
+          type = "serial"
+          port = 0
+        }
+      },
+    ]
+
     disks = [
       {
         source = {
-          file = {
-            file = libvirt_volume.node_root[each.key].path
+          volume = {
+            pool   = libvirt_volume.boot[each.key].pool
+            volume = libvirt_volume.boot[each.key].name
           }
         }
         target = {
@@ -174,21 +338,33 @@ resource "libvirt_domain" "node" {
         }
       },
       {
-        device = "cdrom"
+        device   = "cdrom"
+        readonly = true
         source = {
-          file = {
-            file = libvirt_volume.node_cloudinit[each.key].path
+          volume = {
+            pool   = libvirt_volume.cidata[each.key].pool
+            volume = libvirt_volume.cidata[each.key].name
           }
         }
         target = {
-          dev = "sdb"
+          dev = "sda"
           bus = "sata"
+        }
+      },
+    ]
+
+    graphics = [
+      {
+        vnc = {
+          autoport = true
+          listen   = "127.0.0.1"
         }
       },
     ]
 
     interfaces = [
       {
+        mac   = { address = each.value.mac }
         model = { type = "virtio" }
         source = {
           network = {
@@ -200,29 +376,57 @@ resource "libvirt_domain" "node" {
   }
 
   depends_on = [
-    libvirt_volume.node_root,
-    libvirt_volume.node_cloudinit,
+    libvirt_volume.boot,
+    libvirt_volume.cidata,
   ]
 }
 
 # ============================================================
-# 5. Talos cluster bootstrapping (module)
+# Wait for first control plane Talos API
 # ============================================================
 
-module "talos" {
-  source = "../modules/talos-cluster"
+resource "terraform_data" "wait_for_cp" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      IP="${var.nodes_cp[0].ip}"
+      echo "Waiting for ${var.nodes_cp[0].hostname} ($${IP})..."
+      for i in $(seq 1 30); do
+        if timeout 3 bash -c "echo > /dev/tcp/$${IP}/50000" 2>/dev/null \
+           || timeout 3 bash -c "echo > /dev/tcp/$${IP}/6443" 2>/dev/null; then
+          exit 0
+        fi
+        sleep 10
+      done
+      exit 1
+    EOT
+  }
 
-  cp_ips             = local.cp_ips
-  cp_hostnames       = local.cp_hostnames
-  worker_ips         = local.worker_ips
-  worker_hostnames   = local.worker_hostnames
-  cluster_vip        = var.cluster_vip
-  talos_version      = var.talos_version
-  talos_image_id     = var.talos_image_factory_id
-  tailscale_domain   = var.tailscale_domain
-  tailscale_auth_key = var.tailscale_auth_key
+  depends_on = [libvirt_domain.node]
+}
 
+# ============================================================
+# Bootstrap etcd
+# ============================================================
+
+resource "talos_machine_bootstrap" "this" {
   depends_on = [
-    libvirt_domain.node
+    terraform_data.wait_for_cp,
   ]
+
+  client_configuration = talos_machine_secrets.this.client_configuration
+  node                 = local.cp_ips[0]
+  endpoint             = local.cp_ips[0]
+}
+
+# ============================================================
+# Kubeconfig
+# ============================================================
+
+resource "talos_cluster_kubeconfig" "this" {
+  depends_on = [
+    talos_machine_bootstrap.this,
+  ]
+
+  client_configuration = talos_machine_secrets.this.client_configuration
+  node                 = local.cp_ips[0]
 }
