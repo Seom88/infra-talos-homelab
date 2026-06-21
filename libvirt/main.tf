@@ -45,7 +45,7 @@ resource "libvirt_network" "talos" {
 # ============================================================
 
 resource "talos_image_factory_schematic" "this" {
-  schematic = file("${path.module}/../schematic-${var.env_name}.yaml")
+  schematic = file("${path.module}/../${var.schematic_name}")
 }
 
 # ============================================================
@@ -195,19 +195,23 @@ data "talos_machine_configuration" "worker" {
 # ============================================================
 
 resource "terraform_data" "talos_nocloud_image" {
-  triggers_replace = var.talos_version
+  triggers_replace = "${var.talos_version}-${talos_image_factory_schematic.this.id}"
 
   provisioner "local-exec" {
     command = <<-EOT
       set -euo pipefail
       CACHE_DIR="${var.talos_image_cache_dir}"
-      RAW_PATH="$${CACHE_DIR}/talos-nocloud-v${var.talos_version}.raw"
+      SCHEMATIC_ID="${talos_image_factory_schematic.this.id}"
+      RAW_PATH="$${CACHE_DIR}/talos-nocloud-$${SCHEMATIC_ID}-v${var.talos_version}.raw"
       mkdir -p "$${CACHE_DIR}"
 
       if [ -f "$${RAW_PATH}" ]; then
         echo "Image already cached: $${RAW_PATH}"
         exit 0
       fi
+
+      # Clean up any stale images from other schematics
+      find "$${CACHE_DIR}" -maxdepth 1 -name "talos-nocloud-*-v${var.talos_version}.raw" -delete
 
       curl -fsSL "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64.raw.xz" \
         | xz -d > "$${RAW_PATH}"
@@ -232,7 +236,7 @@ resource "libvirt_volume" "boot" {
 
   create = {
     content = {
-      url = "file://${var.talos_image_cache_dir}/talos-nocloud-v${var.talos_version}.raw"
+      url = "file://${var.talos_image_cache_dir}/talos-nocloud-${talos_image_factory_schematic.this.id}-v${var.talos_version}.raw"
     }
   }
 

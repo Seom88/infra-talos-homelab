@@ -116,29 +116,6 @@ gen-libvirt-secrets:
     terraform -chdir={{ libvirt_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
     echo "✓ secrets regenerated (libvirt)"
 
-# Register DHCP reservations (MAC→IP) in the default network
-setup-libvirt-dhcp:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    for entry in \
-      "52:54:00:aa:00:01=192.168.122.211=talos-cp1" \
-      "52:54:00:aa:00:02=192.168.122.221=talos-w1" \
-      "52:54:00:aa:00:03=192.168.122.222=talos-w2" \
-      "52:54:00:aa:00:04=192.168.122.223=talos-w3" \
-    ; do
-      mac="$(echo "$entry" | cut -d= -f1)"
-      ip="$(echo "$entry" | cut -d= -f2)"
-      name="$(echo "$entry" | cut -d= -f3)"
-      if sudo virsh net-info default &>/dev/null; then
-        sudo virsh net-update default add ip-dhcp-host \
-          "<host mac='$mac' ip='$ip' name='$name'/>" \
-          --live --config 2>&1 || echo "  $name ($mac → $ip) ya existe o falló"
-      else
-        echo "  red 'default' no encontrada — creala con: virsh net-define /usr/share/libvirt/networks/default.xml && virsh net-start default"
-      fi
-    done
-    echo "✓ DHCP reservations registradas en red default"
-
 # Setup CLI for libvirt cluster
 setup-libvirt-cli:
     #!/usr/bin/env bash

@@ -54,10 +54,10 @@ variable "network_prefix" {
 # Environment
 # ============================================================
 
-variable "env_name" {
-  description = "Environment name. Selects which schematic YAML to use (e.g. schematic-dev.yaml or schematic-prod.yaml)."
+variable "schematic_name" {
+  description = "Schematic YAML filename (e.g. schematic-dev.yaml). Overrides env_name if set."
   type        = string
-  default     = "dev"
+  default     = "schematic-dev.yaml"
 }
 
 # ============================================================
