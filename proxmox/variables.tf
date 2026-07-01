@@ -7,15 +7,32 @@ variable "env_name" {
   type        = string
 }
 
-variable "username" {
-  description = "Proxmox API user (e.g. root@pam or an API token name)"
-  type        = string
-}
+# variable "username" {
+#   description = "Proxmox API user (e.g. root@pam or an API token name)"
+#   type        = string
+# }
 
-variable "password" {
-  description = "Proxmox API password or API token secret"
+# variable "password" {
+#   description = "Proxmox API password or API token secret"
+#   type        = string
+#   sensitive   = true
+# }
+
+variable "api_token" {
+  description = "Proxmox API token en formato 'user@realm!tokenid=secret'"
   type        = string
   sensitive   = true
+}
+
+variable "ssh_username" {
+  description = "SSH user for Proxmox node operations (e.g. root)"
+  type        = string
+  default     = "root"
+}
+
+variable "ssh_node_address" {
+  description = "SSH address for the Proxmox node (Tailscale hostname, e.g. node.lonk-mirfak.ts.net)"
+  type        = string
 }
 
 variable "insecure" {

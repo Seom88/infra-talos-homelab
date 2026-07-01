@@ -13,16 +13,6 @@ locals {
   all_tailscale_names    = concat(local.tailscale_cp_names, local.tailscale_worker_names)
   cluster_endpoint       = "https://${var.cluster_vip}:6443"
   install_image          = "factory.talos.dev/installer/${var.talos_image_id}:v${var.talos_version}"
-  dns_patch = yamlencode({
-    apiVersion = "v1alpha1"
-    kind       = "ResolverConfig"
-    nameservers = var.tailscale_auth_key != "" ? [
-      { address = "100.100.100.100" },
-      ] : [
-      { address = "1.1.1.1" },
-      { address = "1.0.0.1" },
-    ]
-  })
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
       kubelet = {
@@ -70,7 +60,6 @@ data "talos_machine_configuration" "control_machine_config" {
         allowSchedulingOnControlPlanes = true
       }
     }) : "",
-    local.dns_patch,
     yamlencode({
       apiVersion = "v1alpha1"
       kind       = "Layer2VIPConfig"
@@ -125,7 +114,6 @@ data "talos_machine_configuration" "worker_machine_config" {
         "TS_ACCEPT_DNS=false"
       ]
     }) : "",
-    local.dns_patch,
     local.longhorn_patch,
   ], var.extra_config_patches))
 }

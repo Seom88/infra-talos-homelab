@@ -15,6 +15,7 @@ resource "proxmox_download_file" "talos_image" {
 }
 
 resource "proxmox_virtual_environment_vm" "talos" {
+  started         = true
   on_boot         = true
   stop_on_destroy = true
   tags            = ["terraform", "talos", "control-plane"]
@@ -58,6 +59,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
 }
 
 resource "proxmox_virtual_environment_vm" "talos_worker" {
+  started         = true
   on_boot         = true
   stop_on_destroy = true
   tags            = ["terraform", "talos", "worker"]
