@@ -218,6 +218,7 @@ Every task accepts `tf_env=dev` to target the dev environment (default: `prod`).
 |------|-------------|
 | `tf-plan` | Plan changes for `tf_env` |
 | `tf-apply` | Apply changes (bootstrap or update) |
+| `tf-ci-apply` | Non-interactive apply for CI (`-auto-approve`) |
 | `tf-destroy` | Tear down the entire environment |
 | `gen-secrets` | Extract talosconfig + kubeconfig from state |
 | `setup-cli` | gen-secrets + merge into `~/.talos/config` and `~/.kube/config` |
@@ -234,6 +235,27 @@ Every task accepts `tf_env=dev` to target the dev environment (default: `prod`).
 | `tf-libvirt-destroy` | Tear down the libvirt environment |
 | `gen-libvirt-secrets` | Extract talosconfig + kubeconfig from libvirt state |
 | `setup-libvirt-cli` | gen-libvirt-secrets + merge into local `~/.talos/config` and `~/.kube/config` |
+
+## CI/CD
+
+This repo includes a GitHub Actions workflow (`.github/workflows/deploy.yaml`) for automated deployment.
+
+To use it from a fork:
+
+1. Create a **Tailscale OAuth client** in the admin console with `tag:ci`
+2. Add these **GitHub secrets**:
+
+| Secret | Value |
+|--------|-------|
+| `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client ID |
+| `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
+| `PROXMOX_API_TOKEN` | Proxmox API token |
+| `TAILSCALE_AUTH_KEY` | Tailscale auth key (for cluster nodes) |
+
+3. Configure your Proxmox endpoint and credentials in your environment's `terraform.tfvars`
+4. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts
+
+> The `tag:ci` node needs ACL access to your Proxmox host in your tailnet.
 
 ---
 

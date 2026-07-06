@@ -13,32 +13,40 @@
 
 tf_root := "./proxmox"
 tf_env := "prod"
+tf_state_path := "/tmp/{{ tf_env }}-terraform.tfstate"
 
 # ── Terraform ──────────────────────────────────
 
 # Init terraform with local backend for an environment
 tf-init:
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+      -backend-config="path={{ tf_state_path }}"
 
 # Plan changes (auto-inits to ensure correct backend)
 tf-plan:
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+      -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} plan \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
 # Apply changes (auto-inits to ensure correct backend)
 tf-apply:
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+      -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} apply \
+      -var-file=environments/{{ tf_env }}/terraform.tfvars
+
+# CI apply (non-interactive, uses env vars)
+tf-ci-apply:
+    terraform -chdir={{ tf_root }} init -reconfigure \
+      -backend-config="path={{ tf_state_path }}"
+    terraform -chdir={{ tf_root }} apply -auto-approve \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
 # Destroy an environment (auto-inits to ensure correct backend)
 tf-destroy:
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+      -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} destroy \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
@@ -52,7 +60,7 @@ gen-secrets:
     SECRETS="$ROOT/secrets/{{ tf_env }}"
     mkdir -p "$SECRETS"
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+      -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} output -raw talosconfig > "$SECRETS/talosconfig.yaml"
     terraform -chdir={{ tf_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
     echo "✓ secrets regenerated ({{ tf_env }})"

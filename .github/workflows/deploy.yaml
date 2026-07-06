@@ -1,0 +1,101 @@
+name: Deploy Talos Cluster
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tf-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TF_ROOT: proxmox
+  TF_ENV: prod
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_ROOT }}
+
+      - name: Init & validate
+        run: |
+          terraform init -backend=false
+          terraform validate
+        working-directory: ${{ env.TF_ROOT }}
+
+  deploy:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          use-cache: 'true'
+
+      - name: Restore Terraform state from previous run
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: tfstate-${{ env.TF_ENV }}
+          path: ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/
+
+      - name: Terraform init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="path=environments/${{ env.TF_ENV }}/terraform.tfstate"
+        working-directory: ${{ env.TF_ROOT }}
+
+      - name: Terraform apply
+        run: |
+          terraform apply -auto-approve \
+            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
+          TF_VAR_tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Backup Terraform state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfstate-${{ env.TF_ENV }}
+          path: ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate
+          retention-days: 90
+
+      - name: Extract cluster secrets
+        run: |
+          mkdir -p /tmp/secrets
+          terraform output -raw talosconfig > /tmp/secrets/talosconfig.yaml
+          terraform output -raw kubeconfig > /tmp/secrets/kubeconfig.yaml
+        working-directory: ${{ env.TF_ROOT }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cluster-secrets-${{ env.TF_ENV }}
+          path: /tmp/secrets/
+          retention-days: 7
