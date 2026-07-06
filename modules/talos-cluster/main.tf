@@ -12,7 +12,7 @@ locals {
   tailscale_worker_names = var.tailscale_domain != "" ? [for hostname in var.worker_hostnames : "${hostname}.${var.tailscale_domain}"] : []
   all_tailscale_names    = concat(local.tailscale_cp_names, local.tailscale_worker_names)
   cluster_endpoint       = "https://${var.cluster_vip}:6443"
-  install_image          = "factory.talos.dev/installer/${var.talos_image_id}:v${var.talos_version}"
+  install_image          = "factory.talos.dev/installer-secureboot/${var.talos_image_id}:v${var.talos_version}"
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
       kubelet = {

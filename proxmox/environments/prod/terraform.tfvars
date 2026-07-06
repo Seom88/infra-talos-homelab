@@ -4,18 +4,18 @@ ssh_node_address                   = "node.lonk-mirfak.ts.net"
 gateway                            = "10.10.10.1"
 node_name                          = "pve"
 datastore_vm                       = "ssd"
-datastore_iso                      = "hdd"
+datastore_iso                      = "nfs"
 insecure                           = true
 network_bridge                     = "vnet1"
 cluster_vip                        = "10.10.10.171"
-disk_size_cp                       = 100
+disk_size_cp                       = 25
 # allow_scheduling_on_control_planes = true
 nodes_cp = [
   {
     hostname     = "talos-cp1"
     ip           = "10.10.10.172"
-    cores        = 8
-    memory       = 6 * 1024
+    cores        = 4
+    memory       = 4 * 1024
     proxmox_node = "pve"
   },
   # {
@@ -39,21 +39,21 @@ nodes_worker = [
     hostname     = "talos-w1"
     ip           = "10.10.10.181"
     cores        = 4
-    memory       = 6 * 1024
+    memory       = 4 * 1024
     proxmox_node = "pve"
   },
   {
     hostname     = "talos-w2"
     ip           = "10.10.10.182"
     cores        = 4
-    memory       = 6 * 1024
+    memory       = 4 * 1024
     proxmox_node = "pve"
   },
   {
     hostname     = "talos-w3"
     ip           = "10.10.10.183"
     cores        = 4
-    memory       = 6 * 1024
+    memory       = 4 * 1024
     proxmox_node = "pve"
   }
 ]

@@ -8,9 +8,9 @@ resource "proxmox_download_file" "talos_image" {
   content_type            = "iso"
   datastore_id            = var.datastore_iso
   node_name               = var.node_name
-  url                     = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64.raw.xz"
+  url                     = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64-secureboot.raw.xz"
   decompression_algorithm = "zst"
-  file_name               = "talos-${var.env_name}-v${var.talos_version}-nocloud-amd64.img"
+  file_name               = "talos-${var.env_name}-v${var.talos_version}-nocloud-amd64-secureboot.img"
   overwrite               = false
 }
 
@@ -22,6 +22,8 @@ resource "proxmox_virtual_environment_vm" "talos" {
   for_each        = { for node in var.nodes_cp : node.hostname => node }
   name            = each.key
   node_name       = each.value.proxmox_node
+  bios            = "ovmf"
+  machine         = "q35"
   initialization {
     datastore_id = var.datastore_vm
     ip_config {
@@ -33,6 +35,11 @@ resource "proxmox_virtual_environment_vm" "talos" {
   }
   agent {
     enabled = true
+  }
+  efi_disk {
+    datastore_id = var.datastore_vm
+    type         = "4m"
+    pre_enrolled_keys = false
   }
   disk {
     datastore_id = var.datastore_vm
@@ -66,6 +73,8 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   for_each        = { for node in var.nodes_worker : node.hostname => node }
   name            = each.key
   node_name       = each.value.proxmox_node
+  bios            = "ovmf"
+  machine         = "q35"
   initialization {
     datastore_id = var.datastore_vm
     ip_config {
@@ -77,6 +86,11 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   }
   agent {
     enabled = true
+  }
+  efi_disk {
+    datastore_id = var.datastore_vm
+    type         = "4m"
+    pre_enrolled_keys = false
   }
   disk {
     datastore_id = var.datastore_vm
