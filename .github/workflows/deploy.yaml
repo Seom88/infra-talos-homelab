@@ -20,11 +20,11 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
 
       - name: Format check
         run: terraform fmt -check -recursive
@@ -43,11 +43,11 @@ jobs:
     environment: prod
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
 
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
@@ -111,7 +111,7 @@ jobs:
             cp ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate /tmp/tfstate-backup/
           fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: tfstate-${{ env.TF_ENV }}
@@ -125,7 +125,7 @@ jobs:
           terraform output -raw kubeconfig > /tmp/secrets/kubeconfig.yaml
         working-directory: ${{ env.TF_ROOT }}
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: cluster-secrets-${{ env.TF_ENV }}
           path: /tmp/secrets/
