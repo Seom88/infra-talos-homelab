@@ -54,15 +54,38 @@ jobs:
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+          tags: tag:terraform
           use-cache: 'true'
 
-      - name: Restore Terraform state from previous run
+      - name: Restore Terraform state from last successful run
+        id: restore-tfstate
         continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: tfstate-${{ env.TF_ENV }}
-          path: ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Looking for latest artifact: tfstate-${{ env.TF_ENV }}"
+          ARTIFACT_ID=$(gh api \
+            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-${{ env.TF_ENV }} \
+            --jq '.artifacts | sort_by(.created_at) | last | .id' 2>/dev/null || echo "")
+          echo "Artifact ID: $ARTIFACT_ID"
+          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
+            mkdir -p /tmp/tfstate-restore
+            cd /tmp/tfstate-restore
+            gh api /repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip > tfstate.zip
+            unzip -o tfstate.zip 2>/dev/null
+            rm -f tfstate.zip
+            cd -
+            if [ -f /tmp/tfstate-restore/terraform.tfstate ]; then
+              mkdir -p environments/${{ env.TF_ENV }}
+              cp /tmp/tfstate-restore/terraform.tfstate environments/${{ env.TF_ENV }}/terraform.tfstate
+              echo "✓ State restored"
+            else
+              echo "State file not found in artifact"
+            fi
+          else
+            echo "No previous artifact found (first run?)"
+          fi
+        working-directory: ${{ env.TF_ROOT }}
 
       - name: Terraform init
         run: |
@@ -72,8 +95,9 @@ jobs:
 
       - name: Terraform apply
         run: |
-          terraform apply -auto-approve \
-            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars
+          terraform apply -auto-approve -no-color \
+            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars 2>&1 | \
+            sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
         working-directory: ${{ env.TF_ROOT }}
         env:
           TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
@@ -81,10 +105,17 @@ jobs:
 
       - name: Backup Terraform state
         if: always()
-        uses: actions/upload-artifact@v4
+        run: |
+          if [ -f ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate ]; then
+            mkdir -p /tmp/tfstate-backup
+            cp ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate /tmp/tfstate-backup/
+          fi
+
+      - uses: actions/upload-artifact@v6
+        if: always()
         with:
           name: tfstate-${{ env.TF_ENV }}
-          path: ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate
+          path: /tmp/tfstate-backup/
           retention-days: 90
 
       - name: Extract cluster secrets
@@ -94,7 +125,7 @@ jobs:
           terraform output -raw kubeconfig > /tmp/secrets/kubeconfig.yaml
         working-directory: ${{ env.TF_ROOT }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: cluster-secrets-${{ env.TF_ENV }}
           path: /tmp/secrets/

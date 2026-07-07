@@ -1,14 +1,14 @@
-env_name                           = "prod"
-endpoint                           = "https://node.lonk-mirfak.ts.net:8006"
-ssh_node_address                   = "node.lonk-mirfak.ts.net"
-gateway                            = "10.10.10.1"
-node_name                          = "pve"
-datastore_vm                       = "ssd"
-datastore_iso                      = "nfs"
-insecure                           = true
-network_bridge                     = "vnet1"
-cluster_vip                        = "10.10.10.171"
-disk_size_cp                       = 25
+env_name         = "prod"
+endpoint         = "https://node.lonk-mirfak.ts.net:8006"
+ssh_node_address = "node.lonk-mirfak.ts.net"
+gateway          = "10.10.10.1"
+node_name        = "pve"
+datastore_vm     = "ssd"
+datastore_iso    = "nfs"
+insecure         = true
+network_bridge   = "vnet1"
+cluster_vip      = "10.10.10.171"
+disk_size_cp     = 25
 # allow_scheduling_on_control_planes = true
 nodes_cp = [
   {

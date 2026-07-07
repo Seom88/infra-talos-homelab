@@ -242,8 +242,30 @@ This repo includes a GitHub Actions workflow (`.github/workflows/deploy.yaml`) f
 
 To use it from a fork:
 
-1. Create a **Tailscale OAuth client** in the admin console with `tag:ci`
-2. Add these **GitHub secrets**:
+1. Configure your Proxmox endpoint and credentials in your environment's `terraform.tfvars`
+2. Create ACL
+```bash
+	"tagOwners": {
+        ...
+		"tag:terraform":        ["autogroup:admin"],
+		"tag:pve":              ["autogroup:admin"],
+	},
+    "acls": [
+        // Terraform need access to 8006
+		{"action": "accept", "src": ["tag:terraform"], "dst": ["tag:pve:*"]},
+	],
+    "ssh": [
+		// Terraform need access using ssh, use ssh from tailscale (https://tailscale.com/kb/1193/tailscale-ssh/)
+		{
+			"action": "accept",
+			"src":    ["tag:terraform"],
+			"dst":    ["tag:pve"],
+			"users":  ["root"],
+		},
+	],
+```
+3. Create a **Tailscale OAuth client** in the admin console with `tag:terraform` ( Add OAuth client → scopes: devices:core:write + auth_keys:write → tags: tag:terraform → copy Client ID + Secret)
+4. Add these **GitHub secrets**:
 
 | Secret | Value |
 |--------|-------|
@@ -252,10 +274,7 @@ To use it from a fork:
 | `PROXMOX_API_TOKEN` | Proxmox API token |
 | `TAILSCALE_AUTH_KEY` | Tailscale auth key (for cluster nodes) |
 
-3. Configure your Proxmox endpoint and credentials in your environment's `terraform.tfvars`
-4. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts
-
-> The `tag:ci` node needs ACL access to your Proxmox host in your tailnet.
+5. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts
 
 ---
 

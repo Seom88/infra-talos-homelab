@@ -12,6 +12,7 @@ resource "proxmox_download_file" "talos_image" {
   decompression_algorithm = "zst"
   file_name               = "talos-${var.env_name}-v${var.talos_version}-nocloud-amd64-secureboot.img"
   overwrite               = false
+  overwrite_unmanaged     = true
 }
 
 resource "proxmox_virtual_environment_vm" "talos" {
@@ -37,8 +38,8 @@ resource "proxmox_virtual_environment_vm" "talos" {
     enabled = true
   }
   efi_disk {
-    datastore_id = var.datastore_vm
-    type         = "4m"
+    datastore_id      = var.datastore_vm
+    type              = "4m"
     pre_enrolled_keys = false
   }
   disk {
@@ -88,8 +89,8 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     enabled = true
   }
   efi_disk {
-    datastore_id = var.datastore_vm
-    type         = "4m"
+    datastore_id      = var.datastore_vm
+    type              = "4m"
     pre_enrolled_keys = false
   }
   disk {

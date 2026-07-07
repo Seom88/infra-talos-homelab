@@ -36,13 +36,6 @@ tf-apply:
     terraform -chdir={{ tf_root }} apply \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
-# CI apply (non-interactive, uses env vars)
-tf-ci-apply:
-    terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path={{ tf_state_path }}"
-    terraform -chdir={{ tf_root }} apply -auto-approve \
-      -var-file=environments/{{ tf_env }}/terraform.tfvars
-
 # Destroy an environment (auto-inits to ensure correct backend)
 tf-destroy:
     terraform -chdir={{ tf_root }} init -reconfigure \
