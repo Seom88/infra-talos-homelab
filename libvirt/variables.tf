@@ -88,13 +88,13 @@ variable "cluster_vip" {
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.13.3)"
   type        = string
-  default     = "1.13.3"
+  default     = "1.13.6"
 }
 
 variable "kubernetes_version" {
   description = "Kubernetes version (e.g. 1.36.1)"
   type        = string
-  default     = "1.36.1"
+  default     = "1.36.2"
 }
 
 variable "tailscale_auth_key" {

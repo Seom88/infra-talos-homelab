@@ -47,7 +47,7 @@ variable "talos_version" {
 variable "kubernetes_version" {
   description = "Kubernetes version to install (e.g. 1.36.1)"
   type        = string
-  default     = "1.36.1"
+  default     = "1.36.2"
 }
 
 variable "talos_image_id" {
