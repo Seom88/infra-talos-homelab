@@ -54,41 +54,69 @@ echo "Tailnet:  $TAILNET"
 echo "Hostnames: $(echo "$HOSTNAMES" | tr '\n' ' ')"
 
 # --- Get OAuth token ---
-TOKEN=$(curl -sf -X POST \
-  "https://api.tailscale.com/api/v2/token" \
-  -u "${TS_OAUTH_CLIENT_ID}:${TS_OAUTH_SECRET}" \
-  -d "scope=device:core" | jq -r '.access_token')
+echo "Requesting OAuth token..."
+TOKEN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+  "https://api.tailscale.com/api/v2/oauth/token" \
+  -d "client_id=${TS_OAUTH_CLIENT_ID}" \
+  -d "client_secret=${TS_OAUTH_SECRET}")
+HTTP_CODE=$(echo "$TOKEN_RESPONSE" | tail -1)
+TOKEN_BODY=$(echo "$TOKEN_RESPONSE" | sed '$d')
 
-if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
-  echo "✗ Failed to get OAuth token"
+if [[ "$HTTP_CODE" != "200" ]]; then
+  echo "✗ OAuth token request failed (HTTP $HTTP_CODE)"
+  echo "  Response: $TOKEN_BODY"
   exit 1
 fi
 
+TOKEN=$(echo "$TOKEN_BODY" | jq -r '.access_token')
+if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+  echo "✗ Failed to extract access_token from response"
+  echo "  Response: $TOKEN_BODY"
+  exit 1
+fi
+echo "✓ OAuth token obtained"
+
 # --- List all devices ---
-DEVICES=$(curl -sf \
+echo "Fetching devices from Tailscale..."
+DEVICES_RESPONSE=$(curl -s -w "\n%{http_code}" \
   -H "Authorization: Bearer ${TOKEN}" \
-  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/devices")
+  "https://api.tailscale.com/api/v2/tailnet/-/devices")
+HTTP_CODE=$(echo "$DEVICES_RESPONSE" | tail -1)
+DEVICES_BODY=$(echo "$DEVICES_RESPONSE" | sed '$d')
+
+if [[ "$HTTP_CODE" != "200" ]]; then
+  echo "✗ Failed to list devices (HTTP $HTTP_CODE)"
+  echo "  Response: $DEVICES_BODY"
+  exit 1
+fi
+
+DEVICE_COUNT=$(echo "$DEVICES_BODY" | jq '.devices | length')
+echo "✓ Found $DEVICE_COUNT devices in tailnet"
 
 # --- Delete matching devices ---
 DELETED=0
 SKIPPED=0
 
 while IFS= read -r HOSTNAME; do
-  DEVICE_ID=$(echo "$DEVICES" | jq -r --arg h "$HOSTNAME" \
+  DEVICE_ID=$(echo "$DEVICES_BODY" | jq -r --arg h "$HOSTNAME" \
     '.devices[] | select(.hostname == $h) | .id')
 
   if [[ -n "$DEVICE_ID" ]]; then
-    if curl -sf -X DELETE \
+    echo "  Deleting $HOSTNAME ($DEVICE_ID)..."
+    DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
       -H "Authorization: Bearer ${TOKEN}" \
-      "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/devices/${DEVICE_ID}"; then
-      echo "  ✓ Deleted: $HOSTNAME ($DEVICE_ID)"
-      ((DELETED++))
+      "https://api.tailscale.com/api/v2/device/${DEVICE_ID}")
+    DELETE_CODE=$(echo "$DELETE_RESPONSE" | tail -1)
+    if [[ "$DELETE_CODE" == "200" ]]; then
+      echo "  ✓ Deleted: $HOSTNAME"
+      DELETED=$((DELETED + 1))
     else
-      echo "  ✗ Failed to delete: $HOSTNAME ($DEVICE_ID)"
+      DELETE_BODY=$(echo "$DELETE_RESPONSE" | sed '$d')
+      echo "  ✗ Failed to delete $HOSTNAME (HTTP $DELETE_CODE): $DELETE_BODY"
     fi
   else
-    echo "  - Not found: $HOSTNAME"
-    ((SKIPPED++))
+    echo "  - Not found in Tailscale: $HOSTNAME"
+    SKIPPED=$((SKIPPED + 1))
   fi
 done <<< "$HOSTNAMES"
 
