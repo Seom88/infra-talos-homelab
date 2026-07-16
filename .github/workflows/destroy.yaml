@@ -1,0 +1,101 @@
+name: Destroy Talos Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm'
+        required: true
+
+concurrency:
+  group: tf-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TF_ROOT: proxmox
+  TF_ENV: prod
+
+jobs:
+  destroy:
+    if: github.event.inputs.confirm == 'destroy'
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:terraform
+          use-cache: 'true'
+
+      - name: Restore Terraform state from last successful run
+        id: restore-tfstate
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Looking for latest artifact: tfstate-${{ env.TF_ENV }}"
+          ARTIFACT_ID=$(gh api \
+            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-${{ env.TF_ENV }} \
+            --jq '.artifacts | sort_by(.created_at) | last | .id' 2>/dev/null || echo "")
+          echo "Artifact ID: $ARTIFACT_ID"
+          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
+            mkdir -p /tmp/tfstate-restore
+            cd /tmp/tfstate-restore
+            gh api /repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip > tfstate.zip
+            unzip -o tfstate.zip 2>/dev/null
+            rm -f tfstate.zip
+            cd -
+            if [ -f /tmp/tfstate-restore/terraform.tfstate ]; then
+              mkdir -p environments/${{ env.TF_ENV }}
+              cp /tmp/tfstate-restore/terraform.tfstate environments/${{ env.TF_ENV }}/terraform.tfstate
+              echo "✓ State restored"
+            else
+              echo "State file not found in artifact"
+            fi
+          else
+            echo "No previous artifact found — nothing to destroy?"
+          fi
+        working-directory: ${{ env.TF_ROOT }}
+
+      - name: Terraform init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="path=environments/${{ env.TF_ENV }}/terraform.tfstate"
+        working-directory: ${{ env.TF_ROOT }}
+
+      - name: Terraform destroy
+        run: |
+          terraform destroy -auto-approve -no-color \
+            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars 2>&1 | \
+            sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
+          TF_VAR_tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Backup Terraform state
+        if: always()
+        run: |
+          if [ -f ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate ]; then
+            mkdir -p /tmp/tfstate-backup
+            cp ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate /tmp/tfstate-backup/
+          fi
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tfstate-${{ env.TF_ENV }}
+          path: /tmp/tfstate-backup/
+          retention-days: 90
