@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.2] - 2026-07-16
+
+### Added
+- **Tailscale device cleanup script** (`scripts/destroy-tailscale-devices.sh`) — deletes Tailscale devices via API before `terraform destroy`, preventing stale "dead" nodes from piling up in the tailnet
+- `scripts/` directory added to repo structure
+
+### Changed
+- `justfile` — `tf-destroy` and `tf-libvirt-destroy` now call the cleanup script before Terraform destroy (skips gracefully if OAuth env vars aren't set)
+- `.github/workflows/destroy.yaml` — added "Clean up Tailscale devices" step before terraform destroy
+- `README.md` — removed ephemeral key references, documented cleanup script, updated CI/CD secrets table
+
 ## [1.0.1] - 2026-07-16
 
 ### Added
@@ -18,7 +29,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - CI badge repo name in README
-- `TAILSCALE_AUTH_KEY` docs clarified — reusable + ephemeral key setup explained
 
 ## [1.0.0] - 2026-07-15
 
