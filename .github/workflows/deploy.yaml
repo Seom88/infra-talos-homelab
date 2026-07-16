@@ -93,7 +93,18 @@ jobs:
             -backend-config="path=environments/${{ env.TF_ENV }}/terraform.tfstate"
         working-directory: ${{ env.TF_ROOT }}
 
-      - name: Terraform apply
+      - name: Terraform apply (secrets first)
+        run: |
+          terraform apply -auto-approve -no-color \
+            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars \
+            -target=talos_machine_secrets.this 2>&1 | \
+            sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
+          TF_VAR_tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Terraform apply (full)
         run: |
           terraform apply -auto-approve -no-color \
             -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars 2>&1 | \

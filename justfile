@@ -40,6 +40,9 @@ tf-apply:
     terraform -chdir={{ tf_root }} init -reconfigure \
       -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} apply \
+      -var-file=environments/{{ tf_env }}/terraform.tfvars \
+      -target=talos_machine_secrets.this
+    terraform -chdir={{ tf_root }} apply \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
 # Destroy an environment (auto-inits to ensure correct backend)
