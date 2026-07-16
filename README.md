@@ -339,9 +339,11 @@ To use it from a fork:
 | `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client ID |
 | `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
 | `PROXMOX_API_TOKEN` | Proxmox API token |
-| `TAILSCALE_AUTH_KEY` | Tailscale auth key (for cluster nodes) |
+| `TAILSCALE_AUTH_KEY` | Tailscale auth key — **reusable + ephemeral** (see below) |
 
 5. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts
+
+> **About `TAILSCALE_AUTH_KEY`**: Create it in the Tailscale admin console under **Settings → Keys → Auth keys**. Enable **Reusable** (same key across workflow runs) and **Ephemeral** (nodes auto-remove from tailnet when they shut down — prevents stale devices piling up). An ephemeral key won't leave orphaned machines if a VM is destroyed without properly disconnecting Tailscale.
 
 ---
 

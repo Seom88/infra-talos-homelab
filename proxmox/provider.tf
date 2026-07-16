@@ -5,11 +5,13 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "0.109.0"
+      version = "0.111.1"
     }
     talos = {
       source  = "siderolabs/talos"
-      version = "0.11"
+      # TODO: using alpha to fix "inconsistent final plan" bug (https://github.com/siderolabs/terraform-provider-talos/issues/352).
+      # Revert to stable when v0.12.0 is released.
+      version = "0.12.0-alpha.5"
     }
   }
 }

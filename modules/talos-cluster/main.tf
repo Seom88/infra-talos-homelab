@@ -2,7 +2,9 @@ terraform {
   required_providers {
     talos = {
       source  = "siderolabs/talos"
-      version = "0.11.0"
+      # TODO: using alpha to fix "inconsistent final plan" bug (siderolabs/terraform-provider-talos#352).
+      # Revert to stable when v0.12.0 is released.
+      version = "0.12.0-alpha.5"
     }
   }
 }
