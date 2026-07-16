@@ -33,7 +33,7 @@ resource "libvirt_network" "talos" {
     enable = "yes"
     host = [
       for n in concat(var.nodes_cp, var.nodes_worker) : {
-        ip = n.ip
+        ip        = n.ip
         hostnames = [{ hostname = n.hostname }]
       }
     ]
