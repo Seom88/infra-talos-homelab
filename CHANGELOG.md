@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] - 2026-07-16
+
+### Added
+- **Destroy workflow** — GitHub Actions `destroy.yaml` with confirmation gate and state restoration
+- Demo screenshot (`docs/demo.png`)
+
+### Changed
+- Talos provider `0.11` → `0.12.0-alpha.5` (temporary — fixes [inconsistent final plan bug](https://github.com/siderolabs/terraform-provider-talos/issues/352); revert when v0.12.0 is stable)
+- Proxmox provider `0.109.0` → `0.111.1`
+- Talos Linux `1.13.3` → `1.13.6`
+- Kubernetes `1.36.1` → `1.36.2`
+
+### Fixed
+- CI badge repo name in README
+- `TAILSCALE_AUTH_KEY` docs clarified — reusable + ephemeral key setup explained
+
 ## [1.0.0] - 2026-07-15
 
 ### Features
