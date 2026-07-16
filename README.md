@@ -1,6 +1,13 @@
 # infra-talos-homelab
 
+![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.5-7B42BC?logo=terraform)
+![Talos](https://img.shields.io/badge/Talos_Linux-1.13-000000?logo=linux)
+![License](https://img.shields.io/badge/License-MIT-green)
+![CI](https://img.shields.io/github/actions/workflow/status/Seom88/infra-homelab/deploy.yaml?label=CI)
+
 Terraform modules that provision a Talos Linux Kubernetes cluster on **Proxmox VE** (via `bpg/proxmox`) or **libvirt** (via `dmacvicar/libvirt`). One `terraform apply` goes from bare hypervisor or host to a working cluster with Tailscale mesh networking.
+
+![Demo](docs/demo.png)
 
 ## Architecture
 
@@ -74,6 +81,7 @@ modules/
 
 schematic-dev.yaml               # Dev Image Factory extensions
 schematic-prod.yaml              # Prod Image Factory extensions
+LICENSE                          # MIT License
 secrets/                         # Generated credentials (.gitignored)
 ├── dev/                         # talosconfig.yaml, kubeconfig.yaml
 └── prod/                        # talosconfig.yaml, kubeconfig.yaml
@@ -97,6 +105,38 @@ secrets/                         # Generated credentials (.gitignored)
 - **Libvirt path**: Linux host with libvirt + KVM and `qemu:///system` accessible
 - Terraform >= 1.5
 - Talos Image Factory schematic ID
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[terraform apply] --> B[Image Factory API]
+    B --> C[Download Talos raw image]
+    C --> D{Provider?}
+
+    D -->|Proxmox| E[Create VMs via Proxmox API]
+    D -->|libvirt| F[Create boot volumes + cloud-init]
+
+    E --> G[VM boots Talos]
+    F --> G
+
+    G --> H[Talos bootstrap]
+    H --> I[Control plane ready]
+    I --> J[Generate kubeconfig + talosconfig]
+
+    J --> K{Tailscale enabled?}
+    K -->|Yes| L[Per-node Tailscale contexts]
+    K -->|No| M[LAN-only contexts]
+
+    L --> N[kubectl / talosctl ready]
+    M --> N
+```
+
+**Proxmox path**: Terraform talks to the Proxmox API to download the Talos image and create VMs with cloud-init. Talos boots, the cluster bootstraps, and kubeconfig is generated with both LAN (VIP) and Tailscale contexts.
+
+**Libvirt path**: Terraform downloads the nocloud raw image, creates boot volumes, and injects cloud-init with static IPs and Talos machine config. VMs boot via libvirt, the cluster bootstraps, and kubeconfig is generated.
+
+Both paths share the same `talos-cluster` module for bootstrap and kubeconfig generation.
 
 ## Quick start
 
@@ -305,9 +345,9 @@ To use it from a fork:
 
 ---
 
-## 🔗 Related Projects
+## Related Projects
 
 | Repo | Role |
 |------|------|
-| `homelab-talos-infra`_(this repo)_ | Cluster provisioning — Terraform + Talos, machine config patches, system extensions |
+| [`infra-talos-homelab`](https://github.com/Seom88/infra-talos-homelab) *(this repo)* | Cluster provisioning — Terraform + Talos, machine config patches, system extensions |
 | [`secured-gitops-tailscale-homelab`](https://github.com/Seom88/secured-gitops-tailscale-homelab) | GitOps layer — ArgoCD, Vault, Tailscale, storage, platform apps |
