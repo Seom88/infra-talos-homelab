@@ -52,7 +52,11 @@ Terraform (libvirt/)
 ```
 .github/
 └── workflows/
-    └── deploy.yaml                 # CI/CD: automated Terraform apply
+    ├── deploy.yaml                 # CI/CD: automated Terraform apply
+    └── destroy.yaml                # CI/CD: tear down cluster + Tailscale cleanup
+
+scripts/
+└── destroy-tailscale-devices.sh    # Pre-destroy Tailscale device cleanup
 
 proxmox/                        # Proxmox VE root module
 ├── provider.tf                  # bpg/proxmox v0.109.0
@@ -339,11 +343,11 @@ To use it from a fork:
 | `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client ID |
 | `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
 | `PROXMOX_API_TOKEN` | Proxmox API token |
-| `TAILSCALE_AUTH_KEY` | Tailscale auth key — **reusable + ephemeral** (see below) |
+| `TAILSCALE_AUTH_KEY` | Tailscale auth key — **reusable** (see below) |
 
 5. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts
 
-> **About `TAILSCALE_AUTH_KEY`**: Create it in the Tailscale admin console under **Settings → Keys → Auth keys**. Enable **Reusable** (same key across workflow runs) and **Ephemeral** (nodes auto-remove from tailnet when they shut down — prevents stale devices piling up). An ephemeral key won't leave orphaned machines if a VM is destroyed without properly disconnecting Tailscale.
+> **About `TAILSCALE_AUTH_KEY`**: Create it in the Tailscale admin console under **Settings → Keys → Auth keys**. Enable **Reusable** (same key across workflow runs). On `terraform destroy`, the `scripts/destroy-tailscale-devices.sh` script cleans up devices via the Tailscale API before tearing down VMs — no manual cleanup needed.
 
 ---
 

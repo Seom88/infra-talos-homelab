@@ -44,6 +44,14 @@ tf-apply:
 
 # Destroy an environment (auto-inits to ensure correct backend)
 tf-destroy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Clean up Tailscale devices before destroy
+    if [[ -n "${TS_OAUTH_CLIENT_ID:-}" && -n "${TS_OAUTH_SECRET:-}" ]]; then
+      ./scripts/destroy-tailscale-devices.sh \
+        {{ tf_root }}/environments/{{ tf_env }}/terraform.tfvars lonk-mirfak || \
+        echo "⚠ Tailscale cleanup failed, continuing with destroy"
+    fi
     terraform -chdir={{ tf_root }} init -reconfigure \
       -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} destroy \
@@ -110,6 +118,14 @@ tf-libvirt-apply:
 
 # Destroy libvirt environment
 tf-libvirt-destroy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Clean up Tailscale devices before destroy
+    if [[ -n "${TS_OAUTH_CLIENT_ID:-}" && -n "${TS_OAUTH_SECRET:-}" ]]; then
+      ./scripts/destroy-tailscale-devices.sh \
+        ./libvirt/terraform.tfvars lonk-mirfak || \
+        echo "⚠ Tailscale cleanup failed, continuing with destroy"
+    fi
     terraform -chdir={{ libvirt_root }} init -reconfigure
     terraform -chdir={{ libvirt_root }} destroy
 

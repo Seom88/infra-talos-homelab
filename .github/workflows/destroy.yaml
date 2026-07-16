@@ -23,6 +23,9 @@ jobs:
     if: github.event.inputs.confirm == 'destroy'
     runs-on: ubuntu-latest
     environment: prod
+    env:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
 
     steps:
       - uses: actions/checkout@v7
@@ -74,6 +77,13 @@ jobs:
           terraform init -reconfigure \
             -backend-config="path=environments/${{ env.TF_ENV }}/terraform.tfstate"
         working-directory: ${{ env.TF_ROOT }}
+
+      - name: Clean up Tailscale devices
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' }}
+        run: |
+          ./scripts/destroy-tailscale-devices.sh \
+            ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfvars lonk-mirfak || \
+            echo "⚠ Tailscale cleanup failed, continuing with destroy"
 
       - name: Terraform destroy
         run: |

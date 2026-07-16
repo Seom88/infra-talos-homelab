@@ -8,7 +8,7 @@ terraform {
       version = "0.111.1"
     }
     talos = {
-      source  = "siderolabs/talos"
+      source = "siderolabs/talos"
       # TODO: using alpha to fix "inconsistent final plan" bug (https://github.com/siderolabs/terraform-provider-talos/issues/352).
       # Revert to stable when v0.12.0 is released.
       version = "0.12.0-alpha.5"
