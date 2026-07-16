@@ -72,7 +72,7 @@ data "talos_machine_configuration" "control_machine_config" {
       name       = "tailscale"
       environment = [
         "TS_AUTHKEY=${var.tailscale_auth_key}",
-        "TS_ACCEPT_DNS=false"
+        "TS_ACCEPT_DNS=true"
       ]
     }) : "",
     local.longhorn_patch,

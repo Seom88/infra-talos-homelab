@@ -24,6 +24,7 @@ tf-init:
 
 # Plan changes (auto-inits to ensure correct backend)
 tf-plan:
+    terraform -chdir={{ tf_root }} fmt -check
     terraform -chdir={{ tf_root }} init -reconfigure \
       -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} plan \
@@ -31,6 +32,7 @@ tf-plan:
 
 # Apply changes (auto-inits to ensure correct backend)
 tf-apply:
+    terraform -chdir={{ tf_root }} fmt -check
     terraform -chdir={{ tf_root }} init -reconfigure \
       -backend-config="path={{ tf_state_path }}"
     terraform -chdir={{ tf_root }} apply \
@@ -92,11 +94,13 @@ tf-libvirt-init:
 
 # Plan libvirt changes
 tf-libvirt-plan:
+    terraform -chdir={{ libvirt_root }} fmt -check
     terraform -chdir={{ libvirt_root }} init -reconfigure
     terraform -chdir={{ libvirt_root }} plan
 
 # Apply libvirt changes
 tf-libvirt-apply:
+    terraform -chdir={{ libvirt_root }} fmt -check
     terraform -chdir={{ libvirt_root }} init -reconfigure
     terraform -chdir={{ libvirt_root }} apply
 

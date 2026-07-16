@@ -19,7 +19,7 @@ variable "env_name" {
 # }
 
 variable "api_token" {
-  description = "Proxmox API token en formato 'user@realm!tokenid=secret'"
+  description = "Proxmox API token in format 'user@realm!tokenid=secret'"
   type        = string
   sensitive   = true
 }
@@ -152,4 +152,10 @@ variable "allow_scheduling_on_control_planes" {
   description = "Allow workload pods to be scheduled on control plane nodes. Pass-through to talos-cluster module."
   type        = bool
   default     = false
+}
+
+variable "tailscale_domain" {
+  description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net)"
+  type        = string
+  default     = "lonk-mirfak.ts.net"
 }

@@ -89,16 +89,18 @@ locals {
   tailscale_cp_names     = var.tailscale_domain != "" ? [for n in var.nodes_cp : "${n.hostname}.${var.tailscale_domain}"] : []
   tailscale_worker_names = var.tailscale_domain != "" ? [for n in var.nodes_worker : "${n.hostname}.${var.tailscale_domain}"] : []
 
-  dns_patch = yamlencode({
-    apiVersion = "v1alpha1"
-    kind       = "ResolverConfig"
-    nameservers = var.tailscale_auth_key != "" ? [
-      { address = "100.100.100.100" },
-      ] : [
-      { address = "1.1.1.1" },
-      { address = "1.0.0.1" },
-    ]
-  })
+  # dns_patch = yamlencode({
+  #   apiVersion = "v1alpha1"
+  #   kind       = "ResolverConfig"
+  #   nameservers = var.tailscale_auth_key != "" ? [
+  #     { address = "1.1.1.1" },
+  #     { address = "1.0.0.1" },
+  #     { address = "100.100.100.100" },
+  #     ] : [
+  #     { address = "1.1.1.1" },
+  #     { address = "1.0.0.1" },
+  #   ]
+  # })
 
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
@@ -155,7 +157,7 @@ data "talos_machine_configuration" "cp" {
         allowSchedulingOnControlPlanes = true
       }
     }) : "",
-    local.dns_patch,
+    # local.dns_patch,
     yamlencode({
       apiVersion = "v1alpha1"
       kind       = "Layer2VIPConfig"
@@ -184,7 +186,7 @@ data "talos_machine_configuration" "worker" {
         }
       }
     }),
-    local.dns_patch,
+    # local.dns_patch,
     local.tailscale_patch,
     local.longhorn_patch,
   ], var.extra_config_patches))

@@ -83,7 +83,6 @@ variable "cluster_name" {
 variable "cluster_vip" {
   description = "Virtual IP address for the Kubernetes API endpoint"
   type        = string
-  default     = "192.168.122.210"
 }
 
 variable "talos_version" {
@@ -108,7 +107,6 @@ variable "tailscale_auth_key" {
 variable "tailscale_domain" {
   description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net)"
   type        = string
-  default     = "lonk-mirfak.ts.net"
 }
 
 variable "allow_scheduling_on_control_planes" {

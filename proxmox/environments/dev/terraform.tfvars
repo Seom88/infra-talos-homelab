@@ -1,58 +1,59 @@
-env_name                           = "dev"
-endpoint                           = "https://node.lonk-mirfak.ts.net:8006"
-gateway                            = "10.10.10.1"
-node_name                          = "pve"
-datastore_vm                       = "local-lvm"
-datastore_iso                      = "nfs"
-insecure                           = true
-network_bridge                     = "vnet1"
-cluster_vip                        = "10.10.10.151"
-disk_size_cp                       = 25
-allow_scheduling_on_control_planes = true
+env_name         = "dev"
+endpoint         = "https://pve01.lonk-mirfak.ts.net:8006"
+ssh_node_address = "pve01.lonk-mirfak.ts.net"
+gateway          = "10.10.0.1"
+node_name        = "pve01"
+datastore_vm     = "ssd"
+datastore_iso    = "local"
+insecure         = true
+network_bridge   = "vnet1"
+cluster_vip      = "10.10.10.171"
+disk_size_cp     = 25
+# allow_scheduling_on_control_planes = true
 nodes_cp = [
   {
-    hostname     = "talos-dev-cp1"
-    ip           = "10.10.10.152"
+    hostname     = "talos-cp1"
+    ip           = "10.10.0.172"
     cores        = 4
     memory       = 4 * 1024
-    proxmox_node = "pve"
+    proxmox_node = "pve01"
   },
   # {
-  #   hostname     = "talos-dev-cp2"
-  #   ip           = "10.10.10.153"
+  #   hostname     = "talos-cp2"
+  #   ip           = "10.10.0.173"
   #   cores        = 4
-  #   memory       = 4 * 1024
-  #   proxmox_node = "pve"
+  #   memory       = 6 * 1024
+  #   proxmox_node = "pve01"
   # },
   # {
-  #   hostname     = "talos-dev-cp3"
-  #   ip           = "10.10.10.154"
+  #   hostname     = "talos-cp3"
+  #   ip           = "10.10.0.174"
   #   cores        = 4
-  #   memory       = 4 * 1024
-  #   proxmox_node = "pve"
+  #   memory       = 6 * 1024
+  #   proxmox_node = "pve01"
   # }
 ]
-disk_size_worker = 35
+disk_size_worker = 100
 nodes_worker = [
   {
-    hostname     = "talos-dev-w1"
-    ip           = "10.10.10.161"
+    hostname     = "talos-w1"
+    ip           = "10.10.0.181"
     cores        = 4
     memory       = 4 * 1024
-    proxmox_node = "pve"
+    proxmox_node = "pve01"
   },
   {
-    hostname     = "talos-dev-w2"
-    ip           = "10.10.10.162"
+    hostname     = "talos-w2"
+    ip           = "10.10.0.182"
     cores        = 4
     memory       = 4 * 1024
-    proxmox_node = "pve"
+    proxmox_node = "pve01"
   },
   {
-    hostname     = "talos-dev-w3"
-    ip           = "10.10.10.163"
+    hostname     = "talos-w3"
+    ip           = "10.10.0.183"
     cores        = 4
     memory       = 4 * 1024
-    proxmox_node = "pve"
+    proxmox_node = "pve01"
   }
 ]

@@ -58,7 +58,6 @@ variable "talos_image_id" {
 variable "tailscale_domain" {
   description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net). Required only if tailscale_auth_key is set."
   type        = string
-  default     = ""
 }
 
 variable "tailscale_auth_key" {

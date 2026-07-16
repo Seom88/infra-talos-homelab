@@ -117,12 +117,6 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   }
 }
 
-locals {
-  # Solo prod usa Tailscale (el schematic lo incluye como extensión).
-  # Dev no tiene tailscale ni en el schematic ni en la configuración.
-  tailscale_domain = var.env_name == "prod" ? "lonk-mirfak.ts.net" : ""
-}
-
 # ── Talos Machine Secrets ────────────────────────
 resource "talos_machine_secrets" "this" {
   talos_version = "v${var.talos_version}"
@@ -140,7 +134,7 @@ module "talos" {
   cluster_vip                        = var.cluster_vip
   talos_version                      = var.talos_version
   talos_image_id                     = talos_image_factory_schematic.this.id
-  tailscale_domain                   = local.tailscale_domain
+  tailscale_domain                   = var.env_name == "prod" ? var.tailscale_domain : ""
   tailscale_auth_key                 = var.env_name == "prod" ? var.tailscale_auth_key : ""
   allow_scheduling_on_control_planes = var.allow_scheduling_on_control_planes
 

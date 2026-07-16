@@ -43,6 +43,10 @@ Terraform (libvirt/)
 ## Structure
 
 ```
+.github/
+└── workflows/
+    └── deploy.yaml                 # CI/CD: automated Terraform apply
+
 proxmox/                        # Proxmox VE root module
 ├── provider.tf                  # bpg/proxmox v0.109.0
 ├── main.tf                      # Image download, VMs, talos module call
@@ -50,7 +54,7 @@ proxmox/                        # Proxmox VE root module
 ├── outputs.tf                   # talosconfig, kubeconfig, kubeconfig_tailscale
 └── environments/
     ├── dev/
-    │   ├── terraform.tfvars      # Dev node definitions (1 cp + 3 workers)
+    │   ├── terraform.tfvars      # Dev node definitions (3 cp, optional workers)
     │   └── terraform.tfstate     # Per-env local backend state
     └── prod/
         └── terraform.tfvars      # Prod node definitions (3 cp, optional workers)
@@ -70,6 +74,9 @@ modules/
 
 schematic-dev.yaml               # Dev Image Factory extensions
 schematic-prod.yaml              # Prod Image Factory extensions
+secrets/                         # Generated credentials (.gitignored)
+├── dev/                         # talosconfig.yaml, kubeconfig.yaml
+└── prod/                        # talosconfig.yaml, kubeconfig.yaml
 ```
 
 ## Highlights
@@ -77,7 +84,7 @@ schematic-prod.yaml              # Prod Image Factory extensions
 - **Two providers** — choose Proxmox VE (`bpg/proxmox`) or libvirt (`dmacvicar/libvirt`); both share the same provider-agnostic `talos-cluster` module
 - **Modular design** — infrastructure (VMs) and configuration (Talos/K8s) are separated; `talos-cluster` module works with any provider
 - **Control plane** — 1–3 nodes with L2 VIP; HA with 3+ nodes. Proxmox prod runs 3 CP nodes, dev runs 1
-- **Dedicated workers** — worker VMs keep workloads off the control plane; disk sizes vary per environment (100 GB default or overridden per env)
+- **Dedicated workers** — worker VMs keep workloads off the control plane; disk sizes configurable per node (20 GB CP default, 100 GB worker default)
 - **Tailscale integration** — optional MagicDNS for multi-network access with per-node kubeconfig contexts
 - **Longhorn-ready** — kubelet extraMounts for `/var/lib/longhorn` injected by default on all nodes; system extensions (`iscsi-tools`, `util-linux-tools`) bundled in the Image Factory schematic
 - **Image caching (libvirt)** — nocloud raw images are downloaded, cached, and reused across applies; only the first apply downloads
@@ -133,8 +140,11 @@ just setup-libvirt-cli
 |----------|-------------|---------|
 | `env_name` | Environment name (`dev` / `prod`); selects schematic file, enables Tailscale on prod | — |
 | `endpoint` | Proxmox API URL (e.g. `https://10.10.10.1:8006`) | — |
-| `username` | Proxmox API user (e.g. `root@pam` or token name) | — |
-| `password` | Proxmox API password or token secret | — |
+| `api_token` | Proxmox API token in format `user@realm!tokenid=secret` | — |
+| `username` | Proxmox API user — legacy, commented out in code | — |
+| `password` | Proxmox API password — legacy, commented out in code | — |
+| `ssh_username` | SSH user for Proxmox node operations | `root` |
+| `ssh_node_address` | SSH address for the Proxmox node (e.g. Tailscale hostname) | — |
 | `insecure` | Skip TLS verification | `false` |
 | `node_name` | Proxmox node for image download | — |
 | `gateway` | VM default gateway | — |
@@ -146,6 +156,7 @@ just setup-libvirt-cli
 | `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node) | — |
 | `disk_size_cp` | Disk size in GB for control plane nodes | `20` |
 | `disk_size_worker` | Disk size in GB for worker nodes | `100` |
+| `tailscale_domain` | Tailscale MagicDNS domain | `lonk-mirfak.ts.net` |
 | `allow_scheduling_on_control_planes` | Allow workloads on control plane nodes | `false` |
 
 ### Libvirt
@@ -154,8 +165,21 @@ just setup-libvirt-cli
 |----------|-------------|---------|
 | `nodes_cp` | Control plane nodes (hostname, ip, mac, cores, memory, disk_size) | — |
 | `nodes_worker` | Worker nodes (hostname, ip, mac, cores, memory, disk_size) | — |
+| `gateway` | Default gateway IPv4 | `10.0.1.1` |
+| `network_prefix` | CIDR prefix length | `24` |
+| `schematic_name` | Schematic YAML filename | `schematic-dev.yaml` |
+| `talos_image_cache_dir` | Local cache for nocloud raw images | `/tmp/talos-images` |
+| `cluster_name` | Talos / Kubernetes cluster name | `talos-cluster` |
+| `cluster_vip` | Virtual IP for the Kubernetes API endpoint | — |
+| `talos_version` | Talos Linux version | `1.13.3` |
+| `kubernetes_version` | Kubernetes version | `1.36.1` |
+| `tailscale_auth_key` | Tailscale auth key (empty = skip) | `""` |
+| `tailscale_domain` | Tailscale MagicDNS domain | — |
+| `allow_scheduling_on_control_planes` | Allow workloads on control plane nodes | `false` |
+| `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
+| `extra_config_patches` | Additional Talos machine config patches | `[]` |
 
-### Talos
+### Shared
 
 | Variable | Providers | Description | Default |
 |----------|-----------|-------------|---------|
@@ -163,17 +187,18 @@ just setup-libvirt-cli
 | `cluster_vip` | both | Virtual IP for the Kubernetes API endpoint | — |
 | `tailscale_auth_key` | both | Tailscale auth key (empty = skip) | `""` (opt-in) |
 | `allow_scheduling_on_control_planes` | both | Allow workloads on control plane nodes | `false` |
-| `tailscale_domain` | both | Tailscale MagicDNS domain | `lonk-mirfak.ts.net` |
-| `talos_image_cache_dir` | libvirt | Local cache for nocloud raw images | `/tmp/talos-images` |
-| `schematic_name` | libvirt | Schematic YAML filename | `schematic-dev.yaml` |
-| `cluster_name` | libvirt | Cluster name (module default) | `talos-cluster` |
-| `kubernetes_version` | libvirt | Kubernetes version (module default) | `1.36.1` |
-| `longhorn_enabled` | libvirt | Inject kubelet extraMounts for Longhorn | `true` |
-| `extra_config_patches` | libvirt | Additional Talos machine config patches | `[]` |
-| `network_prefix` | libvirt | CIDR prefix length | `24` |
-| `gateway` | libvirt | Default gateway IPv4 | `10.0.1.1` |
 
-> **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly. `tailscale_domain` on Proxmox is derived from `env_name` (only active for `prod`).
+> **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly.
+
+## Outputs
+
+| Output | Providers | Description |
+|--------|-----------|-------------|
+| `talosconfig` | both | Talos client configuration for talosctl |
+| `kubeconfig` | both | Standard kubeconfig for kubectl |
+| `kubeconfig_tailscale` | both | Kubeconfig with one context per Tailscale hostname |
+| `machine_configuration_cp` | module | Talos machine config for control plane nodes (used by libvirt cloud-init) |
+| `machine_configuration_worker` | module | Talos machine config for worker nodes (used by libvirt cloud-init) |
 
 ## Access
 
@@ -216,6 +241,7 @@ Every task accepts `tf_env=dev` to target the dev environment (default: `prod`).
 
 | Task | Description |
 |------|-------------|
+| `tf-init` | Initialize Terraform with local backend |
 | `tf-plan` | Plan changes for `tf_env` |
 | `tf-apply` | Apply changes (bootstrap or update) |
 | `tf-ci-apply` | Non-interactive apply for CI (`-auto-approve`) |
@@ -230,6 +256,7 @@ Every task accepts `tf_env=dev` to target the dev environment (default: `prod`).
 
 | Task | Description |
 |------|-------------|
+| `tf-libvirt-init` | Initialize libvirt Terraform |
 | `tf-libvirt-plan` | Plan libvirt changes |
 | `tf-libvirt-apply` | Apply libvirt changes (bootstrap or update) |
 | `tf-libvirt-destroy` | Tear down the libvirt environment |
