@@ -29,7 +29,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
     datastore_id = var.datastore_vm
     ip_config {
       ipv4 {
-        address = "${each.value.ip}/24"
+        address = "${each.value.ip}/${split("/", var.network_cidr)[1]}"
         gateway = var.gateway
       }
     }
@@ -64,6 +64,9 @@ resource "proxmox_virtual_environment_vm" "talos" {
   operating_system {
     type = "l26"
   }
+  depends_on = [
+    proxmox_sdn_applier.this
+  ]
 }
 
 resource "proxmox_virtual_environment_vm" "talos_worker" {
@@ -80,7 +83,7 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     datastore_id = var.datastore_vm
     ip_config {
       ipv4 {
-        address = "${each.value.ip}/24"
+        address = "${each.value.ip}/${split("/", var.network_cidr)[1]}"
         gateway = var.gateway
       }
     }
@@ -115,6 +118,9 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   operating_system {
     type = "l26"
   }
+  depends_on = [
+    proxmox_sdn_applier.this
+  ]
 }
 
 # ── Talos Machine Secrets ────────────────────────
@@ -142,4 +148,18 @@ module "talos" {
     proxmox_virtual_environment_vm.talos,
     proxmox_virtual_environment_vm.talos_worker
   ]
+}
+
+# ── Cluster Health Gate ─────────────────────────
+# Blocks apply until kube-apiserver, etcd, and all nodes are Ready,
+# so dependent roots (platform/) never race the cluster bootstrap.
+data "talos_cluster_health" "this" {
+  depends_on           = [module.talos]
+  client_configuration = talos_machine_secrets.this.client_configuration
+  control_plane_nodes  = [for node in var.nodes_cp : node.ip]
+  worker_nodes         = [for node in var.nodes_worker : node.ip]
+  endpoints            = [for node in var.nodes_cp : node.ip]
+  timeouts = {
+    read = "15m"
+  }
 }

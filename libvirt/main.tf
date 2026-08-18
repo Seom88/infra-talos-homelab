@@ -438,3 +438,17 @@ module "talos_cluster" {
     terraform_data.wait_for_cp,
   ]
 }
+
+# ── Cluster Health Gate ─────────────────────────
+# Blocks apply until kube-apiserver, etcd, and all nodes are Ready,
+# so dependent roots (platform/) never race the cluster bootstrap.
+data "talos_cluster_health" "this" {
+  depends_on           = [module.talos]
+  client_configuration = talos_machine_secrets.this.client_configuration
+  control_plane_nodes  = [for node in var.nodes_cp : node.ip]
+  worker_nodes         = [for node in var.nodes_worker : node.ip]
+  endpoints            = [for node in var.nodes_cp : node.ip]
+  timeouts = {
+    read = "15m"
+  }
+}

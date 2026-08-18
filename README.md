@@ -106,6 +106,7 @@ secrets/                         # Generated credentials (.gitignored)
 ## Requirements
 
 - **Proxmox path**: Proxmox VE 8.x with API access
+- **Network access (Proxmox SDN)**: the machine running `terraform apply` (laptop or CI) must be able to reach the cluster subnet `10.10.0.0/24`. The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT but nothing from outside reaches them directly. For `prod`, expose the subnet through a Tailscale subnet router (see [Quick start → Proxmox](#proxmox-1))
 - **Libvirt path**: Linux host with libvirt + KVM and `qemu:///system` accessible
 - Terraform >= 1.5
 - Talos Image Factory schematic ID
@@ -162,6 +163,18 @@ just tf_env=dev setup-cli  # dev
 ```
 
 All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state, and secrets directory under `proxmox/environments/`. Tailscale is only enabled for `prod`.
+
+> **Network reachability (Proxmox SDN)**: Terraform must be able to reach the cluster IPs (`10.10.0.0/24`). The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT (subnet `snat = true`), but traffic from outside cannot reach them directly. If you are not on the same network as the Proxmox host, expose the subnet through Tailscale from the Proxmox node (prod):
+>
+> ```bash
+> # 1. On the Proxmox host (subnet router — it already runs Tailscale)
+> sudo tailscale set --advertise-routes=10.10.0.0/24
+> ```
+>
+> 2. Approve the route: admin console → **Machines** → the host row → **Subnets** → **Edit route settings** → tick `10.10.0.0/24` → **Save**
+> 3. On the device running Terraform: `sudo tailscale set --accept-routes` (Linux only — Windows/macOS accept routes by default)
+>
+> Without the route, the `talos_cluster_health` gate waits until its 15 m timeout because it cannot reach the control plane endpoints.
 
 ### Libvirt
 
@@ -306,6 +319,36 @@ Every task accepts `tf_env=dev` to target the dev environment (default: `prod`).
 | `tf-libvirt-destroy` | Tear down the libvirt environment |
 | `gen-libvirt-secrets` | Extract talosconfig + kubeconfig from libvirt state |
 | `setup-libvirt-cli` | gen-libvirt-secrets + merge into local `~/.talos/config` and `~/.kube/config` |
+
+## Platform (Longhorn + ArgoCD)
+
+The `platform/` layer is an independent Terraform root (its own state) that installs the **platform** on top of the cluster:
+
+- **Longhorn** (`longhorn-system`) — distributed storage. Provides the default StorageClass and an additional `longhorn-prod` StorageClass (Retain + `ssd,nvme` selector).
+- **ArgoCD** (`argocd`) — GitOps engine.
+
+The cluster depends on this layer: Longhorn and ArgoCD are project dependencies, not optional.
+
+### Setup flow
+
+1. `just tf-apply` — provisions the cluster; the health gate (`talos_cluster_health`) blocks the apply until kube-apiserver, etcd, and all nodes are Ready.
+2. `just tf-platform-apply` — regenerates `secrets/<env>/kubeconfig.yaml` and applies the platform layer: waits for Ready nodes, installs Longhorn, waits for the CSI, applies the StorageClass, and installs ArgoCD.
+3. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository.
+
+For other environments, use `tf_env`: `just tf_env=dev tf-platform-apply` (or `tf_env=libvirt`).
+
+### Migrating an existing cluster
+
+If the cluster already has Longhorn or ArgoCD installed (for example, via the `init-infra.sh` script from the GitOps repo), you can adopt the existing releases into the Terraform state with `terraform import`:
+
+```bash
+terraform -chdir=platform import 'helm_release.longhorn' longhorn-system/longhorn
+terraform -chdir=platform import 'helm_release.argocd' argocd/argocd
+```
+
+### State
+
+Platform state is stored locally in `/tmp/<env>-platform-terraform.tfstate` — one file per environment.
 
 ## CI/CD
 

@@ -51,9 +51,33 @@ variable "endpoint" {
 # ============================================================
 
 variable "network_bridge" {
-  description = "Proxmox network bridge to attach VMs to (e.g. vmbr0)"
+  description = "Proxmox network bridge to attach VMs to. When using SDN, this must match the SDN VNet id — max 8 chars (e.g. talosvn)"
   type        = string
   default     = "vmbr0"
+}
+
+variable "sdn_zone" {
+  description = "SDN zone id for the Talos network. Each environment gets its own zone + VNet"
+  type        = string
+  default     = "talos"
+}
+
+variable "network_cidr" {
+  description = "CIDR for the SDN VNet subnet. Must contain the node IPs (e.g. 10.10.0.0/24)"
+  type        = string
+  default     = "10.10.0.0/24"
+}
+
+variable "network_mtu" {
+  description = "MTU for the SDN zone"
+  type        = number
+  default     = 1500
+}
+
+variable "network_snat" {
+  description = "Enable SNAT on the SDN subnet so VMs reach the internet via the node (the gateway IP is taken by the node's bridge). Disable only if an external router handles routing/NAT for the subnet"
+  type        = bool
+  default     = true
 }
 
 variable "node_name" {

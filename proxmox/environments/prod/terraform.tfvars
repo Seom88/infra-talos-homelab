@@ -3,11 +3,13 @@ endpoint                           = "https://pve01.lonk-mirfak.ts.net:8006"
 ssh_node_address                   = "pve01.lonk-mirfak.ts.net"
 gateway                            = "10.10.0.1"
 node_name                          = "pve01"
-datastore_vm                       = "ssd"
+datastore_vm                       = "ssd01"
 datastore_iso                      = "local"
 insecure                           = true
-network_bridge                     = "vnet1"
-cluster_vip                        = "10.10.10.171"
+network_bridge                     = "talosvn"
+sdn_zone                           = "prod"
+network_cidr                       = "10.10.0.0/24"
+cluster_vip                        = "10.10.0.171"
 disk_size_cp                       = 100
 allow_scheduling_on_control_planes = true
 nodes_cp = [
@@ -37,21 +39,21 @@ disk_size_worker = 100
 nodes_worker = [
   #   {
   #     hostname     = "talos-w1"
-  #     ip           = "10.10.10.181"
+  #     ip           = "10.10.0.181"
   #     cores        = 4
   #     memory       = 4 * 1024
   #     proxmox_node = "pve"
   #   },
   #   {
   #     hostname     = "talos-w2"
-  #     ip           = "10.10.10.182"
+  #     ip           = "10.10.0.182"
   #     cores        = 4
   #     memory       = 4 * 1024
   #     proxmox_node = "pve"
   #   },
   #   {
   #     hostname     = "talos-w3"
-  #     ip           = "10.10.10.183"
+  #     ip           = "10.10.0.183"
   #     cores        = 4
   #     memory       = 4 * 1024
   #     proxmox_node = "pve"

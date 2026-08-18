@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.3] - 2026-08-18
+
+### Added
+- **Platform root** (`platform/`) — new Terraform workspace that installs **Longhorn** (v1.12.1, default storage class) and **ArgoCD** (v9.5.13) from outside this repo's cluster roots:
+  - `platform/main.tf` — declarative pipeline: wait for all nodes Ready → `longhorn-system` namespace (PSA privileged) → Longhorn Helm chart → wait for Longhorn CSI (manager DaemonSet → driver-deployer → csi-plugin) → `longhorn-prod` StorageClass → ArgoCD Helm chart
+  - `platform/providers.tf` — `kubernetes` + `helm` providers configured against `secrets/<env>/kubeconfig.yaml`
+  - `platform/variables.tf` — `env_name` (default `prod`)
+  - `platform/values/longhorn/` + `platform/values/argocd/` — values moved verbatim from the GitOps repo (`secured-gitops-tailscale-homelab`)
+- **Cluster health gate** — `data "talos_cluster_health"` in `proxmox/main.tf`: `terraform apply` blocks until kube-apiserver, etcd and all nodes are Ready (protects both local and CI applies)
+- **SDN networking (Proxmox)** — `proxmox/network.tf` now creates the cluster network via Proxmox SDN: simple zone + VNet (the `talosvn` bridge, id matches `network_bridge`, max 8 chars) + subnet (`snat = true`, so VMs reach the internet through the node via MASQUERADE) + `proxmox_sdn_applier` (performs the SDN Apply — without it the bridge does not exist on the node and VM creation fails). VMs depend on the applier so the network exists before they boot
+- **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply` (chains `gen-secrets` first), `tf-platform-destroy`
+
+### Changed
+- `README.md` — new "Plataforma (Longhorn + ArgoCD)" section: setup flow (`tf-apply` → `tf-platform-apply` → GitOps bootstrap), migration via `terraform import`, local state note
+- `README.md` — documented the SDN network reachability requirement: the `talosvn` VNet is isolated (outbound SNAT only), so the machine running `terraform apply` must reach `10.10.0.0/24`; for `prod` the subnet is exposed via a Tailscale subnet router (`tailscale set --advertise-routes=10.10.0.0/24` on the Proxmox host, approve in admin console, `--accept-routes` on Linux clients)
+- `proxmox/environments/{dev,prod}/terraform.tfvars` — network bridge renamed `vnet1` → `talosvn`; new `sdn_zone` / `network_cidr` variables; `cluster_vip` corrected to `10.10.0.171` (was outside the `10.10.0.0/24` subnet)
+- `proxmox/main.tf` — VM IP prefix/mask now derived from `network_cidr` instead of a hardcoded `/24`
+- `proxmox/variables.tf` — added `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` variables; `network_bridge` doc updated for SDN usage
+
 ## [1.0.2] - 2026-07-16
 
 ### Added
