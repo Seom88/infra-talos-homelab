@@ -67,10 +67,9 @@ variable "tailscale_auth_key" {
   sensitive   = true
 }
 
-variable "allow_scheduling_on_control_planes" {
-  description = "Allow workload pods to be scheduled on control plane nodes"
-  type        = bool
-  default     = false
+variable "cp_allow_scheduling" {
+  description = "Per control plane node: allow workloads on that node. Index-aligned with cp_hostnames / cp_ips."
+  type        = list(bool)
 }
 
 variable "longhorn_enabled" {

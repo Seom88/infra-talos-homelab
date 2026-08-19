@@ -25,6 +25,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply` (chains `gen-secrets` first), `tf-platform-destroy`
 
 ### Changed
+- **Breaking: `allow_scheduling_on_control_planes` removed** — replaced by a required per-node `allow_scheduling` flag on `nodes_cp` entries. The `talos-cluster` module now takes `cp_allow_scheduling` (index-aligned with `cp_hostnames` / `cp_ips`) and removes the `node-role.kubernetes.io/control-plane` taint **post-bootstrap** with `kubectl taint` (requires `kubectl` on the machine running Terraform)
+- **Breaking: per-node disk/datastore are now required** — `nodes_cp` / `nodes_worker` require per-node `disk_size` (GB) and `datastore` (Proxmox) / `pool` (libvirt); the global `disk_size_cp`, `disk_size_worker` and `datastore_vm` variables were removed, so there are no fallback defaults
 - `talos_version` is now a **bootstrap-only pin** in both `proxmox/variables.tf` and `libvirt/variables.tf` (explicit comment): `terraform apply` no longer doubles as the Talos upgrade path — upgrades run through `just upgrade` / `just upgrade-libvirt`
 - Talos Linux default `1.13.6` → `1.13.8` (both roots)
 - `README.md` — corrected stale version defaults (`talos_version` 1.13.3 → 1.13.8, `kubernetes_version` 1.36.1 → 1.36.2)

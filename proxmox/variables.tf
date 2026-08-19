@@ -96,30 +96,30 @@ variable "datastore_iso" {
   default     = "local"
 }
 
-variable "datastore_vm" {
-  description = "Proxmox datastore ID for VM disks (e.g. local-lvm, ssd1)"
-  type        = string
-  default     = "local-lvm"
-}
-
 variable "nodes_cp" {
   description = <<-EOF
     Control plane nodes and their configurations.
-    Each node requires: hostname, ip, cores, memory, proxmox_node.
+    Each node requires: hostname, ip, cores, memory, proxmox_node,
+    per-node disk_size (GB) and datastore; allow_scheduling opts this CP
+    out of the control-plane taint.
   EOF
   type = list(object({
-    hostname     = string
-    ip           = string
-    cores        = number
-    memory       = number
-    proxmox_node = string
+    hostname         = string
+    ip               = string
+    cores            = number
+    memory           = number
+    proxmox_node     = string
+    disk_size        = number
+    datastore        = string
+    allow_scheduling = bool
   }))
 }
 
 variable "nodes_worker" {
   description = <<-EOF
     Worker nodes and their configurations.
-    Each node requires: hostname, ip, cores, memory, proxmox_node.
+    Each node requires: hostname, ip, cores, memory, proxmox_node,
+    per-node disk_size (GB) and datastore.
   EOF
   type = list(object({
     hostname     = string
@@ -127,28 +127,14 @@ variable "nodes_worker" {
     cores        = number
     memory       = number
     proxmox_node = string
+    disk_size    = number
+    datastore    = string
   }))
 }
 
 variable "cluster_vip" {
   description = "Virtual IP for the cluster control plane (e.g. 10.1.3.10)"
   type        = string
-}
-
-# ============================================================
-# VM disk sizes — per node type
-# ============================================================
-
-variable "disk_size_cp" {
-  description = "Disk size in GB for control plane nodes"
-  type        = number
-  default     = 20
-}
-
-variable "disk_size_worker" {
-  description = "Disk size in GB for worker nodes"
-  type        = number
-  default     = 100
 }
 
 # ============================================================
@@ -173,12 +159,6 @@ variable "tailscale_auth_key" {
   type        = string
   default     = ""
   sensitive   = true
-}
-
-variable "allow_scheduling_on_control_planes" {
-  description = "Allow workload pods to be scheduled on control plane nodes. Pass-through to talos-cluster module."
-  type        = bool
-  default     = false
 }
 
 variable "tailscale_domain" {

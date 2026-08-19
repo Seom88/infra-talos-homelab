@@ -5,24 +5,27 @@
 variable "nodes_cp" {
   description = <<-EOF
     Control plane nodes.
-    Required: hostname, ip, mac (static), cores, memory (MiB).
-    disk_size defaults to 20 GiB.
+    Required: hostname, ip, mac (static), cores, memory (MiB),
+    disk_size (GiB), pool and allow_scheduling (opts this CP out of the
+    control-plane taint).
   EOF
   type = list(object({
-    hostname  = string
-    ip        = string
-    mac       = string
-    cores     = number
-    memory    = number
-    disk_size = optional(number, 20)
+    hostname         = string
+    ip               = string
+    mac              = string
+    cores            = number
+    memory           = number
+    disk_size        = number
+    pool             = string
+    allow_scheduling = bool
   }))
 }
 
 variable "nodes_worker" {
   description = <<-EOF
     Worker nodes.
-    Required: hostname, ip, mac (static), cores, memory (MiB).
-    disk_size defaults to 100 GiB.
+    Required: hostname, ip, mac (static), cores, memory (MiB),
+    disk_size (GiB) and pool.
   EOF
   type = list(object({
     hostname  = string
@@ -30,7 +33,8 @@ variable "nodes_worker" {
     mac       = string
     cores     = number
     memory    = number
-    disk_size = optional(number, 100)
+    disk_size = number
+    pool      = string
   }))
 }
 
@@ -110,12 +114,6 @@ variable "tailscale_auth_key" {
 variable "tailscale_domain" {
   description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net)"
   type        = string
-}
-
-variable "allow_scheduling_on_control_planes" {
-  description = "Allow workloads on control plane nodes"
-  type        = bool
-  default     = false
 }
 
 variable "longhorn_enabled" {

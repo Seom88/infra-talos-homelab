@@ -207,21 +207,17 @@ just setup-libvirt-cli
 | `gateway` | VM default gateway | — |
 | `network_bridge` | Proxmox network bridge (e.g. `vmbr0`, `vnet1`) | `vmbr0` |
 | `datastore_iso` | Datastore for ISO/raw images | `local` |
-| `datastore_vm` | Datastore for VM disks | `local-lvm` |
 | `cluster_vip` | Virtual IP for the Kubernetes API endpoint | — |
-| `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node) | — |
-| `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node) | — |
-| `disk_size_cp` | Disk size in GB for control plane nodes | `20` |
-| `disk_size_worker` | Disk size in GB for worker nodes | `100` |
+| `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required) | — |
+| `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required) | — |
 | `tailscale_domain` | Tailscale MagicDNS domain | `lonk-mirfak.ts.net` |
-| `allow_scheduling_on_control_planes` | Allow workloads on control plane nodes | `false` |
 
 ### Libvirt
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `nodes_cp` | Control plane nodes (hostname, ip, mac, cores, memory, disk_size) | — |
-| `nodes_worker` | Worker nodes (hostname, ip, mac, cores, memory, disk_size) | — |
+| `nodes_cp` | Control plane nodes (hostname, ip, mac, cores, memory, disk_size, pool, allow_scheduling — all required) | — |
+| `nodes_worker` | Worker nodes (hostname, ip, mac, cores, memory, disk_size, pool — all required) | — |
 | `gateway` | Default gateway IPv4 | `10.0.1.1` |
 | `network_prefix` | CIDR prefix length | `24` |
 | `schematic_name` | Schematic YAML filename | `schematic-dev.yaml` |
@@ -232,7 +228,6 @@ just setup-libvirt-cli
 | `kubernetes_version` | Kubernetes version | `1.36.2` |
 | `tailscale_auth_key` | Tailscale auth key (empty = skip) | `""` |
 | `tailscale_domain` | Tailscale MagicDNS domain | — |
-| `allow_scheduling_on_control_planes` | Allow workloads on control plane nodes | `false` |
 | `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
 | `extra_config_patches` | Additional Talos machine config patches | `[]` |
 
@@ -243,7 +238,7 @@ just setup-libvirt-cli
 | `talos_version` | both | Talos Linux version | `1.13.8` |
 | `cluster_vip` | both | Virtual IP for the Kubernetes API endpoint | — |
 | `tailscale_auth_key` | both | Tailscale auth key (empty = skip) | `""` (opt-in) |
-| `allow_scheduling_on_control_planes` | both | Allow workloads on control plane nodes | `false` |
+| `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Taints are removed **post-bootstrap** with `kubectl taint` — requires `kubectl` installed on the machine running Terraform | — |
 
 > **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly.
 
@@ -259,9 +254,9 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 |------------|--------------|
 | `talos_version` | New version changes the download URL → new disk `file_id` → VMs recreated, etcd wiped |
 | `schematic-{env}.yaml` (editing system extensions) | New schematic ID → new image → same recreate path as `talos_version` |
-| `datastore_iso`, `datastore_vm` | Disks recreated on the new datastore |
+| `datastore_iso`, `nodes_cp[].datastore` / `nodes_worker[].datastore` | Disks recreated on the new datastore |
 | `node_name`, `nodes_cp[].proxmox_node` | Proxmox doesn't migrate VMs between nodes — destroy + create |
-| `disk_size_cp` / `disk_size_worker` (decrease) | Disks can't shrink — destroy + create |
+| `nodes_cp[].disk_size` / `nodes_worker[].disk_size` (decrease) | Disks can't shrink — destroy + create |
 | Removing a node from `nodes_cp` / `nodes_worker` | That VM is destroyed |
 | `env_name` | Different resource namespace → full recreate |
 
@@ -275,7 +270,7 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 
 ### 🟢 Safe to change
 
-`endpoint`, `api_token`, `ssh_username`, `ssh_node_address`, `insecure`, `tailscale_auth_key`, `tailscale_domain`, `allow_scheduling_on_control_planes`.
+`endpoint`, `api_token`, `ssh_username`, `ssh_node_address`, `insecure`, `tailscale_auth_key`, `tailscale_domain`, `nodes_cp[].allow_scheduling`.
 
 ### Upgrading Talos
 

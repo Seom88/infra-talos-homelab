@@ -29,6 +29,8 @@ locals {
       }
     }
   }) : ""
+
+  scheduled_cp_hostnames = [for i, hostname in var.cp_hostnames : hostname if var.cp_allow_scheduling[i]]
 }
 
 data "talos_client_configuration" "client_config" {
@@ -57,11 +59,6 @@ data "talos_machine_configuration" "control_machine_config" {
         }
       }
     }),
-    var.allow_scheduling_on_control_planes ? yamlencode({
-      cluster = {
-        allowSchedulingOnControlPlanes = true
-      }
-    }) : "",
     yamlencode({
       apiVersion = "v1alpha1"
       kind       = "Layer2VIPConfig"
@@ -140,4 +137,20 @@ resource "talos_cluster_kubeconfig" "kubeconfig" {
   depends_on           = [talos_machine_bootstrap.bootstrap]
   client_configuration = var.client_configuration
   node                 = var.cp_ips[0]
+}
+
+# Removes the control-plane taint post-bootstrap for CPs with allow_scheduling=true.
+# Per-node taint removal via KubeNodeConfig requires Talos v1.14+; on 1.13 it is
+# done imperatively with kubectl once the nodes register with the kube-apiserver.
+resource "terraform_data" "remove_control_plane_taints" {
+  count = length(local.scheduled_cp_hostnames) > 0 ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "bash ${path.module}/scripts/remove-control-plane-taints.sh ${join(" ", local.scheduled_cp_hostnames)}"
+    environment = {
+      KUBECONFIG_CONTENT = talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw
+    }
+  }
+
+  depends_on = [talos_cluster_kubeconfig.kubeconfig]
 }

@@ -6,11 +6,14 @@ cluster_vip = "10.0.1.10"
 
 nodes_cp = [
   {
-    hostname = "talos-cp1"
-    mac      = "52:54:00:aa:00:01"
-    ip       = "10.0.1.11"
-    cores    = 4
-    memory   = 4 * 1024
+    hostname         = "talos-cp1"
+    mac              = "52:54:00:aa:00:01"
+    ip               = "10.0.1.11"
+    cores            = 4
+    memory           = 4 * 1024
+    disk_size        = 20
+    pool             = "default"
+    allow_scheduling = false
   },
 ]
 
@@ -22,6 +25,7 @@ nodes_worker = [
     cores     = 4
     memory    = 4 * 1024
     disk_size = 100
+    pool      = "default"
   },
   {
     hostname  = "talos-w2"
@@ -30,6 +34,7 @@ nodes_worker = [
     cores     = 4
     memory    = 4 * 1024
     disk_size = 100
+    pool      = "default"
   },
   {
     hostname  = "talos-w3"
@@ -38,5 +43,6 @@ nodes_worker = [
     cores     = 4
     memory    = 4 * 1024
     disk_size = 100
+    pool      = "default"
   },
 ]

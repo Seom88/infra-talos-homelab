@@ -69,6 +69,7 @@ locals {
       cores     = n.cores
       memory    = n.memory
       disk_size = n.disk_size
+      pool      = n.pool
     } },
     { for n in var.nodes_worker : n.hostname => {
       role      = "worker"
@@ -77,6 +78,7 @@ locals {
       cores     = n.cores
       memory    = n.memory
       disk_size = n.disk_size
+      pool      = n.pool
     } },
   )
 
@@ -152,11 +154,6 @@ data "talos_machine_configuration" "cp" {
         }
       }
     }),
-    var.allow_scheduling_on_control_planes ? yamlencode({
-      cluster = {
-        allowSchedulingOnControlPlanes = true
-      }
-    }) : "",
     # local.dns_patch,
     yamlencode({
       apiVersion = "v1alpha1"
@@ -228,7 +225,7 @@ resource "terraform_data" "talos_nocloud_image" {
 resource "libvirt_volume" "boot" {
   for_each = local.nodes_all
   name     = "${each.key}.raw"
-  pool     = "default"
+  pool     = each.value.pool
 
   target = {
     format = {
@@ -278,7 +275,7 @@ resource "libvirt_cloudinit_disk" "cloud_init" {
 resource "libvirt_volume" "cloud_init" {
   for_each = local.nodes_all
   name     = "${each.key}-cloudinit.iso"
-  pool     = "default"
+  pool     = each.value.pool
 
   create = {
     content = {
@@ -417,22 +414,22 @@ resource "terraform_data" "wait_for_cp" {
 module "talos_cluster" {
   source = "../modules/talos-cluster"
 
-  machine_secrets                    = talos_machine_secrets.this.machine_secrets
-  client_configuration               = talos_machine_secrets.this.client_configuration
-  cp_ips                             = local.cp_ips
-  cp_hostnames                       = [for n in var.nodes_cp : n.hostname]
-  worker_ips                         = [for n in var.nodes_worker : n.ip]
-  worker_hostnames                   = [for n in var.nodes_worker : n.hostname]
-  cluster_name                       = var.cluster_name
-  cluster_vip                        = var.cluster_vip
-  talos_version                      = var.talos_version
-  kubernetes_version                 = var.kubernetes_version
-  talos_image_id                     = talos_image_factory_schematic.this.id
-  tailscale_domain                   = var.tailscale_domain
-  tailscale_auth_key                 = var.tailscale_auth_key
-  allow_scheduling_on_control_planes = var.allow_scheduling_on_control_planes
-  longhorn_enabled                   = var.longhorn_enabled
-  extra_config_patches               = var.extra_config_patches
+  machine_secrets      = talos_machine_secrets.this.machine_secrets
+  client_configuration = talos_machine_secrets.this.client_configuration
+  cp_ips               = local.cp_ips
+  cp_hostnames         = [for n in var.nodes_cp : n.hostname]
+  worker_ips           = [for n in var.nodes_worker : n.ip]
+  worker_hostnames     = [for n in var.nodes_worker : n.hostname]
+  cluster_name         = var.cluster_name
+  cluster_vip          = var.cluster_vip
+  talos_version        = var.talos_version
+  kubernetes_version   = var.kubernetes_version
+  talos_image_id       = talos_image_factory_schematic.this.id
+  tailscale_domain     = var.tailscale_domain
+  tailscale_auth_key   = var.tailscale_auth_key
+  cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
+  longhorn_enabled     = var.longhorn_enabled
+  extra_config_patches = var.extra_config_patches
 
   depends_on = [
     terraform_data.wait_for_cp,
@@ -443,7 +440,7 @@ module "talos_cluster" {
 # Blocks apply until kube-apiserver, etcd, and all nodes are Ready,
 # so dependent roots (platform/) never race the cluster bootstrap.
 data "talos_cluster_health" "this" {
-  depends_on           = [module.talos]
+  depends_on           = [module.talos_cluster]
   client_configuration = talos_machine_secrets.this.client_configuration
   control_plane_nodes  = [for node in var.nodes_cp : node.ip]
   worker_nodes         = [for node in var.nodes_worker : node.ip]

@@ -3,5 +3,6 @@ customization:
         officialExtensions:
             - siderolabs/iscsi-tools
             - siderolabs/qemu-guest-agent
-            - siderolabs/tailscale
+            # Disable because subnets is easier to manage and talos use an old version of tailscale
+            # - siderolabs/tailscale
             - siderolabs/util-linux-tools
