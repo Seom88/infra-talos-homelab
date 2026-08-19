@@ -4,9 +4,17 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.3] - 2026-08-18
+## [1.1.0] - 2026-08-18
 
 ### Added
+- **Rolling Talos upgrade** (`scripts/talos-upgrade.sh`) — upgrades a running cluster in place, node by node, preserving etcd:
+  - Resolves the latest stable Talos release from GitHub, computes the schematic ID via the Image Factory API, and runs `talosctl upgrade` per node (control planes first, then workers) with a cluster health check after each node
+  - Syncs the `talos_version` pin in both `proxmox/variables.tf` and `libvirt/variables.tf` afterwards
+- **Justfile upgrade tasks** — `upgrade` (proxmox, per `tf_env`) and `upgrade-libvirt` (libvirt) under a new "Talos Upgrade" section
+- **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (Longhorn + ArgoCD) after the cluster:
+  - `validate` job: platform format check + init/validate
+  - `deploy` job: `azure/setup-kubectl` + `azure/setup-helm` actions, platform secrets from cluster outputs, platform state restore/backup as artifact (mirrors the proxmox flow), and `terraform apply -var=env_name`
+- **README risk section** — "⚠️ Changes that destroy your cluster": traffic-light tables mapping `terraform.tfvars` changes to VM-destroy (cluster wipe), outage-only, or no-effect, plus the bootstrap-only upgrade guidance
 - **Platform root** (`platform/`) — new Terraform workspace that installs **Longhorn** (v1.12.1, default storage class) and **ArgoCD** (v9.5.13) from outside this repo's cluster roots:
   - `platform/main.tf` — declarative pipeline: wait for all nodes Ready → `longhorn-system` namespace (PSA privileged) → Longhorn Helm chart → wait for Longhorn CSI (manager DaemonSet → driver-deployer → csi-plugin) → `longhorn-prod` StorageClass → ArgoCD Helm chart
   - `platform/providers.tf` — `kubernetes` + `helm` providers configured against `secrets/<env>/kubeconfig.yaml`
@@ -17,6 +25,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply` (chains `gen-secrets` first), `tf-platform-destroy`
 
 ### Changed
+- `talos_version` is now a **bootstrap-only pin** in both `proxmox/variables.tf` and `libvirt/variables.tf` (explicit comment): `terraform apply` no longer doubles as the Talos upgrade path — upgrades run through `just upgrade` / `just upgrade-libvirt`
+- Talos Linux default `1.13.6` → `1.13.8` (both roots)
+- `README.md` — corrected stale version defaults (`talos_version` 1.13.3 → 1.13.8, `kubernetes_version` 1.36.1 → 1.36.2)
 - `README.md` — new "Plataforma (Longhorn + ArgoCD)" section: setup flow (`tf-apply` → `tf-platform-apply` → GitOps bootstrap), migration via `terraform import`, local state note
 - `README.md` — documented the SDN network reachability requirement: the `talosvn` VNet is isolated (outbound SNAT only), so the machine running `terraform apply` must reach `10.10.0.0/24`; for `prod` the subnet is exposed via a Tailscale subnet router (`tailscale set --advertise-routes=10.10.0.0/24` on the Proxmox host, approve in admin console, `--accept-routes` on Linux clients)
 - `proxmox/environments/{dev,prod}/terraform.tfvars` — network bridge renamed `vnet1` → `talosvn`; new `sdn_zone` / `network_cidr` variables; `cluster_vip` corrected to `10.10.0.171` (was outside the `10.10.0.0/24` subnet)

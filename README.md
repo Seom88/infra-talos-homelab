@@ -247,6 +247,45 @@ just setup-libvirt-cli
 
 > **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly.
 
+## ⚠️ Changes that destroy your cluster
+
+Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** instead of updating them in place. A recreated control plane node loses its etcd data; if more than one node is replaced, the cluster loses quorum and the L2 VIP goes down — the cluster comes back empty, and the platform layer (`longhorn`, `argocd`) must be re-applied.
+
+> **Rule of thumb**: `terraform apply` provisions and updates *configuration*. It is **not** the upgrade path for Talos — see [Upgrading Talos](#upgrading-talos) below.
+
+### 🔴 Destroys the cluster (VM destroy + recreate)
+
+| tfvars key | What happens |
+|------------|--------------|
+| `talos_version` | New version changes the download URL → new disk `file_id` → VMs recreated, etcd wiped |
+| `schematic-{env}.yaml` (editing system extensions) | New schematic ID → new image → same recreate path as `talos_version` |
+| `datastore_iso`, `datastore_vm` | Disks recreated on the new datastore |
+| `node_name`, `nodes_cp[].proxmox_node` | Proxmox doesn't migrate VMs between nodes — destroy + create |
+| `disk_size_cp` / `disk_size_worker` (decrease) | Disks can't shrink — destroy + create |
+| Removing a node from `nodes_cp` / `nodes_worker` | That VM is destroyed |
+| `env_name` | Different resource namespace → full recreate |
+
+### 🟡 Outage without data loss
+
+| tfvars key | What happens |
+|------------|--------------|
+| `network_bridge`, `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` | SDN config re-pushed, VMs reboot |
+| `gateway`, `cluster_vip` | Machine config re-pushed; cluster endpoint changes |
+| `kubernetes_version` | Machine config re-pushed (rolling kubelet update) |
+
+### 🟢 Safe to change
+
+`endpoint`, `api_token`, `ssh_username`, `ssh_node_address`, `insecure`, `tailscale_auth_key`, `tailscale_domain`, `allow_scheduling_on_control_planes`.
+
+### Upgrading Talos
+
+`talos_version` is a **bootstrap-only pin**: it selects the image the VMs are created with. To upgrade a running cluster, use the rolling upgrade (control planes first, then workers — preserves etcd and syncs the pin):
+
+```bash
+just upgrade          # proxmox (prod by default, tf_env=dev for dev)
+just upgrade-libvirt  # libvirt
+```
+
 ## Outputs
 
 | Output | Providers | Description |
