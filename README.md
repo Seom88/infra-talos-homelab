@@ -228,8 +228,8 @@ just setup-libvirt-cli
 | `talos_image_cache_dir` | Local cache for nocloud raw images | `/tmp/talos-images` |
 | `cluster_name` | Talos / Kubernetes cluster name | `talos-cluster` |
 | `cluster_vip` | Virtual IP for the Kubernetes API endpoint | — |
-| `talos_version` | Talos Linux version | `1.13.3` |
-| `kubernetes_version` | Kubernetes version | `1.36.1` |
+| `talos_version` | Talos Linux version | `1.13.8` |
+| `kubernetes_version` | Kubernetes version | `1.36.2` |
 | `tailscale_auth_key` | Tailscale auth key (empty = skip) | `""` |
 | `tailscale_domain` | Tailscale MagicDNS domain | — |
 | `allow_scheduling_on_control_planes` | Allow workloads on control plane nodes | `false` |
@@ -240,7 +240,7 @@ just setup-libvirt-cli
 
 | Variable | Providers | Description | Default |
 |----------|-----------|-------------|---------|
-| `talos_version` | both | Talos Linux version | `1.13.3` |
+| `talos_version` | both | Talos Linux version | `1.13.8` |
 | `cluster_vip` | both | Virtual IP for the Kubernetes API endpoint | — |
 | `tailscale_auth_key` | both | Tailscale auth key (empty = skip) | `""` (opt-in) |
 | `allow_scheduling_on_control_planes` | both | Allow workloads on control plane nodes | `false` |

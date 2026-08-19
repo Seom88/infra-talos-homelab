@@ -234,3 +234,13 @@ cluster-schematic-id:
     echo "Schematic ID ({{ tf_env }}):"
     talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
+
+# ── Talos Upgrade ─────────────────────────────
+
+# Rolling upgrade of Talos nodes to the latest stable release (proxmox env)
+upgrade:
+    ./scripts/talos-upgrade.sh --root proxmox --env {{ tf_env }}
+
+# Rolling upgrade of Talos nodes to the latest stable release (libvirt)
+upgrade-libvirt:
+    ./scripts/talos-upgrade.sh --root libvirt

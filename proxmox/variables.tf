@@ -155,10 +155,13 @@ variable "disk_size_worker" {
 # Talos — shared between Proxmox image download and talos-cluster module
 # ============================================================
 
+# Bootstrap-only pin: bumping this replaces the node disks (etcd wipe) and
+# recreates the VMs. Run 'just upgrade' / 'just upgrade-libvirt' to roll
+# Talos to the latest release in place.
 variable "talos_version" {
   description = "Talos Linux version to install on the nodes (e.g. 1.13.3)"
   type        = string
-  default     = "1.13.6"
+  default     = "1.13.8"
 }
 
 # ============================================================
