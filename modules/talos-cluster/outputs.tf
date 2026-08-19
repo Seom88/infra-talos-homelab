@@ -48,8 +48,10 @@ output "kubeconfig_tailscale" {
 }
 
 output "machine_configuration_cp" {
-  description = "Talos machine configuration for control plane nodes (for cloud-init user-data)"
-  value       = data.talos_machine_configuration.control_machine_config.machine_configuration
+  description = "Talos machine configuration per control plane node, keyed by hostname (for cloud-init user-data). Per-node because of the scheduling patch."
+  value = {
+    for hostname, config in data.talos_machine_configuration.control_machine_config : hostname => config.machine_configuration
+  }
 }
 
 output "machine_configuration_worker" {

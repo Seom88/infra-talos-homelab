@@ -162,7 +162,7 @@ just setup-cli             # prod
 just tf_env=dev setup-cli  # dev
 ```
 
-All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state, and secrets directory under `proxmox/environments/`. Tailscale is only enabled for `prod`.
+All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state, and secrets directory under `proxmox/environments/`. Platform state lives under `platform/environments/`. Tailscale is only enabled for `prod`.
 
 > **Network reachability (Proxmox SDN)**: Terraform must be able to reach the cluster IPs (`10.10.0.0/24`). The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT (subnet `snat = true`), but traffic from outside cannot reach them directly. If you are not on the same network as the Proxmox host, expose the subnet through Tailscale from the Proxmox node (prod):
 >
@@ -238,7 +238,7 @@ just setup-libvirt-cli
 | `talos_version` | both | Talos Linux version | `1.13.8` |
 | `cluster_vip` | both | Virtual IP for the Kubernetes API endpoint | — |
 | `tailscale_auth_key` | both | Tailscale auth key (empty = skip) | `""` (opt-in) |
-| `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Taints are removed **post-bootstrap** with `kubectl taint` — requires `kubectl` installed on the machine running Terraform | — |
+| `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Applied per node via the Talos `cluster.allowSchedulingOnControlPlanes` machine-config patch (Sidero docs) | — |
 
 > **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly.
 
@@ -382,7 +382,7 @@ terraform -chdir=platform import 'helm_release.argocd' argocd/argocd
 
 ### State
 
-Platform state is stored locally in `/tmp/<env>-platform-terraform.tfstate` — one file per environment.
+Platform state is stored locally at `platform/environments/<env>/platform-terraform.tfstate` — one file per environment.
 
 ## CI/CD
 

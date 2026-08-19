@@ -23,13 +23,13 @@ tf-fmt:
 # Init terraform with local backend for an environment
 tf-init:
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
 
 # Plan changes (auto-inits to ensure correct backend)
 tf-plan:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
     terraform -chdir={{ tf_root }} plan \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
@@ -37,7 +37,7 @@ tf-plan:
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
     terraform -chdir={{ tf_root }} apply \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
@@ -52,7 +52,7 @@ tf-destroy:
         echo "⚠ Tailscale cleanup failed, continuing with destroy"
     fi
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
     terraform -chdir={{ tf_root }} destroy \
       -var-file=environments/{{ tf_env }}/terraform.tfvars
 
@@ -66,7 +66,7 @@ gen-secrets:
     SECRETS="$ROOT/secrets/{{ tf_env }}"
     mkdir -p "$SECRETS"
     terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
     terraform -chdir={{ tf_root }} output -raw talosconfig > "$SECRETS/talosconfig.yaml"
     terraform -chdir={{ tf_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
     echo "✓ secrets regenerated ({{ tf_env }})"
@@ -171,13 +171,13 @@ platform_root := "./platform"
 # Init platform terraform (Longhorn + ArgoCD) with local backend
 tf-platform-init:
     terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-platform-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
 
 # Plan platform changes (auto-inits to ensure correct backend)
 tf-platform-plan:
     terraform -chdir={{ platform_root }} fmt
     terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-platform-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
     terraform -chdir={{ platform_root }} plan \
       -var="env_name={{ tf_env }}"
 
@@ -186,14 +186,14 @@ tf-platform-apply:
     just tf_env="{{ tf_env }}" gen-secrets
     terraform -chdir={{ platform_root }} fmt
     terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-platform-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
     terraform -chdir={{ platform_root }} apply \
       -var="env_name={{ tf_env }}"
 
 # Destroy platform resources (auto-inits to ensure correct backend)
 tf-platform-destroy:
     terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=/tmp/{{ tf_env }}-platform-terraform.tfstate"
+      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
     terraform -chdir={{ platform_root }} destroy \
       -var="env_name={{ tf_env }}"
 

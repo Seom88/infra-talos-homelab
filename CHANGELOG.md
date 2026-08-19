@@ -18,14 +18,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Platform root** (`platform/`) — new Terraform workspace that installs **Longhorn** (v1.12.1, default storage class) and **ArgoCD** (v9.5.13) from outside this repo's cluster roots:
   - `platform/main.tf` — declarative pipeline: wait for all nodes Ready → `longhorn-system` namespace (PSA privileged) → Longhorn Helm chart → wait for Longhorn CSI (manager DaemonSet → driver-deployer → csi-plugin) → `longhorn-prod` StorageClass → ArgoCD Helm chart
   - `platform/providers.tf` — `kubernetes` + `helm` providers configured against `secrets/<env>/kubeconfig.yaml`
-  - `platform/variables.tf` — `env_name` (default `prod`)
+  - `platform/variables.tf` — `env_name` (default `prod`), `longhorn_version` (default `1.12.1`), `argocd_version` (default `9.5.13`); chart versions are pinned exact, overridable per environment
   - `platform/values/longhorn/` + `platform/values/argocd/` — values moved verbatim from the GitOps repo (`secured-gitops-tailscale-homelab`)
 - **Cluster health gate** — `data "talos_cluster_health"` in `proxmox/main.tf`: `terraform apply` blocks until kube-apiserver, etcd and all nodes are Ready (protects both local and CI applies)
 - **SDN networking (Proxmox)** — `proxmox/network.tf` now creates the cluster network via Proxmox SDN: simple zone + VNet (the `talosvn` bridge, id matches `network_bridge`, max 8 chars) + subnet (`snat = true`, so VMs reach the internet through the node via MASQUERADE) + `proxmox_sdn_applier` (performs the SDN Apply — without it the bridge does not exist on the node and VM creation fails). VMs depend on the applier so the network exists before they boot
 - **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply` (chains `gen-secrets` first), `tf-platform-destroy`
 
 ### Changed
-- **Breaking: `allow_scheduling_on_control_planes` removed** — replaced by a required per-node `allow_scheduling` flag on `nodes_cp` entries. The `talos-cluster` module now takes `cp_allow_scheduling` (index-aligned with `cp_hostnames` / `cp_ips`) and removes the `node-role.kubernetes.io/control-plane` taint **post-bootstrap** with `kubectl taint` (requires `kubectl` on the machine running Terraform)
+- **Breaking: `allow_scheduling_on_control_planes` removed** — replaced by a required per-node `allow_scheduling` flag on `nodes_cp` entries. The `talos-cluster` module now takes `cp_allow_scheduling` (index-aligned with `cp_hostnames` / `cp_ips`) and patches each control plane's Talos machine config with `cluster.allowSchedulingOnControlPlanes: true` (per Sidero docs), so the kubelet never registers the `node-role.kubernetes.io/control-plane` taint — durable across node reboots, no `kubectl` requirement
 - **Breaking: per-node disk/datastore are now required** — `nodes_cp` / `nodes_worker` require per-node `disk_size` (GB) and `datastore` (Proxmox) / `pool` (libvirt); the global `disk_size_cp`, `disk_size_worker` and `datastore_vm` variables were removed, so there are no fallback defaults
 - `talos_version` is now a **bootstrap-only pin** in both `proxmox/variables.tf` and `libvirt/variables.tf` (explicit comment): `terraform apply` no longer doubles as the Talos upgrade path — upgrades run through `just upgrade` / `just upgrade-libvirt`
 - Talos Linux default `1.13.6` → `1.13.8` (both roots)

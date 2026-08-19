@@ -30,7 +30,17 @@ locals {
     }
   }) : ""
 
-  scheduled_cp_hostnames = [for i, hostname in var.cp_hostnames : hostname if var.cp_allow_scheduling[i]]
+  cp_allow_scheduling_map = { for i, hostname in var.cp_hostnames : hostname => var.cp_allow_scheduling[i] }
+  # Durable per Sidero docs (Talos v1.13): cluster.allowSchedulingOnControlPlanes makes
+  # the kubelet itself skip the control-plane taint. Applied PER NODE: each control plane
+  # node gets its own machine config, so only nodes with allow_scheduling=true lose the
+  # taint. Replaces the fragile post-bootstrap `kubectl taint` removal, which the kubelet
+  # re-applies on restart.
+  scheduling_patch = yamlencode({
+    cluster = {
+      allowSchedulingOnControlPlanes = true
+    }
+  })
 }
 
 data "talos_client_configuration" "client_config" {
@@ -40,9 +50,10 @@ data "talos_client_configuration" "client_config" {
   nodes                = local.all_tailscale_names
 }
 
-# --- Control Plane Configuration ---
+# --- Control Plane Configuration (per node: scheduling patch is node-specific) ---
 
 data "talos_machine_configuration" "control_machine_config" {
+  for_each           = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
   cluster_name       = var.cluster_name
   cluster_endpoint   = local.cluster_endpoint
   machine_type       = "controlplane"
@@ -74,6 +85,7 @@ data "talos_machine_configuration" "control_machine_config" {
         "TS_ACCEPT_DNS=true"
       ]
     }) : "",
+    local.cp_allow_scheduling_map[each.key] ? local.scheduling_patch : "",
     local.longhorn_patch,
   ], var.extra_config_patches))
 }
@@ -81,7 +93,7 @@ data "talos_machine_configuration" "control_machine_config" {
 resource "talos_machine_configuration_apply" "control_machine_config_apply" {
   for_each                    = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
   client_configuration        = var.client_configuration
-  machine_configuration_input = data.talos_machine_configuration.control_machine_config.machine_configuration
+  machine_configuration_input = data.talos_machine_configuration.control_machine_config[each.key].machine_configuration
   node                        = each.value
 }
 
@@ -137,20 +149,4 @@ resource "talos_cluster_kubeconfig" "kubeconfig" {
   depends_on           = [talos_machine_bootstrap.bootstrap]
   client_configuration = var.client_configuration
   node                 = var.cp_ips[0]
-}
-
-# Removes the control-plane taint post-bootstrap for CPs with allow_scheduling=true.
-# Per-node taint removal via KubeNodeConfig requires Talos v1.14+; on 1.13 it is
-# done imperatively with kubectl once the nodes register with the kube-apiserver.
-resource "terraform_data" "remove_control_plane_taints" {
-  count = length(local.scheduled_cp_hostnames) > 0 ? 1 : 0
-
-  provisioner "local-exec" {
-    command = "bash ${path.module}/scripts/remove-control-plane-taints.sh ${join(" ", local.scheduled_cp_hostnames)}"
-    environment = {
-      KUBECONFIG_CONTENT = talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw
-    }
-  }
-
-  depends_on = [talos_cluster_kubeconfig.kubeconfig]
 }

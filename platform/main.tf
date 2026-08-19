@@ -40,7 +40,7 @@ resource "helm_release" "longhorn" {
   name             = "longhorn"
   repository       = "https://charts.longhorn.io"
   chart            = "longhorn"
-  version          = "1.12.1"
+  version          = var.longhorn_version
   namespace        = "longhorn-system"
   create_namespace = false
   values           = [file("${path.module}/values/longhorn/longhorn-values.yaml")]
@@ -98,7 +98,7 @@ resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
-  version          = "9.5.13"
+  version          = var.argocd_version
   namespace        = "argocd"
   create_namespace = true
   values           = [file("${path.module}/values/argocd/values.yaml")]

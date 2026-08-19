@@ -68,7 +68,7 @@ variable "tailscale_auth_key" {
 }
 
 variable "cp_allow_scheduling" {
-  description = "Per control plane node: allow workloads on that node. Index-aligned with cp_hostnames / cp_ips."
+  description = "Per control plane node: allow workloads on that node. Index-aligned with cp_hostnames / cp_ips. Each node's machine config gets cluster.allowSchedulingOnControlPlanes: true when its value is true (Talos v1.13 supports per-node machine config)."
   type        = list(bool)
 }
 
