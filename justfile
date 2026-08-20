@@ -164,11 +164,11 @@ setup-libvirt-cli:
     mv /tmp/kube-merge ~/.kube/config
     echo "✓ kubectl configured (libvirt)"
 
-# ── Platform (Longhorn + ArgoCD) ─────────────────
+# ── Platform (ArgoCD) ─
 
 platform_root := "./platform"
 
-# Init platform terraform (Longhorn + ArgoCD) with local backend
+# Init platform terraform (ArgoCD) with local backend
 tf-platform-init:
     terraform -chdir={{ platform_root }} init -reconfigure \
       -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
@@ -181,7 +181,7 @@ tf-platform-plan:
     terraform -chdir={{ platform_root }} plan \
       -var="env_name={{ tf_env }}"
 
-# Apply platform changes (regenerates secrets, then installs Longhorn + ArgoCD)
+# Apply platform changes (regenerates secrets, then installs ArgoCD (Longhorn is deployed by the GitOps repo))
 tf-platform-apply:
     just tf_env="{{ tf_env }}" gen-secrets
     terraform -chdir={{ platform_root }} fmt

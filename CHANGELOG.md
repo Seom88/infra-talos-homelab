@@ -4,22 +4,21 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.0] - 2026-08-18
-
+## [1.1.0] - Unreleased
 ### Added
 - **Rolling Talos upgrade** (`scripts/talos-upgrade.sh`) — upgrades a running cluster in place, node by node, preserving etcd:
   - Resolves the latest stable Talos release from GitHub, computes the schematic ID via the Image Factory API, and runs `talosctl upgrade` per node (control planes first, then workers) with a cluster health check after each node
   - Syncs the `talos_version` pin in both `proxmox/variables.tf` and `libvirt/variables.tf` afterwards
 - **Justfile upgrade tasks** — `upgrade` (proxmox, per `tf_env`) and `upgrade-libvirt` (libvirt) under a new "Talos Upgrade" section
-- **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (Longhorn + ArgoCD) after the cluster:
+- **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (ArgoCD) after the cluster:
   - `validate` job: platform format check + init/validate
   - `deploy` job: `azure/setup-kubectl` + `azure/setup-helm` actions, platform secrets from cluster outputs, platform state restore/backup as artifact (mirrors the proxmox flow), and `terraform apply -var=env_name`
 - **README risk section** — "⚠️ Changes that destroy your cluster": traffic-light tables mapping `terraform.tfvars` changes to VM-destroy (cluster wipe), outage-only, or no-effect, plus the bootstrap-only upgrade guidance
-- **Platform root** (`platform/`) — new Terraform workspace that installs **Longhorn** (v1.12.1, default storage class) and **ArgoCD** (v9.5.13) from outside this repo's cluster roots:
-  - `platform/main.tf` — declarative pipeline: wait for all nodes Ready → `longhorn-system` namespace (PSA privileged) → Longhorn Helm chart → wait for Longhorn CSI (manager DaemonSet → driver-deployer → csi-plugin) → `longhorn-prod` StorageClass → ArgoCD Helm chart
-  - `platform/providers.tf` — `kubernetes` + `helm` providers configured against `secrets/<env>/kubeconfig.yaml`
-  - `platform/variables.tf` — `env_name` (default `prod`), `longhorn_version` (default `1.12.1`), `argocd_version` (default `9.5.13`); chart versions are pinned exact, overridable per environment
-  - `platform/values/longhorn/` + `platform/values/argocd/` — values moved verbatim from the GitOps repo (`secured-gitops-tailscale-homelab`)
+- **Platform root** (`platform/`) — new Terraform workspace that installs **ArgoCD** (v9.5.13) from outside this repo's cluster roots:
+  - `platform/main.tf` — declarative pipeline: wait for all nodes Ready → ArgoCD Helm chart
+  - `platform/providers.tf` — `helm` provider configured against `secrets/<env>/kubeconfig.yaml`
+  - `platform/variables.tf` — `env_name` (default `prod`), `argocd_version` (default `9.5.13`); pinned exact, overridable per environment
+  - `platform/values/argocd/` — ArgoCD values moved verbatim from the GitOps repo (`secured-gitops-tailscale-homelab`)
 - **Cluster health gate** — `data "talos_cluster_health"` in `proxmox/main.tf`: `terraform apply` blocks until kube-apiserver, etcd and all nodes are Ready (protects both local and CI applies)
 - **SDN networking (Proxmox)** — `proxmox/network.tf` now creates the cluster network via Proxmox SDN: simple zone + VNet (the `talosvn` bridge, id matches `network_bridge`, max 8 chars) + subnet (`snat = true`, so VMs reach the internet through the node via MASQUERADE) + `proxmox_sdn_applier` (performs the SDN Apply — without it the bridge does not exist on the node and VM creation fails). VMs depend on the applier so the network exists before they boot
 - **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply` (chains `gen-secrets` first), `tf-platform-destroy`
@@ -30,11 +29,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `talos_version` is now a **bootstrap-only pin** in both `proxmox/variables.tf` and `libvirt/variables.tf` (explicit comment): `terraform apply` no longer doubles as the Talos upgrade path — upgrades run through `just upgrade` / `just upgrade-libvirt`
 - Talos Linux default `1.13.6` → `1.13.8` (both roots)
 - `README.md` — corrected stale version defaults (`talos_version` 1.13.3 → 1.13.8, `kubernetes_version` 1.36.1 → 1.36.2)
-- `README.md` — new "Plataforma (Longhorn + ArgoCD)" section: setup flow (`tf-apply` → `tf-platform-apply` → GitOps bootstrap), migration via `terraform import`, local state note
+- `README.md` — new "Plataforma (ArgoCD)" section: setup flow (`tf-apply` → `tf-platform-apply` → GitOps bootstrap), plus the Longhorn migration runbook (`terraform state rm` before applying the reduced layer, never `terraform destroy`)
 - `README.md` — documented the SDN network reachability requirement: the `talosvn` VNet is isolated (outbound SNAT only), so the machine running `terraform apply` must reach `10.10.0.0/24`; for `prod` the subnet is exposed via a Tailscale subnet router (`tailscale set --advertise-routes=10.10.0.0/24` on the Proxmox host, approve in admin console, `--accept-routes` on Linux clients)
 - `proxmox/environments/{dev,prod}/terraform.tfvars` — network bridge renamed `vnet1` → `talosvn`; new `sdn_zone` / `network_cidr` variables; `cluster_vip` corrected to `10.10.0.171` (was outside the `10.10.0.0/24` subnet)
 - `proxmox/main.tf` — VM IP prefix/mask now derived from `network_cidr` instead of a hardcoded `/24`
 - `proxmox/variables.tf` — added `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` variables; `network_bridge` doc updated for SDN usage
+- **Platform root reduced to ArgoCD only** — the `platform/` Terraform workspace no longer installs Longhorn (`kubernetes_namespace_v1.longhorn_system`, `helm_release.longhorn`, `terraform_data.csi_waiter` and `kubernetes_manifest.longhorn_prod_storageclass` removed; `kubernetes` provider and `longhorn_version` variable dropped)
+- **Longhorn moved to the GitOps repo** — deployed by `secured-gitops-tailscale-homelab` as a wave-0 ArgoCD app (`platform/longhorn`) with a CSI readiness gate (Job `longhorn-csi-wait`)
+- **Runbook for migration** — README documents `terraform state rm` for the old Longhorn resources before applying the reduced layer, so volumes are never destroyed (never `terraform destroy` `helm_release.longhorn`)
 
 ## [1.0.2] - 2026-07-16
 

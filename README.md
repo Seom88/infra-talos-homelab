@@ -354,30 +354,41 @@ Every task accepts `tf_env=dev` to target the dev environment (default: `prod`).
 | `gen-libvirt-secrets` | Extract talosconfig + kubeconfig from libvirt state |
 | `setup-libvirt-cli` | gen-libvirt-secrets + merge into local `~/.talos/config` and `~/.kube/config` |
 
-## Platform (Longhorn + ArgoCD)
+## Platform (ArgoCD)
 
 The `platform/` layer is an independent Terraform root (its own state) that installs the **platform** on top of the cluster:
 
-- **Longhorn** (`longhorn-system`) — distributed storage. Provides the default StorageClass and an additional `longhorn-prod` StorageClass (Retain + `ssd,nvme` selector).
 - **ArgoCD** (`argocd`) — GitOps engine.
 
-The cluster depends on this layer: Longhorn and ArgoCD are project dependencies, not optional.
+Longhorn is no longer installed here: it is a platform app of the GitOps repo (`secured-gitops-tailscale-homelab`, `platform/longhorn`, wave 0, gated by a CSI readiness Job). The Longhorn node prerequisites still live in this repo at cluster level: kubelet extraMounts for `/var/lib/longhorn` and the `iscsi-tools` / `util-linux-tools` system extensions.
 
 ### Setup flow
 
 1. `just tf-apply` — provisions the cluster; the health gate (`talos_cluster_health`) blocks the apply until kube-apiserver, etcd, and all nodes are Ready.
-2. `just tf-platform-apply` — regenerates `secrets/<env>/kubeconfig.yaml` and applies the platform layer: waits for Ready nodes, installs Longhorn, waits for the CSI, applies the StorageClass, and installs ArgoCD.
-3. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository.
+2. `just tf-platform-apply` — regenerates `secrets/<env>/kubeconfig.yaml` and applies the platform layer: waits for Ready nodes and installs ArgoCD.
+3. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
 
 For other environments, use `tf_env`: `just tf_env=dev tf-platform-apply` (or `tf_env=libvirt`).
 
 ### Migrating an existing cluster
 
-If the cluster already has Longhorn or ArgoCD installed (for example, via the `init-infra.sh` script from the GitOps repo), you can adopt the existing releases into the Terraform state with `terraform import`:
+If the cluster already has ArgoCD installed (for example, via the `init-infra.sh` script from the GitOps repo), you can adopt the existing release into the Terraform state with `terraform import`:
 
 ```bash
-terraform -chdir=platform import 'helm_release.longhorn' longhorn-system/longhorn
 terraform -chdir=platform import 'helm_release.argocd' argocd/argocd
+```
+
+#### Migrating Longhorn to the GitOps repo
+
+```bash
+# 1) En el repo secured: pushear los cambios (platform/longhorn + gitops/values) y
+#    esperar a que la app longhorn de ArgoCD quede Healthy (CSI gate Job completado).
+# 2) Recién entonces, en infra, sacar los recursos del estado de TF para que el
+#    próximo apply NO los DESTRUYA:
+terraform -chdir=platform state rm helm_release.longhorn kubernetes_namespace_v1.longhorn_system kubernetes_manifest.longhorn_prod_storageclass terraform_data.csi_waiter
+# 3) Aplicar el platform layer reducido (ArgoCD only):
+just tf-platform-apply
+# NO ejecutar terraform destroy sobre helm_release.longhorn: borraría los volúmenes.
 ```
 
 ### State

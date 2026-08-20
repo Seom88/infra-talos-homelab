@@ -145,7 +145,7 @@ jobs:
           path: /tmp/secrets/
           retention-days: 7
 
-      # ── Platform layer (Longhorn + ArgoCD) — mirrors the proxmox flow ──────
+      # ── Platform layer (ArgoCD) — mirrors the proxmox flow ─────────────────
 
       - name: Write platform secrets to workspace
         run: |
