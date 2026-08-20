@@ -56,7 +56,8 @@ Terraform (libvirt/)
     └── destroy.yaml                # CI/CD: tear down cluster + Tailscale cleanup
 
 scripts/
-└── destroy-tailscale-devices.sh    # Pre-destroy Tailscale device cleanup
+├── destroy-tailscale-devices.sh    # Pre-destroy Tailscale device cleanup
+└── talos-upgrade.sh                # Rolling in-place Talos upgrade
 
 proxmox/                        # Proxmox VE root module
 ├── provider.tf                  # bpg/proxmox v0.109.0
@@ -76,6 +77,13 @@ libvirt/                        # Libvirt root module
 ├── variables.tf                 # Node definitions, network, schematic, pass-through vars
 ├── outputs.tf                   # talosconfig, kubeconfig, kubeconfig_tailscale
 └── terraform.tfvars             # Node IPs, MACs, specs
+
+platform/                       # Platform root module (ArgoCD)
+├── main.tf                      # Node readiness gate + ArgoCD Helm chart
+├── providers.tf                 # helm provider against secrets/<env>/kubeconfig.yaml
+├── variables.tf                 # env_name (default prod), argocd_version (default 9.5.13)
+├── values/argocd/               # ArgoCD Helm values
+└── terraform.tfstate            # Platform state (committed for CI restore/backup)
 
 modules/
 └── talos-cluster/               # Provider-agnostic child module
@@ -162,7 +170,7 @@ just setup-cli             # prod
 just tf_env=dev setup-cli  # dev
 ```
 
-All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state, and secrets directory under `proxmox/environments/`. Platform state lives under `platform/environments/`. Tailscale is only enabled for `prod`.
+All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state, and secrets directory under `proxmox/environments/`. Platform state lives in `platform/terraform.tfstate`. Tailscale is only enabled for `prod`.
 
 > **Network reachability (Proxmox SDN)**: Terraform must be able to reach the cluster IPs (`10.10.0.0/24`). The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT (subnet `snat = true`), but traffic from outside cannot reach them directly. If you are not on the same network as the Proxmox host, expose the subnet through Tailscale from the Proxmox node (prod):
 >
@@ -183,10 +191,10 @@ All `just` commands run from the repo root. Each environment has its own `terraf
 export TF_VAR_tailscale_auth_key="tskey-auth-..."
 
 # Bootstrap the cluster
-just tf-libvirt-apply
+just provider=libvirt tf-apply
 
 # Extract credentials and merge into local ~/.talos/config and ~/.kube/config
-just setup-libvirt-cli
+just provider=libvirt setup-cli
 ```
 
 ## Variables
@@ -277,8 +285,8 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 `talos_version` is a **bootstrap-only pin**: it selects the image the VMs are created with. To upgrade a running cluster, use the rolling upgrade (control planes first, then workers — preserves etcd and syncs the pin):
 
 ```bash
-just upgrade          # proxmox (prod by default, tf_env=dev for dev)
-just upgrade-libvirt  # libvirt
+just upgrade                      # proxmox, prod (default; tf_env=dev for dev)
+just provider=libvirt upgrade     # libvirt
 ```
 
 ## Outputs
@@ -326,33 +334,38 @@ Hands-on infrastructure-as-code with real hardware. Two providers let you choose
 
 ## Available `just` tasks
 
-### Proxmox
+All tasks run from the repo root. `provider` selects the Terraform root (`proxmox` or `libvirt`) and `tf_env` selects the environment (only used when `provider == proxmox`, default `prod`):
 
-Every task accepts `tf_env=dev` to target the dev environment (default: `prod`). Each environment has its own backend state, `.tfvars`, and secrets directory.
+```bash
+just tf-apply                              # proxmox, prod (default)
+just provider=proxmox tf_env=dev tf-apply  # proxmox, dev
+just provider=libvirt tf-apply             # libvirt (no environments)
+```
 
 | Task | Description |
 |------|-------------|
-| `tf-init` | Initialize Terraform with local backend |
-| `tf-plan` | Plan changes for `tf_env` |
+| `tf-fmt` | Format all Terraform files recursively |
+| `tf-init` | Initialize Terraform with local backend for the active provider/env |
+| `tf-plan` | Plan changes for the active provider/env |
 | `tf-apply` | Apply changes (bootstrap or update) |
-| `tf-ci-apply` | Non-interactive apply for CI (`-auto-approve`) |
-| `tf-destroy` | Tear down the entire environment |
+| `tf-destroy` | Tear down the active provider/env (cleans up Tailscale devices first) |
 | `gen-secrets` | Extract talosconfig + kubeconfig from state |
-| `setup-cli` | gen-secrets + merge into `~/.talos/config` and `~/.kube/config` |
+| `setup-cli` | `gen-secrets` + merge into `~/.talos/config` and `~/.kube/config` |
 | `status` | Show Talos version, extensions, and cluster members |
-| `get-schematic-id env="prod"` | Compute schematic ID from `schematic-{env}.yaml` via Image Factory API |
+| `get-schematic-id name="prod"` | Compute schematic ID from `schematic-{name}.yaml` via the Image Factory API |
 | `cluster-schematic-id` | Read the active schematic ID from the running cluster |
+| `upgrade` | Rolling Talos upgrade on the active provider/env (see [Upgrading Talos](#upgrading-talos)) |
 
-### Libvirt
+### Platform (ArgoCD)
+
+Provider/env-agnostic tasks — they act on the kubeconfig of the selected environment (`env_name`, default `prod`):
 
 | Task | Description |
 |------|-------------|
-| `tf-libvirt-init` | Initialize libvirt Terraform |
-| `tf-libvirt-plan` | Plan libvirt changes |
-| `tf-libvirt-apply` | Apply libvirt changes (bootstrap or update) |
-| `tf-libvirt-destroy` | Tear down the libvirt environment |
-| `gen-libvirt-secrets` | Extract talosconfig + kubeconfig from libvirt state |
-| `setup-libvirt-cli` | gen-libvirt-secrets + merge into local `~/.talos/config` and `~/.kube/config` |
+| `tf-platform-init` | Initialize the platform Terraform root |
+| `tf-platform-plan` | Plan platform changes |
+| `tf-platform-apply` | Apply platform changes (installs ArgoCD) |
+| `tf-platform-destroy` | Tear down the platform layer |
 
 ## Platform (ArgoCD)
 
@@ -365,10 +378,11 @@ Longhorn is no longer installed here: it is a platform app of the GitOps repo (`
 ### Setup flow
 
 1. `just tf-apply` — provisions the cluster; the health gate (`talos_cluster_health`) blocks the apply until kube-apiserver, etcd, and all nodes are Ready.
-2. `just tf-platform-apply` — regenerates `secrets/<env>/kubeconfig.yaml` and applies the platform layer: waits for Ready nodes and installs ArgoCD.
-3. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
+2. `just setup-cli` — regenerates `secrets/<env>/kubeconfig.yaml` and merges it into the local CLI configs.
+3. `just tf-platform-apply` — applies the platform layer: waits for Ready nodes and installs ArgoCD.
+4. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
 
-For other environments, use `tf_env`: `just tf_env=dev tf-platform-apply` (or `tf_env=libvirt`).
+The platform root uses `env_name` (default `prod`) to pick the kubeconfig under `secrets/<env>/`; to target another environment, pass it explicitly: `terraform -chdir=platform apply -var="env_name=dev"`.
 
 ### Migrating an existing cluster
 
@@ -381,19 +395,19 @@ terraform -chdir=platform import 'helm_release.argocd' argocd/argocd
 #### Migrating Longhorn to the GitOps repo
 
 ```bash
-# 1) En el repo secured: pushear los cambios (platform/longhorn + gitops/values) y
-#    esperar a que la app longhorn de ArgoCD quede Healthy (CSI gate Job completado).
-# 2) Recién entonces, en infra, sacar los recursos del estado de TF para que el
-#    próximo apply NO los DESTRUYA:
+# 1) In the secured repo: push the changes (platform/longhorn + gitops/values) and
+#    wait until the longhorn ArgoCD app is Healthy (CSI gate Job completed).
+# 2) Only then, in this repo, remove the resources from the TF state so the next
+#    apply does NOT destroy them:
 terraform -chdir=platform state rm helm_release.longhorn kubernetes_namespace_v1.longhorn_system kubernetes_manifest.longhorn_prod_storageclass terraform_data.csi_waiter
-# 3) Aplicar el platform layer reducido (ArgoCD only):
+# 3) Apply the reduced platform layer (ArgoCD only):
 just tf-platform-apply
-# NO ejecutar terraform destroy sobre helm_release.longhorn: borraría los volúmenes.
+# Do NOT run terraform destroy on helm_release.longhorn: it would delete the volumes.
 ```
 
 ### State
 
-Platform state is stored locally at `platform/environments/<env>/platform-terraform.tfstate` — one file per environment.
+Platform state lives in `platform/terraform.tfstate` in the platform root (default local backend) and is committed so CI can restore/back it up as an artifact.
 
 ## CI/CD
 

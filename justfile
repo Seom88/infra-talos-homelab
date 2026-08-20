@@ -1,60 +1,67 @@
 # ──────────────────────────────────────────────
-#  infra-homelab — Talos + Proxmox helper tasks
+#  infra-homelab — Talos helper tasks
 # ──────────────────────────────────────────────
 #  All commands run from the repo root.
-#  Terraform:  proxmox/environments/<env>/
-#  Secrets:    ./secrets/<env>/          (.gitignored)
-#  Usage:      just tf_env=dev <task>    (default: prod)
 #
-#  plan/apply/gen-secrets auto-init before running,
-#  so you can switch environments freely:
-#    just tf_env=dev tf-apply   # work on dev
-#    just tf_apply              # work on prod (no cross-talk)
+#  Providers:  proxmox (envs: prod, dev)  |  libvirt (no envs)
+#  Terraform:  {{ tf_root }}/    (./proxmox or ./libvirt)
+#  Secrets:    ./secrets/<env-or-provider>/   (.gitignored)
+#
+#  Usage:
+#    just tf-apply                              # proxmox, prod (default)
+#    just provider=proxmox tf_env=dev tf-apply  # proxmox, dev
+#    just provider=libvirt tf-apply             # libvirt (no env)
+#
+#  Platform (ArgoCD) does NOT depend on provider/env: it applies to
+#  the kubeconfig context that is active at that moment.
+#    just setup-cli           # point kubectl/talosctl at a cluster
+#    just tf-platform-apply   # installs ArgoCD there
 
-tf_root := "./proxmox"
-tf_env := "prod"
+provider := "proxmox"   # proxmox | libvirt
+tf_env   := "prod"      # only applies when provider == proxmox
 
-# ── Terraform ──────────────────────────────────
+tf_root      := if provider == "proxmox" { "./proxmox" } else { "./libvirt" }
+env_dir      := if provider == "proxmox" { tf_root + "/environments/" + tf_env } else { tf_root }
+secrets_dir  := if provider == "proxmox" { "./secrets/" + tf_env } else { "./secrets/libvirt" }
+backend_arg  := if provider == "proxmox" { "-backend-config=path=environments/" + tf_env + "/terraform.tfstate" } else { "" }
+var_file_arg := if provider == "proxmox" { "-var-file=environments/" + tf_env + "/terraform.tfvars" } else { "" }
+tfvars_path  := env_dir + "/terraform.tfvars"
+label        := if provider == "proxmox" { provider + "/" + tf_env } else { provider }
+
+# ── Terraform (proxmox or libvirt, per `provider=`) ───────────
 
 # Format all Terraform files recursively
 tf-fmt:
     terraform fmt -recursive
 
-# Init terraform with local backend for an environment
+# Init terraform with local backend for the active provider/env
 tf-init:
-    terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
 
-# Plan changes (auto-inits to ensure correct backend)
+# Plan changes (auto-init to ensure the correct backend)
 tf-plan:
     terraform -chdir={{ tf_root }} fmt
-    terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
-    terraform -chdir={{ tf_root }} plan \
-      -var-file=environments/{{ tf_env }}/terraform.tfvars
+    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
+    terraform -chdir={{ tf_root }} plan {{ var_file_arg }}
 
-# Apply changes (auto-inits to ensure correct backend)
+# Apply changes (auto-init to ensure the correct backend)
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
-    terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
-    terraform -chdir={{ tf_root }} apply \
-      -var-file=environments/{{ tf_env }}/terraform.tfvars
+    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
+    terraform -chdir={{ tf_root }} apply {{ var_file_arg }}
 
-# Destroy an environment (auto-inits to ensure correct backend)
+# Destroy the active provider/env (auto-init for the correct backend)
 tf-destroy:
     #!/usr/bin/env bash
     set -euo pipefail
     # Clean up Tailscale devices before destroy
     if [[ -n "${TS_OAUTH_CLIENT_ID:-}" && -n "${TS_OAUTH_SECRET:-}" ]]; then
       ./scripts/destroy-tailscale-devices.sh \
-        {{ tf_root }}/environments/{{ tf_env }}/terraform.tfvars lonk-mirfak || \
+        {{ tfvars_path }} lonk-mirfak || \
         echo "⚠ Tailscale cleanup failed, continuing with destroy"
     fi
-    terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
-    terraform -chdir={{ tf_root }} destroy \
-      -var-file=environments/{{ tf_env }}/terraform.tfvars
+    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
+    terraform -chdir={{ tf_root }} destroy {{ var_file_arg }}
 
 # ── Secrets ────────────────────────────────────
 
@@ -62,22 +69,19 @@ tf-destroy:
 gen-secrets:
     #!/usr/bin/env bash
     set -euo pipefail
-    ROOT="$PWD"
-    SECRETS="$ROOT/secrets/{{ tf_env }}"
+    SECRETS="{{ secrets_dir }}"
     mkdir -p "$SECRETS"
-    terraform -chdir={{ tf_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/terraform.tfstate"
+    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
     terraform -chdir={{ tf_root }} output -raw talosconfig > "$SECRETS/talosconfig.yaml"
     terraform -chdir={{ tf_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
-    echo "✓ secrets regenerated ({{ tf_env }})"
+    echo "✓ secrets regenerated ({{ label }})"
 
 # Merge secrets into local talosctl and kubectl config
 setup-cli:
     #!/usr/bin/env bash
     set -euo pipefail
-    ROOT="$PWD"
-    just tf_env="{{ tf_env }}" gen-secrets
-    SECRETS="$ROOT/secrets/{{ tf_env }}"
+    just provider="{{ provider }}" tf_env="{{ tf_env }}" gen-secrets
+    SECRETS="{{ secrets_dir }}"
     TC="$SECRETS/talosconfig.yaml"
     KC="$SECRETS/kubeconfig.yaml"
     # talosctl
@@ -87,128 +91,48 @@ setup-cli:
     else
         cp "$TC" ~/.talos/config
     fi
-    echo "✓ talosctl configured ({{ tf_env }})"
+    echo "✓ talosctl configured ({{ label }})"
     # kubectl
     mkdir -p ~/.kube
     KUBECONFIG="$KC":~/.kube/config \
       kubectl config view --flatten > /tmp/kube-merge
     mv /tmp/kube-merge ~/.kube/config
-    echo "✓ kubectl configured ({{ tf_env }})"
+    echo "✓ kubectl configured ({{ label }})"
 
-# ── Libvirt ───────────────────────────────────
-
-libvirt_root := "./libvirt"
-
-# Init libvirt terraform
-tf-libvirt-init:
-    terraform -chdir={{ libvirt_root }} init -reconfigure
-
-# Plan libvirt changes
-tf-libvirt-plan:
-    terraform -chdir={{ libvirt_root }} fmt
-    terraform -chdir={{ libvirt_root }} init -reconfigure
-    terraform -chdir={{ libvirt_root }} plan
-
-# Apply libvirt changes
-tf-libvirt-apply:
-    terraform -chdir={{ libvirt_root }} fmt
-    terraform -chdir={{ libvirt_root }} init -reconfigure
-    terraform -chdir={{ libvirt_root }} apply
-
-# Destroy libvirt environment
-tf-libvirt-destroy:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Clean up Tailscale devices before destroy
-    if [[ -n "${TS_OAUTH_CLIENT_ID:-}" && -n "${TS_OAUTH_SECRET:-}" ]]; then
-      ./scripts/destroy-tailscale-devices.sh \
-        ./libvirt/terraform.tfvars lonk-mirfak || \
-        echo "⚠ Tailscale cleanup failed, continuing with destroy"
-    fi
-    terraform -chdir={{ libvirt_root }} init -reconfigure
-    terraform -chdir={{ libvirt_root }} destroy
-
-# Generate secrets from libvirt terraform state
-gen-libvirt-secrets:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ROOT="$PWD"
-    SECRETS="$ROOT/secrets/libvirt"
-    mkdir -p "$SECRETS"
-    terraform -chdir={{ libvirt_root }} init -reconfigure
-    terraform -chdir={{ libvirt_root }} output -raw talosconfig > "$SECRETS/talosconfig.yaml"
-    terraform -chdir={{ libvirt_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
-    echo "✓ secrets regenerated (libvirt)"
-
-# Setup CLI for libvirt cluster
-setup-libvirt-cli:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ROOT="$PWD"
-    just gen-libvirt-secrets
-    SECRETS="$ROOT/secrets/libvirt"
-    TC="$SECRETS/talosconfig.yaml"
-    KC="$SECRETS/kubeconfig.yaml"
-    # talosctl
-    mkdir -p ~/.talos
-    if [[ -f ~/.talos/config ]]; then
-        talosctl config merge "$TC"
-    else
-        cp "$TC" ~/.talos/config
-    fi
-    echo "✓ talosctl configured (libvirt)"
-    # kubectl
-    mkdir -p ~/.kube
-    KUBECONFIG="$KC":~/.kube/config \
-      kubectl config view --flatten > /tmp/kube-merge
-    mv /tmp/kube-merge ~/.kube/config
-    echo "✓ kubectl configured (libvirt)"
-
-# ── Platform (ArgoCD) ─
+# ── Platform (ArgoCD) — agnostic of provider/env ───────────────
+# Applies to the active kubeconfig context (run `setup-cli`
+# pointing at whichever cluster you want before using these commands).
 
 platform_root := "./platform"
 
-# Init platform terraform (ArgoCD) with local backend
 tf-platform-init:
-    terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
+    terraform -chdir={{ platform_root }} init -reconfigure
 
-# Plan platform changes (auto-inits to ensure correct backend)
 tf-platform-plan:
     terraform -chdir={{ platform_root }} fmt
-    terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
-    terraform -chdir={{ platform_root }} plan \
-      -var="env_name={{ tf_env }}"
+    terraform -chdir={{ platform_root }} init -reconfigure
+    terraform -chdir={{ platform_root }} plan
 
-# Apply platform changes (regenerates secrets, then installs ArgoCD (Longhorn is deployed by the GitOps repo))
 tf-platform-apply:
-    just tf_env="{{ tf_env }}" gen-secrets
     terraform -chdir={{ platform_root }} fmt
-    terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
-    terraform -chdir={{ platform_root }} apply \
-      -var="env_name={{ tf_env }}"
+    terraform -chdir={{ platform_root }} init -reconfigure
+    terraform -chdir={{ platform_root }} apply
 
-# Destroy platform resources (auto-inits to ensure correct backend)
 tf-platform-destroy:
-    terraform -chdir={{ platform_root }} init -reconfigure \
-      -backend-config="path=environments/{{ tf_env }}/platform-terraform.tfstate"
-    terraform -chdir={{ platform_root }} destroy \
-      -var="env_name={{ tf_env }}"
+    terraform -chdir={{ platform_root }} init -reconfigure
+    terraform -chdir={{ platform_root }} destroy
 
 # ── Cluster Status ─────────────────────────────
 
-# Show Talos version, extensions, and nodes
+# Show Talos version, extensions, and nodes (active provider/env)
 status:
     #!/usr/bin/env bash
     set -euo pipefail
-    TC="./secrets/{{ tf_env }}/talosconfig.yaml"
-    ENV_DIR="{{ tf_root }}/environments/{{ tf_env }}"
-    FIRST=$(awk -F'"' '/ip/{print $2; exit}' "$ENV_DIR/terraform.tfvars")
+    TC="{{ secrets_dir }}/talosconfig.yaml"
+    FIRST=$(awk -F'"' '/ip/{print $2; exit}' "{{ tfvars_path }}")
     FIRST=$(talosctl --talosconfig "$TC" get members -o json -n "$FIRST" 2>/dev/null \
       | jq -rs '.[0].spec.addresses[0]' 2>/dev/null || echo "$FIRST")
-    echo "── Version ──"
+    echo "── Version ({{ label }}) ──"
     talosctl --talosconfig "$TC" version --short -n "$FIRST"
     echo ""
     echo "── Extensions ──"
@@ -217,30 +141,27 @@ status:
     echo "── Nodes ──"
     talosctl --talosconfig "$TC" get members -n "$FIRST"
 
-# Compute schematic ID via Talos Image Factory API for a given env
-get-schematic-id env="prod":
-    curl -sf -X POST --data-binary @schematic-{{ env }}.yaml \
+# Compute schematic ID via Talos Image Factory API (schematic-<name>.yaml)
+get-schematic-id name="prod":
+    curl -sf -X POST --data-binary @schematic-{{ name }}.yaml \
       https://factory.talos.dev/schematics | jq -r '.id'
 
-# Read schematic ID from the running cluster
+# Read schematic ID from the running cluster (active provider/env)
 cluster-schematic-id:
     #!/usr/bin/env bash
     set -euo pipefail
-    TC="./secrets/{{ tf_env }}/talosconfig.yaml"
-    ENV_DIR="{{ tf_root }}/environments/{{ tf_env }}"
-    FIRST=$(awk -F'"' '/ip/{print $2; exit}' "$ENV_DIR/terraform.tfvars")
+    TC="{{ secrets_dir }}/talosconfig.yaml"
+    FIRST=$(awk -F'"' '/ip/{print $2; exit}' "{{ tfvars_path }}")
     FIRST=$(talosctl --talosconfig "$TC" get members -o json -n "$FIRST" 2>/dev/null \
       | jq -rs '.[0].spec.addresses[0]' 2>/dev/null || echo "$FIRST")
-    echo "Schematic ID ({{ tf_env }}):"
+    echo "Schematic ID ({{ label }}):"
     talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
 
 # ── Talos Upgrade ─────────────────────────────
 
-# Rolling upgrade of Talos nodes to the latest stable release (proxmox env)
-upgrade:
-    ./scripts/talos-upgrade.sh --root proxmox --env {{ tf_env }}
+env_flag := if provider == "proxmox" { "--env " + tf_env } else { "" }
 
-# Rolling upgrade of Talos nodes to the latest stable release (libvirt)
-upgrade-libvirt:
-    ./scripts/talos-upgrade.sh --root libvirt
+# Rolling Talos upgrade on the active provider/env
+upgrade:
+    ./scripts/talos-upgrade.sh --root {{ provider }} {{ env_flag }}
