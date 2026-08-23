@@ -6,10 +6,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.1.0] - Unreleased
 ### Added
-- **Rolling Talos upgrade** (`scripts/talos-upgrade.sh`) — upgrades a running cluster in place, node by node, preserving etcd:
-  - Resolves the latest stable Talos release from GitHub, computes the schematic ID via the Image Factory API, and runs `talosctl upgrade` per node (control planes first, then workers) with a cluster health check after each node
-  - Syncs the `talos_version` pin in both `proxmox/variables.tf` and `libvirt/variables.tf` afterwards
-- **Justfile upgrade task** — `upgrade` under a new "Talos Upgrade" section: provider-agnostic via `--root {{ provider }}` (proxmox honors `tf_env`; libvirt has no environment)
 - **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (ArgoCD) after the cluster:
   - `validate` job: platform format check + init/validate
   - `deploy` job: `azure/setup-kubectl` + `azure/setup-helm` actions, platform secrets from cluster outputs, platform state restore/backup as artifact (mirrors the proxmox flow), and `terraform apply -var=env_name`
@@ -22,11 +18,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Cluster health gate** — `data "talos_cluster_health"` in `proxmox/main.tf`: `terraform apply` blocks until kube-apiserver, etcd and all nodes are Ready (protects both local and CI applies)
 - **SDN networking (Proxmox)** — `proxmox/network.tf` now creates the cluster network via Proxmox SDN: simple zone + VNet (the `talosvn` bridge, id matches `network_bridge`, max 8 chars) + subnet (`snat = true`, so VMs reach the internet through the node via MASQUERADE) + `proxmox_sdn_applier` (performs the SDN Apply — without it the bridge does not exist on the node and VM creation fails). VMs depend on the applier so the network exists before they boot
 - **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply`, `tf-platform-destroy` (agnostic of provider/env)
+- **`installer_image` variable** (`modules/talos-cluster/variables.tf`) — `string`, default `""`; platform-aware override for `talos_machine.image` (e.g. `factory.talos.dev/nocloud-installer/<schematic-id>:v<version>`). Secureboot roots can omit it (defaults to `factory.talos.dev/nocloud-installer-secureboot/<schematic-id>:v<version>` built from `talos_image_id` + `talos_version`); non-secureboot roots (e.g. `libvirt`) must override — `libvirt/main.tf` now passes `factory.talos.dev/nocloud-installer/${schematic.id}:v${var.talos_version}`
+- **`talos_machine` resources** (`modules/talos-cluster/main.tf`) — replace `talos_machine_configuration_apply` (`control` + `worker`) with `talos_machine.control_plane` / `talos_machine.worker` (`image = local.installer_image`, `drain_on_upgrade = false`). Bumping `talos_version` now triggers an in-place pull → install → reboot without recreating VMs; `talos_machine_bootstrap` now depends on `talos_machine.control_plane`
 
 ### Changed
 - **Breaking: `allow_scheduling_on_control_planes` removed** — replaced by a required per-node `allow_scheduling` flag on `nodes_cp` entries. The `talos-cluster` module now takes `cp_allow_scheduling` (index-aligned with `cp_hostnames` / `cp_ips`) and patches each control plane's Talos machine config with `cluster.allowSchedulingOnControlPlanes: true` (per Sidero docs), so the kubelet never registers the `node-role.kubernetes.io/control-plane` taint — durable across node reboots, no `kubectl` requirement
 - **Breaking: per-node disk/datastore are now required** — `nodes_cp` / `nodes_worker` require per-node `disk_size` (GB) and `datastore` (Proxmox) / `pool` (libvirt); the global `disk_size_cp`, `disk_size_worker` and `datastore_vm` variables were removed, so there are no fallback defaults
-- `talos_version` is now a **bootstrap-only pin** in both `proxmox/variables.tf` and `libvirt/variables.tf` (explicit comment): `terraform apply` no longer doubles as the Talos upgrade path — upgrades run through `just upgrade` (provider-agnostic, see the `provider=` / `tf_env=` unification below)
+- `talos_version` is now managed declaratively via `talos_machine.image` in `modules/talos-cluster/main.tf` — `proxmox/variables.tf` (default `1.13.9`) and `libvirt/variables.tf` (default `1.13.8`) bump triggers a sequential rolling upgrade (`terraform apply -parallelism=1`, `drain_on_upgrade = false`) instead of VM recreation; `proxmox_download_file.talos_image` is now bootstrap-only with `lifecycle { ignore_changes = [url] }`
 - Talos Linux default `1.13.6` → `1.13.8` (both roots)
 - `README.md` — corrected stale version defaults (`talos_version` 1.13.3 → 1.13.8, `kubernetes_version` 1.36.1 → 1.36.2)
 - `README.md` — new "Plataforma (ArgoCD)" section: setup flow (`tf-apply` → `tf-platform-apply` → GitOps bootstrap), plus the Longhorn migration runbook (`terraform state rm` before applying the reduced layer, never `terraform destroy`)
@@ -40,6 +38,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Justfile unified around `provider=` / `tf_env=`** — one task set now serves both providers; the dedicated libvirt tasks (`tf-libvirt-*`, `gen-libvirt-secrets`, `setup-libvirt-cli`, `upgrade-libvirt`) were removed. Backend/var-file arguments, secrets path, and status labels are derived from the active provider/env; platform tasks no longer chain `gen-secrets` or pass backend/`env_name` flags
 - `justfile` — comments and task descriptions fully translated to English
 - `README.md` — task tables and quick-start examples updated to the unified `just` task set; platform setup flow and state notes updated; Longhorn migration runbook translated to English
+- `talos_version` default `1.13.8` → `1.13.9` in `proxmox/variables.tf` (libvirt stays `1.13.8`)
+- `justfile` `tf-apply` now runs `terraform apply -parallelism=1` — sequential reboots protect etcd quorum during `talos_machine` rolling upgrades; cold bootstrap from scratch is slower (~15 min × 3) but safe
+- `proxmox/main.tf` `proxmox_download_file.talos_image` is now bootstrap-only: `file_name` simplified from `talos-${env}-v${version}-nocloud-amd64-secureboot.img` to `talos-nocloud-amd64-secureboot.img` (shared, no `env`/`version` suffix) and `lifecycle { ignore_changes = [url] }` so bumping `talos_version` or changing the schematic no longer recreates the disk/etcd — upgrades flow through `talos_machine.image`
+- `modules/talos-cluster/main.tf` installer image flavor `factory.talos.dev/installer-secureboot/...` → `factory.talos.dev/nocloud-installer-secureboot/${talos_image_id}:v${talos_version}` with new `local.installer_image` that respects `var.installer_image`; `libvirt/main.tf` overrides it with the non-secureboot `factory.talos.dev/nocloud-installer/...`
+- `modules/talos-cluster/main.tf` / `outputs.tf` locals renamed `tailscale_cp_names` → `cp_names`, `tailscale_worker_names` → `worker_names`, `all_tailscale_names` → `all_nodes_names`
 
 ## [1.0.2] - 2026-07-16
 

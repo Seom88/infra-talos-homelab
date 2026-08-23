@@ -56,8 +56,7 @@ Terraform (libvirt/)
     └── destroy.yaml                # CI/CD: tear down cluster + Tailscale cleanup
 
 scripts/
-├── destroy-tailscale-devices.sh    # Pre-destroy Tailscale device cleanup
-└── talos-upgrade.sh                # Rolling in-place Talos upgrade
+└── destroy-tailscale-devices.sh    # Pre-destroy Tailscale device cleanup
 
 proxmox/                        # Proxmox VE root module
 ├── provider.tf                  # bpg/proxmox v0.109.0
@@ -110,6 +109,7 @@ secrets/                         # Generated credentials (.gitignored)
 - **Image caching (libvirt)** — nocloud raw images are downloaded, cached, and reused across applies; only the first apply downloads
 - **NAT networking (libvirt)** — dedicated `virbr-talos` bridge with DHCP reservations and DNS entries from node MACs
 - **Custom Talos image** — Image Factory schematic bundles `iscsi-tools`, `qemu-guest-agent`, `tailscale`, `util-linux-tools`
+- **In-place Talos upgrades** — `talos_machine` keeps the OS version in sync via `image`; bumping `talos_version` triggers a sequential rolling upgrade (pull → install → reboot) with `drain_on_upgrade = false` and `-parallelism=1`, so etcd quorum is protected without VM recreation. Installer images are platform-aware (`nocloud-installer-secureboot` by default, `nocloud-installer` override for libvirt)
 
 ## Requirements
 
@@ -243,9 +243,10 @@ just provider=libvirt setup-cli
 
 | Variable | Providers | Description | Default |
 |----------|-----------|-------------|---------|
-| `talos_version` | both | Talos Linux version | `1.13.8` |
+| `talos_version` | both | Talos Linux version | `1.13.9` (Proxmox default; libvirt default `1.13.8`) |
 | `cluster_vip` | both | Virtual IP for the Kubernetes API endpoint | — |
 | `tailscale_auth_key` | both | Tailscale auth key (empty = skip) | `""` (opt-in) |
+| `installer_image` | module | Installer container image for `talos_machine.image` (e.g. `factory.talos.dev/nocloud-installer/<schematic-id>:v<version>`). Must match platform flavor — secureboot roots can omit (defaults to `nocloud-installer-secureboot` built from `talos_image_id` + `talos_version`); non-secureboot roots (e.g. libvirt) must override | `""` |
 | `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Applied per node via the Talos `cluster.allowSchedulingOnControlPlanes` machine-config patch (Sidero docs) | — |
 
 > **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly.
@@ -254,27 +255,29 @@ just provider=libvirt setup-cli
 
 Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** instead of updating them in place. A recreated control plane node loses its etcd data; if more than one node is replaced, the cluster loses quorum and the L2 VIP goes down — the cluster comes back empty, and the platform layer (`longhorn`, `argocd`) must be re-applied.
 
-> **Rule of thumb**: `terraform apply` provisions and updates *configuration*. It is **not** the upgrade path for Talos — see [Upgrading Talos](#upgrading-talos) below.
+> **Rule of thumb**: `terraform apply` provisions and updates *configuration* and now also drives **rolling Talos upgrades** via `talos_machine.image` (see [Upgrading Talos](#upgrading-talos) below). Only bootstrap image changes and destructive `tfvars` keys still force VM recreation.
 
 ### 🔴 Destroys the cluster (VM destroy + recreate)
 
 | tfvars key | What happens |
 |------------|--------------|
-| `talos_version` | New version changes the download URL → new disk `file_id` → VMs recreated, etcd wiped |
-| `schematic-{env}.yaml` (editing system extensions) | New schematic ID → new image → same recreate path as `talos_version` |
 | `datastore_iso`, `nodes_cp[].datastore` / `nodes_worker[].datastore` | Disks recreated on the new datastore |
 | `node_name`, `nodes_cp[].proxmox_node` | Proxmox doesn't migrate VMs between nodes — destroy + create |
 | `nodes_cp[].disk_size` / `nodes_worker[].disk_size` (decrease) | Disks can't shrink — destroy + create |
 | Removing a node from `nodes_cp` / `nodes_worker` | That VM is destroyed |
 | `env_name` | Different resource namespace → full recreate |
 
-### 🟡 Outage without data loss
+### 🟡 Outage without data loss (rolling upgrade / reboot)
 
 | tfvars key | What happens |
 |------------|--------------|
+| `talos_version` | Bumping the version triggers a **sequential rolling upgrade** via `talos_machine.image` (pull → install → reboot, one node at a time with `-parallelism=1` to protect etcd quorum). No VM recreation, no etcd wipe. `drain_on_upgrade = false`. A fresh `terraform destroy` + `apply` or manually tainting `proxmox_download_file.talos_image` still pulls a new bootstrap image |
+| `schematic-{env}.yaml` (editing system extensions) | New schematic ID changes `local.installer_image` → same rolling upgrade path as `talos_version`. The bootstrap disk (`proxmox_download_file.talos_image`) ignores `url` changes (`lifecycle { ignore_changes = [url] }`), so etcd is preserved |
 | `network_bridge`, `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` | SDN config re-pushed, VMs reboot |
 | `gateway`, `cluster_vip` | Machine config re-pushed; cluster endpoint changes |
 | `kubernetes_version` | Machine config re-pushed (rolling kubelet update) |
+
+> **Note**: `proxmox_download_file.talos_image` now uses a shared `file_name` (`talos-nocloud-amd64-secureboot.img`, no `env`/`version` suffix) and `lifecycle { ignore_changes = [url] }` — bumping `talos_version` or editing the schematic no longer recreates the download file/disks. Upgrades are handled by `talos_machine.image`. `justfile`'s `tf-apply` runs with `-parallelism=1` so those rolling reboots are sequential (bootstrap from scratch is slower — ~15 min × 3 — but etcd-safe; remove the flag if you prefer fast parallel bootstrap).
 
 ### 🟢 Safe to change
 
@@ -282,12 +285,7 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 
 ### Upgrading Talos
 
-`talos_version` is a **bootstrap-only pin**: it selects the image the VMs are created with. To upgrade a running cluster, use the rolling upgrade (control planes first, then workers — preserves etcd and syncs the pin):
-
-```bash
-just upgrade                      # proxmox, prod (default; tf_env=dev for dev)
-just provider=libvirt upgrade     # libvirt
-```
+Bumping `talos_version` and running `just tf-apply` performs a sequential in-place upgrade via `talos_machine.image` (control planes first, then workers) with `-parallelism=1` to protect etcd quorum. The installer image is platform-aware: `factory.talos.dev/nocloud-installer-secureboot/...` by default (Proxmox/secureboot), overridden to `factory.talos.dev/nocloud-installer/...` for libvirt via `var.installer_image`. `drain_on_upgrade = false` (revisit when dedicated workers carry workloads). Bump the pin in `proxmox/variables.tf` (default `1.13.9`), `libvirt/variables.tf` (`1.13.8`) or `proxmox/environments/<env>/terraform.tfvars`, then apply.
 
 ## Outputs
 
@@ -347,14 +345,13 @@ just provider=libvirt tf-apply             # libvirt (no environments)
 | `tf-fmt` | Format all Terraform files recursively |
 | `tf-init` | Initialize Terraform with local backend for the active provider/env |
 | `tf-plan` | Plan changes for the active provider/env |
-| `tf-apply` | Apply changes (bootstrap or update) |
+| `tf-apply` | Apply changes (bootstrap or update) — runs with `-parallelism=1` to serialize `talos_machine` reboots and protect etcd quorum (slower cold bootstrap, ~15 min × 3) |
 | `tf-destroy` | Tear down the active provider/env (cleans up Tailscale devices first) |
 | `gen-secrets` | Extract talosconfig + kubeconfig from state |
 | `setup-cli` | `gen-secrets` + merge into `~/.talos/config` and `~/.kube/config` |
 | `status` | Show Talos version, extensions, and cluster members |
 | `get-schematic-id name="prod"` | Compute schematic ID from `schematic-{name}.yaml` via the Image Factory API |
 | `cluster-schematic-id` | Read the active schematic ID from the running cluster |
-| `upgrade` | Rolling Talos upgrade on the active provider/env (see [Upgrading Talos](#upgrading-talos)) |
 
 ### Platform (ArgoCD)
 

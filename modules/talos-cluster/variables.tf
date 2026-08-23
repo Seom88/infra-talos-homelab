@@ -55,6 +55,19 @@ variable "talos_image_id" {
   type        = string
 }
 
+variable "installer_image" {
+  description = <<-EOF
+    Installer container image used by talos_machine to keep the node OS version
+    in sync (e.g. factory.talos.dev/nocloud-installer/<schematic-id>:v1.13.9).
+    Must match the platform flavor of the nodes: roots booting secureboot images
+    can omit it (defaults to the nocloud-installer-secureboot built from
+    talos_image_id + talos_version); non-secureboot roots (e.g. libvirt) must
+    override it.
+  EOF
+  type        = string
+  default     = ""
+}
+
 variable "tailscale_domain" {
   description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net). Required only if tailscale_auth_key is set."
   type        = string

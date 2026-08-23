@@ -44,11 +44,15 @@ tf-plan:
     terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
     terraform -chdir={{ tf_root }} plan {{ var_file_arg }}
 
-# Apply changes (auto-init to ensure the correct backend)
+# Apply changes (auto-init to ensure the correct backend).
+# IaC upgrades via var.talos_version use talos_machine.image — those reboots
+# must be sequential to protect etcd quorum, so we serialize. Bootstrap from
+# scratch will be slower (15m x3) but safe; remove `-parallelism=1` if you
+# want fast parallel bootstrap and accept parallel upgrade risk.
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
-    terraform -chdir={{ tf_root }} apply {{ var_file_arg }}
+    terraform -chdir={{ tf_root }} apply {{ var_file_arg }} -parallelism=1
 
 # Destroy the active provider/env (auto-init for the correct backend)
 tf-destroy:
@@ -157,11 +161,3 @@ cluster-schematic-id:
     echo "Schematic ID ({{ label }}):"
     talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
-
-# ── Talos Upgrade ─────────────────────────────
-
-env_flag := if provider == "proxmox" { "--env " + tf_env } else { "" }
-
-# Rolling Talos upgrade on the active provider/env
-upgrade:
-    ./scripts/talos-upgrade.sh --root {{ provider }} {{ env_flag }}

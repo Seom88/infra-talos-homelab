@@ -425,6 +425,8 @@ module "talos_cluster" {
   talos_version        = var.talos_version
   kubernetes_version   = var.kubernetes_version
   talos_image_id       = talos_image_factory_schematic.this.id
+  # Non-secureboot platform flavor: the module default is the secureboot installer.
+  installer_image      = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
   tailscale_domain     = var.tailscale_domain
   tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]

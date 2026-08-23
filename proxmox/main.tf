@@ -4,15 +4,25 @@ resource "talos_image_factory_schematic" "this" {
 }
 
 # ── Proxmox Image ────────────────────────────────
+# Bootstrap image only: pins the disk the VMs are FIRST created from.
+# Bumping var.talos_version does NOT recreate this file (see lifecycle below) —
+# that would wipe etcd per README "Changes that destroy your cluster". In-place
+# upgrades are handled by talos_machine.image (installer), not by recreating
+# disks. Only a fresh `terraform destroy` + `apply`, or manually tainting
+# this resource, pulls a new bootstrap image.
 resource "proxmox_download_file" "talos_image" {
   content_type            = "iso"
   datastore_id            = var.datastore_iso
   node_name               = var.node_name
   url                     = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64-secureboot.raw.xz"
   decompression_algorithm = "zst"
-  file_name               = "talos-${var.env_name}-v${var.talos_version}-nocloud-amd64-secureboot.img"
+  file_name               = "talos-nocloud-amd64-secureboot.img"
   overwrite               = false
   overwrite_unmanaged     = true
+
+  lifecycle {
+    ignore_changes = [url]
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "talos" {
