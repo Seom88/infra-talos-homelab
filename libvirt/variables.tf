@@ -6,8 +6,7 @@ variable "nodes_cp" {
   description = <<-EOF
     Control plane nodes.
     Required: hostname, ip, mac (static), cores, memory (MiB),
-    disk_size (GiB), pool and allow_scheduling (opts this CP out of the
-    control-plane taint).
+    disk_size (GiB), pool (optional, defaults to var.pool_name) and allow_scheduling.
   EOF
   type = list(object({
     hostname         = string
@@ -16,7 +15,7 @@ variable "nodes_cp" {
     cores            = number
     memory           = number
     disk_size        = number
-    pool             = string
+    pool             = optional(string)
     allow_scheduling = bool
   }))
 }
@@ -25,7 +24,7 @@ variable "nodes_worker" {
   description = <<-EOF
     Worker nodes.
     Required: hostname, ip, mac (static), cores, memory (MiB),
-    disk_size (GiB) and pool.
+    disk_size (GiB) and pool (optional, defaults to var.pool_name).
   EOF
   type = list(object({
     hostname  = string
@@ -34,8 +33,24 @@ variable "nodes_worker" {
     cores     = number
     memory    = number
     disk_size = number
-    pool      = string
+    pool      = optional(string)
   }))
+}
+
+# ============================================================
+# Storage Pool
+# ============================================================
+
+variable "pool_name" {
+  description = "Name of the dedicated storage pool for Talos"
+  type        = string
+  default     = "talos-pool"
+}
+
+variable "pool_path" {
+  description = "Target filesystem directory for the dedicated Talos storage pool"
+  type        = string
+  default     = "/var/lib/libvirt/images/talos"
 }
 
 # ============================================================
@@ -55,7 +70,7 @@ variable "network_prefix" {
 }
 
 # ============================================================
-# Environment
+# Environment & Features
 # ============================================================
 
 variable "schematic_name" {
@@ -64,14 +79,32 @@ variable "schematic_name" {
   default     = "schematic-dev.yaml"
 }
 
+variable "secureboot" {
+  description = "Enable UEFI SecureBoot and download secureboot-signed Talos nocloud images"
+  type        = bool
+  default     = true
+}
+
+variable "ovmf_code_secboot" {
+  description = "Path to the OVMF code binary on the host"
+  type        = string
+  default     = "/usr/share/edk2/ovmf/OVMF_CODE.fd"
+}
+
+variable "ovmf_vars_secboot" {
+  description = "Path to the OVMF vars template on the host"
+  type        = string
+  default     = "/usr/share/edk2/ovmf/OVMF_VARS.fd"
+}
+
 # ============================================================
 # Talos image cache (libvirt-specific)
 # ============================================================
 
 variable "talos_image_cache_dir" {
-  description = "Local directory for cached Talos raw images. Must be readable by libvirtd."
+  description = "Directory for cached Talos raw images. Must be writable by current user and readable by libvirtd/qemu."
   type        = string
-  default     = "/tmp/talos-images"
+  default     = "~/.cache/talos-images"
 }
 
 # ============================================================
@@ -89,9 +122,6 @@ variable "cluster_vip" {
   type        = string
 }
 
-# Bootstrap-only pin: bumping this replaces the node disks (etcd wipe) and
-# recreates the VMs. Run 'just upgrade' / 'just upgrade-libvirt' to roll
-# Talos to the latest release in place.
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.13.3)"
   type        = string
