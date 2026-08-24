@@ -136,12 +136,6 @@ variable "tailscale_auth_key" {
   sensitive   = true
 }
 
-variable "tailscale_domain" {
-  description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net)"
-  type        = string
-  default     = "lonk-mirfak.ts.net"
-}
-
 variable "longhorn_enabled" {
   description = "Inject kubelet extraMounts for Longhorn on all nodes"
   type        = bool

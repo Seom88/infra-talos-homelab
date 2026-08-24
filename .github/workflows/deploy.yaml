@@ -28,13 +28,13 @@ jobs:
 
       - name: Format check
         run: terraform fmt -check -recursive
-        working-directory: ${{ env.TF_ROOT }}
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
 
       - name: Init & validate
         run: |
           terraform init -backend=false
           terraform validate
-        working-directory: ${{ env.TF_ROOT }}
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
 
       - name: Platform format check
         run: terraform fmt -check -recursive
@@ -77,9 +77,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Looking for latest artifact: tfstate-${{ env.TF_ENV }}"
+          echo "Looking for latest artifact: tfstate-${{ env.TF_ROOT }}-${{ env.TF_ENV }}"
           ARTIFACT_ID=$(gh api \
-            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-${{ env.TF_ENV }} \
+            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-${{ env.TF_ROOT }}-${{ env.TF_ENV }} \
             --jq '.artifacts | sort_by(.created_at) | last | .id' 2>/dev/null || echo "")
           echo "Artifact ID: $ARTIFACT_ID"
           if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
@@ -90,8 +90,8 @@ jobs:
             rm -f tfstate.zip
             cd -
             if [ -f /tmp/tfstate-restore/terraform.tfstate ]; then
-              mkdir -p environments/${{ env.TF_ENV }}
-              cp /tmp/tfstate-restore/terraform.tfstate environments/${{ env.TF_ENV }}/terraform.tfstate
+              mkdir -p environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+              cp /tmp/tfstate-restore/terraform.tfstate environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate
               echo "✓ State restored"
             else
               echo "State file not found in artifact"
@@ -99,20 +99,17 @@ jobs:
           else
             echo "No previous artifact found (first run?)"
           fi
-        working-directory: ${{ env.TF_ROOT }}
 
       - name: Terraform init
         run: |
-          terraform init -reconfigure \
-            -backend-config="path=environments/${{ env.TF_ENV }}/terraform.tfstate"
-        working-directory: ${{ env.TF_ROOT }}
+          terraform init -reconfigure
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
 
       - name: Terraform apply
         run: |
-          terraform apply -auto-approve -no-color \
-            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars 2>&1 | \
+          terraform apply -auto-approve -no-color 2>&1 | \
             sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
-        working-directory: ${{ env.TF_ROOT }}
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
         env:
           TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
           TF_VAR_tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
@@ -120,15 +117,15 @@ jobs:
       - name: Backup Terraform state
         if: always()
         run: |
-          if [ -f ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate ]; then
+          if [ -f environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate ]; then
             mkdir -p /tmp/tfstate-backup
-            cp ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate /tmp/tfstate-backup/
+            cp environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate /tmp/tfstate-backup/
           fi
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: tfstate-${{ env.TF_ENV }}
+          name: tfstate-${{ env.TF_ROOT }}-${{ env.TF_ENV }}
           path: /tmp/tfstate-backup/
           retention-days: 90
 
@@ -137,7 +134,7 @@ jobs:
           mkdir -p /tmp/secrets
           terraform output -raw talosconfig > /tmp/secrets/talosconfig.yaml
           terraform output -raw kubeconfig > /tmp/secrets/kubeconfig.yaml
-        working-directory: ${{ env.TF_ROOT }}
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -149,9 +146,9 @@ jobs:
 
       - name: Write platform secrets to workspace
         run: |
-          mkdir -p secrets/${{ env.TF_ENV }}
-          cp /tmp/secrets/talosconfig.yaml secrets/${{ env.TF_ENV }}/talosconfig.yaml
-          cp /tmp/secrets/kubeconfig.yaml secrets/${{ env.TF_ENV }}/kubeconfig.yaml
+          mkdir -p secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+          cp /tmp/secrets/talosconfig.yaml secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/talosconfig.yaml
+          cp /tmp/secrets/kubeconfig.yaml secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/kubeconfig.yaml
 
       - name: Restore platform state from last successful run
         id: restore-platform-tfstate
@@ -159,9 +156,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Looking for latest artifact: tfstate-platform-${{ env.TF_ENV }}"
+          echo "Looking for latest artifact: tfstate-platform-${{ env.TF_ROOT }}-${{ env.TF_ENV }}"
           ARTIFACT_ID=$(gh api \
-            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-platform-${{ env.TF_ENV }} \
+            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-platform-${{ env.TF_ROOT }}-${{ env.TF_ENV }} \
             --jq '.artifacts | sort_by(.created_at) | last | .id' 2>/dev/null || echo "")
           echo "Artifact ID: $ARTIFACT_ID"
           if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
@@ -172,8 +169,8 @@ jobs:
             rm -f tfstate.zip
             cd -
             if [ -f /tmp/platform-tfstate-restore/terraform.tfstate ]; then
-              mkdir -p platform/environments/${{ env.TF_ENV }}
-              cp /tmp/platform-tfstate-restore/terraform.tfstate platform/environments/${{ env.TF_ENV }}/terraform.tfstate
+              mkdir -p platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+              cp /tmp/platform-tfstate-restore/terraform.tfstate platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate
               echo "✓ Platform state restored"
             else
               echo "Platform state file not found in artifact"
@@ -185,27 +182,27 @@ jobs:
       - name: Platform Terraform init
         run: |
           terraform init -reconfigure \
-            -backend-config="path=environments/${{ env.TF_ENV }}/platform-terraform.tfstate"
+            -backend-config="path=environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate"
         working-directory: platform
 
       - name: Platform Terraform apply
         run: |
           terraform apply -auto-approve -no-color \
-            -var="env_name=${{ env.TF_ENV }}" 2>&1 | \
+            -var="infra_provider=${{ env.TF_ROOT }}" -var="env_name=${{ env.TF_ENV }}" 2>&1 | \
             sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
         working-directory: platform
 
       - name: Backup platform state
         if: always()
         run: |
-          if [ -f platform/environments/${{ env.TF_ENV }}/platform-terraform.tfstate ]; then
+          if [ -f platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate ]; then
             mkdir -p /tmp/platform-tfstate-backup
-            cp platform/environments/${{ env.TF_ENV }}/platform-terraform.tfstate /tmp/platform-tfstate-backup/
+            cp platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate /tmp/platform-tfstate-backup/
           fi
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: tfstate-platform-${{ env.TF_ENV }}
+          name: tfstate-platform-${{ env.TF_ROOT }}-${{ env.TF_ENV }}
           path: /tmp/platform-tfstate-backup/
           retention-days: 90

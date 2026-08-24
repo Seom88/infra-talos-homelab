@@ -79,10 +79,10 @@ libvirt/                        # Libvirt root module
 
 platform/                       # Platform root module (ArgoCD)
 ├── main.tf                      # Node readiness gate + ArgoCD Helm chart
-├── providers.tf                 # helm provider against secrets/<env>/kubeconfig.yaml
-├── variables.tf                 # env_name (default prod), argocd_version (default 9.5.13)
+├── providers.tf                 # helm provider against secrets/<provider>/<env>/kubeconfig.yaml
+├── variables.tf                 # infra_provider (default proxmox), env_name (default prod), argocd_version (default 9.5.13)
 ├── values/argocd/               # ArgoCD Helm values
-└── terraform.tfstate            # Platform state (committed for CI restore/backup)
+└── environments/<provider>/<env>/terraform.tfstate  # Per-provider/env local backend state (symmetrical with infra roots)
 
 modules/
 └── talos-cluster/               # Provider-agnostic child module
@@ -94,8 +94,7 @@ schematic-dev.yaml               # Dev Image Factory extensions
 schematic-prod.yaml              # Prod Image Factory extensions
 LICENSE                          # MIT License
 secrets/                         # Generated credentials (.gitignored)
-├── dev/                         # talosconfig.yaml, kubeconfig.yaml
-└── prod/                        # talosconfig.yaml, kubeconfig.yaml
+└── <provider>/<env>/            # e.g. proxmox/prod, libvirt/dev — talosconfig.yaml, kubeconfig.yaml
 ```
 
 ## Highlights
@@ -163,14 +162,14 @@ export TF_VAR_tailscale_auth_key="tskey-auth-..."
 just tf-apply
 
 # Or target the dev environment
-just tf_env=dev tf-apply
+just provider=proxmox env=dev tf-apply
 
 # Extract credentials and merge into local config
-just setup-cli             # prod
-just tf_env=dev setup-cli  # dev
+just setup-cli                         # proxmox/prod (default)
+just provider=proxmox env=dev setup-cli  # proxmox/dev
 ```
 
-All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state, and secrets directory under `proxmox/environments/`. Platform state lives in `platform/terraform.tfstate`. Tailscale is only enabled for `prod`.
+All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state at `environments/<provider>/<env>/terraform.tfstate`, and secrets at `secrets/<provider>/<env>/`. Platform state is symmetrical: `platform/environments/<provider>/<env>/terraform.tfstate`. Tailscale is only enabled for `prod`.
 
 > **Network reachability (Proxmox SDN)**: Terraform must be able to reach the cluster IPs (`10.10.0.0/24`). The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT (subnet `snat = true`), but traffic from outside cannot reach them directly. If you are not on the same network as the Proxmox host, expose the subnet through Tailscale from the Proxmox node (prod):
 >
@@ -218,7 +217,7 @@ just provider=libvirt setup-cli
 | `cluster_vip` | Virtual IP for the Kubernetes API endpoint | — |
 | `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required) | — |
 | `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required) | — |
-| `tailscale_domain` | Tailscale MagicDNS domain | `lonk-mirfak.ts.net` |
+| `tailscale_domain` | Tailscale MagicDNS domain | `tail-scale.ts.net` |
 
 ### Libvirt
 
@@ -299,31 +298,28 @@ Bumping `talos_version` and running `just tf-apply` performs a sequential in-pla
 
 ## Access
 
-Use dev instead of prod on dev environments.
+Use `provider` and `env` to select the cluster (defaults: `proxmox` / `prod`).
 
 ### Proxmox
 
 ```bash
-# Use the right env
-export TF_ENV=prod
-
 # LAN (L2 VIP, check your environment's cluster_vip)
-talosctl --talosconfig secrets/$TF_ENV/talosconfig.yaml version
+talosctl --talosconfig secrets/proxmox/prod/talosconfig.yaml version
 
 # Tailscale (per-node contexts, prod only)
-kubectl --kubeconfig secrets/$TF_ENV/kubeconfig.yaml get nodes
-kubectl --kubeconfig secrets/$TF_ENV/kubeconfig.yaml config use-context talos-cp1
+kubectl --kubeconfig secrets/proxmox/prod/kubeconfig.yaml get nodes
+kubectl --kubeconfig secrets/proxmox/prod/kubeconfig.yaml config use-context talos-cp1
 ```
 
 ### Libvirt
 
 ```bash
 # LAN (L2 VIP)
-talosctl --talosconfig secrets/libvirt/talosconfig.yaml version
+talosctl --talosconfig secrets/libvirt/dev/talosconfig.yaml version
 
 # Tailscale (per-node contexts)
-kubectl --kubeconfig secrets/libvirt/kubeconfig.yaml get nodes
-kubectl --kubeconfig secrets/libvirt/kubeconfig.yaml config use-context talos-cp1
+kubectl --kubeconfig secrets/libvirt/dev/kubeconfig.yaml get nodes
+kubectl --kubeconfig secrets/libvirt/dev/kubeconfig.yaml config use-context talos-cp1
 ```
 
 ## Why
@@ -332,12 +328,13 @@ Hands-on infrastructure-as-code with real hardware. Two providers let you choose
 
 ## Available `just` tasks
 
-All tasks run from the repo root. `provider` selects the Terraform root (`proxmox` or `libvirt`) and `tf_env` selects the environment (only used when `provider == proxmox`, default `prod`):
+All tasks run from the repo root. `provider` (`proxmox` | `libvirt`) and `env` (`prod` | `dev`) select the environment (defaults: `proxmox`/`prod`):
 
 ```bash
-just tf-apply                              # proxmox, prod (default)
-just provider=proxmox tf_env=dev tf-apply  # proxmox, dev
-just provider=libvirt tf-apply             # libvirt (no environments)
+just tf-apply                              # proxmox/prod (default)
+just provider=proxmox env=dev tf-apply     # proxmox/dev
+just provider=libvirt env=dev tf-apply     # libvirt/dev
+just provider=libvirt env=prod tf-apply    # libvirt/prod
 ```
 
 | Task | Description |
@@ -355,14 +352,14 @@ just provider=libvirt tf-apply             # libvirt (no environments)
 
 ### Platform (ArgoCD)
 
-Provider/env-agnostic tasks — they act on the kubeconfig of the selected environment (`env_name`, default `prod`):
+Provider/env-aware tasks — symmetrical per `provider`/`env` (state at `platform/environments/<provider>/<env>/terraform.tfstate`, kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`):
 
 | Task | Description |
 |------|-------------|
-| `tf-platform-init` | Initialize the platform Terraform root |
-| `tf-platform-plan` | Plan platform changes |
-| `tf-platform-apply` | Apply platform changes (installs ArgoCD) |
-| `tf-platform-destroy` | Tear down the platform layer |
+| `tf-platform-init` | Initialize the platform layer for the selected `provider`/`env` (regenerates secrets + `terraform init` with provider-aware backend) |
+| `tf-platform-plan` | Plan platform changes for the selected `provider`/`env` |
+| `tf-platform-apply` | Apply platform changes (installs ArgoCD) for the selected `provider`/`env` |
+| `tf-platform-destroy` | Tear down the platform layer for the selected `provider`/`env` — run **before** `tf-destroy` (e.g. `just provider=proxmox env=prod tf-platform-destroy`) |
 
 ## Platform (ArgoCD)
 
@@ -374,12 +371,14 @@ Longhorn is no longer installed here: it is a platform app of the GitOps repo (`
 
 ### Setup flow
 
-1. `just tf-apply` — provisions the cluster; the health gate (`talos_cluster_health`) blocks the apply until kube-apiserver, etcd, and all nodes are Ready.
-2. `just setup-cli` — regenerates `secrets/<env>/kubeconfig.yaml` and merges it into the local CLI configs.
-3. `just tf-platform-apply` — applies the platform layer: waits for Ready nodes and installs ArgoCD.
+1. `just provider=proxmox env=prod tf-apply` — provisions the cluster; the health gate (`talos_cluster_health`) blocks the apply until kube-apiserver, etcd, and all nodes are Ready.
+2. `just provider=proxmox env=prod setup-cli` — regenerates `secrets/proxmox/prod/kubeconfig.yaml` and merges it into the local CLI configs.
+3. `just provider=proxmox env=prod tf-platform-apply` — applies the platform layer: waits for Ready nodes and installs ArgoCD (uses `platform/environments/proxmox/prod/terraform.tfstate`).
 4. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
 
-The platform root uses `env_name` (default `prod`) to pick the kubeconfig under `secrets/<env>/`; to target another environment, pass it explicitly: `terraform -chdir=platform apply -var="env_name=dev"`.
+The platform root uses `infra_provider` (default `proxmox`) and `env_name` (default `prod`) to pick the kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`; to target another environment, pass both explicitly: `just provider=libvirt env=dev tf-platform-apply` or `terraform -chdir=platform apply -var="infra_provider=libvirt" -var="env_name=dev"`.
+
+**Destroy order:** tear down platform before infra — `just provider=proxmox env=prod tf-platform-destroy` then `just provider=proxmox env=prod tf-destroy` — so Helm releases are removed before VMs disappear.
 
 ### Migrating an existing cluster
 
@@ -404,7 +403,9 @@ just tf-platform-apply
 
 ### State
 
-Platform state lives in `platform/terraform.tfstate` in the platform root (default local backend) and is committed so CI can restore/back it up as an artifact.
+Platform state is symmetrical per provider/env at `platform/environments/<provider>/<env>/terraform.tfstate` (local backend with `-backend-config="path=environments/<provider>/<env>/terraform.tfstate"` when running from `platform/`). CI restores/backs it up as artifact `tfstate-platform-<provider>-<env>`.
+
+> **Migration note:** legacy locations `platform/terraform.tfstate` and `platform/environments/prod/platform-terraform.tfstate` / `platform/environments/<env>/platform-terraform.tfstate` are superseded. The canonical path is now `platform/environments/<provider>/<env>/terraform.tfstate` (e.g. `platform/environments/proxmox/prod/terraform.tfstate`, already present). Keep old files on disk for manual `terraform state` migration if needed, but new `just tf-platform-*` and CI tasks use the provider-aware path.
 
 ## CI/CD
 

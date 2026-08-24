@@ -21,7 +21,6 @@ module "libvirt" {
   talos_version        = var.talos_version
   kubernetes_version   = var.kubernetes_version
   tailscale_auth_key   = var.tailscale_auth_key
-  tailscale_domain     = var.tailscale_domain
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = var.extra_config_patches
 }

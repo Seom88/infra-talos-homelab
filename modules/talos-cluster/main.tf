@@ -10,8 +10,8 @@ terraform {
 }
 
 locals {
-  cp_names           = var.tailscale_domain != "" ? [for hostname in var.cp_hostnames : "${hostname}.${var.tailscale_domain}"] : []
-  worker_names       = var.tailscale_domain != "" ? [for hostname in var.worker_hostnames : "${hostname}.${var.tailscale_domain}"] : []
+  cp_names           = var.cp_hostnames
+  worker_names       = var.worker_hostnames
   all_nodes_names    = concat(local.cp_names, local.worker_names)
   cluster_endpoint   = "https://${var.cp_ips[0]}:6443"
   base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"

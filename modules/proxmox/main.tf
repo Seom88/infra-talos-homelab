@@ -154,7 +154,6 @@ module "talos" {
   worker_hostnames     = [for node in var.nodes_worker : node.hostname]
   talos_version        = var.talos_version
   talos_image_id       = talos_image_factory_schematic.this.id
-  tailscale_domain     = var.tailscale_domain
   tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
 

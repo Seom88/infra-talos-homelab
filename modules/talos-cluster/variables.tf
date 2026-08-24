@@ -69,11 +69,6 @@ variable "secureboot" {
   default     = true
 }
 
-variable "tailscale_domain" {
-  description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net). Required only if tailscale_auth_key is set."
-  type        = string
-}
-
 variable "tailscale_auth_key" {
   description = "Tailscale pre-authentication key for node registration. Omit or leave empty to skip Tailscale."
   type        = string

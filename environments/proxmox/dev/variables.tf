@@ -12,7 +12,7 @@ variable "ssh_username" {
 }
 
 variable "ssh_node_address" {
-  description = "SSH address for the Proxmox node (Tailscale hostname, e.g. node.lonk-mirfak.ts.net)"
+  description = "SSH address for the Proxmox node (Tailscale hostname, e.g. node.tail-scale.ts.net)"
   type        = string
 }
 
@@ -106,9 +106,4 @@ variable "tailscale_auth_key" {
   type      = string
   default   = ""
   sensitive = true
-}
-
-variable "tailscale_domain" {
-  type    = string
-  default = "lonk-mirfak.ts.net"
 }

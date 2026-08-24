@@ -18,5 +18,4 @@ module "proxmox" {
   schematic_path = "${path.module}/../../../schematic-${var.env_name}.yaml"
 
   tailscale_auth_key = var.tailscale_auth_key
-  tailscale_domain   = var.tailscale_domain
 }

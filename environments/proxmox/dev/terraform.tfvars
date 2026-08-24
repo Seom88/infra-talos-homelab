@@ -1,6 +1,6 @@
 env_name         = "dev"
-endpoint         = "https://pve01.lonk-mirfak.ts.net:8006"
-ssh_node_address = "pve01.lonk-mirfak.ts.net"
+endpoint         = "https://pve01.lonk-mirfak.ts.net"
+ssh_node_address = "pve01"
 gateway          = "10.10.1.1"
 node_name        = "pve01"
 datastore_iso    = "local"

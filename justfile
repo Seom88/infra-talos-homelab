@@ -12,10 +12,12 @@
 #    just provider=proxmox env=dev tf-apply      # proxmox, dev
 #    just provider=libvirt env=dev tf-apply      # libvirt, dev (local only)
 #
-#  Platform (ArgoCD) does NOT depend on provider/env: it applies to
-#  the kubeconfig context that is active at that moment.
-#    just setup-cli           # point kubectl/talosctl at a cluster
-#    just tf-platform-apply   # installs ArgoCD there
+#  Platform (ArgoCD) is provider/env-aware: it selects the kubeconfig at
+#  ./secrets/<provider>/<env>/kubeconfig.yaml and keeps its own state at
+#  ./platform/environments/<provider>/<env>/terraform.tfstate (symmetrical
+#  per provider/env, like the infra roots).
+#    just provider=proxmox env=prod setup-cli           # point kubectl/talosctl at proxmox/prod
+#    just provider=proxmox env=prod tf-platform-apply   # installs ArgoCD there
 
 provider := "proxmox"   # proxmox | libvirt
 env      := "prod"      # prod | dev
@@ -109,20 +111,24 @@ setup-cli:
 platform_root := "./platform"
 
 tf-platform-init:
-    terraform -chdir={{ platform_root }} init -reconfigure
+    just provider="{{ provider }}" env="{{ env }}" gen-secrets
+    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
 
 tf-platform-plan:
+    just provider="{{ provider }}" env="{{ env }}" gen-secrets
     terraform -chdir={{ platform_root }} fmt
-    terraform -chdir={{ platform_root }} init -reconfigure
+    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
     terraform -chdir={{ platform_root }} plan -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 tf-platform-apply:
+    just provider="{{ provider }}" env="{{ env }}" gen-secrets
     terraform -chdir={{ platform_root }} fmt
-    terraform -chdir={{ platform_root }} init -reconfigure
+    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
     terraform -chdir={{ platform_root }} apply -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 tf-platform-destroy:
-    terraform -chdir={{ platform_root }} init -reconfigure
+    just provider="{{ provider }}" env="{{ env }}" gen-secrets
+    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
     terraform -chdir={{ platform_root }} destroy -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 # ── Cluster Status ─────────────────────────────

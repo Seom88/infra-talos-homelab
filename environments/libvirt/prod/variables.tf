@@ -84,11 +84,6 @@ variable "tailscale_auth_key" {
   sensitive = true
 }
 
-variable "tailscale_domain" {
-  type    = string
-  default = "lonk-mirfak.ts.net"
-}
-
 variable "longhorn_enabled" {
   type    = bool
   default = true
