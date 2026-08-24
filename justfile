@@ -100,9 +100,11 @@ setup-cli:
     mv /tmp/kube-merge ~/.kube/config
     echo "✓ kubectl configured ({{ label }})"
 
-# ── Platform (ArgoCD) — agnostic of provider/env ───────────────
-# Applies to the active kubeconfig context (run `setup-cli`
-# pointing at whichever cluster you want before using these commands).
+# ── Platform (ArgoCD) — provider/env-aware ───────────────
+# Selects kubeconfig at ./secrets/<provider>/<env>/kubeconfig.yaml
+# Usage:
+#   just provider=libvirt env=prod tf-platform-apply
+#   just provider=proxmox env=prod tf-platform-apply
 
 platform_root := "./platform"
 
@@ -112,16 +114,16 @@ tf-platform-init:
 tf-platform-plan:
     terraform -chdir={{ platform_root }} fmt
     terraform -chdir={{ platform_root }} init -reconfigure
-    terraform -chdir={{ platform_root }} plan
+    terraform -chdir={{ platform_root }} plan -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 tf-platform-apply:
     terraform -chdir={{ platform_root }} fmt
     terraform -chdir={{ platform_root }} init -reconfigure
-    terraform -chdir={{ platform_root }} apply
+    terraform -chdir={{ platform_root }} apply -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 tf-platform-destroy:
     terraform -chdir={{ platform_root }} init -reconfigure
-    terraform -chdir={{ platform_root }} destroy
+    terraform -chdir={{ platform_root }} destroy -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 # ── Cluster Status ─────────────────────────────
 

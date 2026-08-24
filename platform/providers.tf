@@ -11,6 +11,6 @@ terraform {
 
 provider "helm" {
   kubernetes {
-    config_path = "../secrets/${var.env_name}/kubeconfig.yaml"
+    config_path = "../secrets/${var.infra_provider}/${var.env_name}/kubeconfig.yaml"
   }
 }

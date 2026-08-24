@@ -13,13 +13,13 @@
 resource "terraform_data" "wait_nodes" {
   # Re-run when the kubeconfig changes (e.g. after a cluster rebuild)
   triggers_replace = {
-    kubeconfig_hash = fileexists("${path.module}/../secrets/${var.env_name}/kubeconfig.yaml") ? filesha256("${path.module}/../secrets/${var.env_name}/kubeconfig.yaml") : "kubeconfig-missing"
+    kubeconfig_hash = fileexists("${path.module}/../secrets/${var.infra_provider}/${var.env_name}/kubeconfig.yaml") ? filesha256("${path.module}/../secrets/${var.infra_provider}/${var.env_name}/kubeconfig.yaml") : "kubeconfig-missing"
   }
 
   provisioner "local-exec" {
     command = <<-EOT
       set -euo pipefail
-      export KUBECONFIG=${abspath("${path.module}/../secrets/${var.env_name}/kubeconfig.yaml")}
+      export KUBECONFIG=${abspath("${path.module}/../secrets/${var.infra_provider}/${var.env_name}/kubeconfig.yaml")}
       kubectl wait --for=condition=Ready node --all --timeout=600s
     EOT
   }
