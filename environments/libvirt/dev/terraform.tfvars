@@ -3,7 +3,7 @@
 # (current single-node CP + 3 workers local cluster)
 # ============================================================
 
-env_name    = "dev"
+env_name     = "dev"
 gateway      = "10.10.20.1"
 network_cidr = "10.10.20.0/24"
 

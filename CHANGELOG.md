@@ -28,6 +28,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Removed
 - **VIP (`cluster_vip`)** — removed from `modules/talos-cluster` and all environment `terraform.tfvars`; the virtual IP caused bootstrap failures and conflicted with node reconfiguration. API server access now relies on direct per-node IPs.
 
+### Fixed
+- **Bootstrap-only `talos_machine_secrets` (`modules/proxmox` and `modules/libvirt`)** — added `lifecycle { ignore_changes = [talos_version] }` so bumping `talos_version` (upgrade or downgrade) no longer rotates the CA. In-place upgrades now flow solely through `talos_machine.image` (`factory.talos.dev/nocloud-installer*:<id>:v<version>`) as a sequential rolling reboot, preventing `x509: certificate signed by unknown authority (Ed25519 verification failure)` after version changes
+
 ### Changed
 - **Modularized Libvirt root** — decomposed monolithic `libvirt/main.tf` into domain-focused files: `network.tf` (NAT network & DHCP), `image.tf` (Talos factory schematic & cache download), `vms.tf` (volumes & KVM domains), `cluster.tf` (bootstrap module & health gate), and `pool.tf` (storage pool)
 - **Deterministic MAC generation in Libvirt** (`libvirt/variables.tf`, `libvirt/vms.tf`, `libvirt/network.tf`) — made `mac` optional in `nodes_cp` / `nodes_worker`; when omitted, a stable QEMU OUI MAC (`52:54:00:xx:yy:zz`) is auto-generated deterministically from `md5(hostname)`, eliminating hardcoded MAC addresses in `terraform.tfvars`

@@ -4,6 +4,11 @@
 
 resource "talos_machine_secrets" "this" {
   talos_version = "v${var.talos_version}"
+
+  # Secrets are bootstrap-only: version bumps must not rotate the CA. In-place upgrades are handled by talos_machine.image (installer) in talos-cluster module.
+  lifecycle {
+    ignore_changes = [talos_version]
+  }
 }
 
 # ============================================================
