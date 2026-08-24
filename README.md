@@ -77,18 +77,26 @@ libvirt/                        # Libvirt root module
 ├── outputs.tf                   # talosconfig, kubeconfig, kubeconfig_tailscale
 └── terraform.tfvars             # Node IPs, MACs, specs
 
-platform/                       # Platform root module (ArgoCD)
-├── main.tf                      # Node readiness gate + ArgoCD Helm chart
-├── providers.tf                 # helm provider against secrets/<provider>/<env>/kubeconfig.yaml
-├── variables.tf                 # infra_provider (default proxmox), env_name (default prod), argocd_version (default 9.5.13)
-├── values/argocd/               # ArgoCD Helm values
-└── environments/<provider>/<env>/terraform.tfstate  # Per-provider/env local backend state (symmetrical with infra roots)
+environments/                  # Composed roots (infra + platform in one state)
+├── proxmox/{prod,dev}/         # bpg/proxmox + helm provider + module.platform
+└── libvirt/{prod,dev}/         # dmacvicar/libvirt + helm provider + module.platform
+
+platform/                       # DEPRECATED standalone root (kept for state migration)
+├── DEPRECATED.md               # Migration guide (terraform state mv)
+├── main.tf                     # (deprecated) Node readiness gate + ArgoCD Helm chart
+├── providers.tf                # (deprecated) helm provider
+└── values/argocd/              # (deprecated) duplicate — canonical is modules/platform/values
 
 modules/
-└── talos-cluster/               # Provider-agnostic child module
-    ├── main.tf                  # Talos resources (bootstrap, kubeconfig)
-    ├── variables.tf
-    └── outputs.tf
+├── talos-cluster/               # Provider-agnostic child module
+│   ├── main.tf                  # Talos resources (bootstrap, kubeconfig)
+│   ├── variables.tf
+│   └── outputs.tf
+└── platform/                    # Composable platform module (ArgoCD)
+    ├── main.tf                  # Node readiness gate + ArgoCD Helm chart (no backend)
+    ├── variables.tf             # kubeconfig_path, argocd_version, argocd_namespace
+    ├── outputs.tf
+    └── values/argocd/           # ArgoCD Helm values (canonical)
 
 schematic-dev.yaml               # Dev Image Factory extensions
 schematic-prod.yaml              # Prod Image Factory extensions
@@ -169,7 +177,7 @@ just setup-cli                         # proxmox/prod (default)
 just provider=proxmox env=dev setup-cli  # proxmox/dev
 ```
 
-All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state at `environments/<provider>/<env>/terraform.tfstate`, and secrets at `secrets/<provider>/<env>/`. Platform state is symmetrical: `platform/environments/<provider>/<env>/terraform.tfstate`. Tailscale is only enabled for `prod`.
+All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state at `environments/<provider>/<env>/terraform.tfstate` (single file now includes both infra and platform via `module.platform`), and secrets at `secrets/<provider>/<env>/`. Tailscale is only enabled for `prod`.
 
 > **Network reachability (Proxmox SDN)**: Terraform must be able to reach the cluster IPs (`10.10.0.0/24`). The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT (subnet `snat = true`), but traffic from outside cannot reach them directly. If you are not on the same network as the Proxmox host, expose the subnet through Tailscale from the Proxmox node (prod):
 >
@@ -350,62 +358,67 @@ just provider=libvirt env=prod tf-apply    # libvirt/prod
 | `get-schematic-id name="prod"` | Compute schematic ID from `schematic-{name}.yaml` via the Image Factory API |
 | `cluster-schematic-id` | Read the active schematic ID from the running cluster |
 
-### Platform (ArgoCD)
+### Platform (ArgoCD) — now composed
 
-Provider/env-aware tasks — symmetrical per `provider`/`env` (state at `platform/environments/<provider>/<env>/terraform.tfstate`, kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`):
+Platform (ArgoCD) is a composable module (`modules/platform`) called from each environment root. One `terraform apply` deploys both infra and platform in one state file at `environments/<provider>/<env>/terraform.tfstate` (kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`). The standalone `platform/` root is deprecated — see `platform/DEPRECATED.md` for `terraform state mv` migration.
+
+`tf-platform-*` tasks are kept for backward compatibility and now delegate to `tf-apply`/`tf-plan`/`tf-init` with a deprecation warning:
 
 | Task | Description |
 |------|-------------|
-| `tf-platform-init` | Initialize the platform layer for the selected `provider`/`env` (regenerates secrets + `terraform init` with provider-aware backend) |
-| `tf-platform-plan` | Plan platform changes for the selected `provider`/`env` |
-| `tf-platform-apply` | Apply platform changes (installs ArgoCD) for the selected `provider`/`env` |
-| `tf-platform-destroy` | Tear down the platform layer for the selected `provider`/`env` — run **before** `tf-destroy` (e.g. `just provider=proxmox env=prod tf-platform-destroy`) |
+| `tf-platform-init` | Deprecated → delegates to `tf-init` |
+| `tf-platform-plan` | Deprecated → delegates to `tf-plan` |
+| `tf-platform-apply` | Deprecated → delegates to `tf-apply` |
+| `tf-platform-destroy` | Deprecated → prints destroy guidance (`tf-destroy` or `terraform destroy -target=module.platform.helm_release.argocd`) |
 
 ## Platform (ArgoCD)
 
-The `platform/` layer is an independent Terraform root (its own state) that installs the **platform** on top of the cluster:
+The **platform layer** is now a composable module (`modules/platform`) called from each environment root (`environments/<provider>/<env>`). It installs the **platform** on top of the cluster in the same state file and same `terraform apply`:
 
-- **ArgoCD** (`argocd`) — GitOps engine.
+- **ArgoCD** (`argocd`) — GitOps engine (via `helm_release.argocd` in `modules/platform`).
 
 Longhorn is no longer installed here: it is a platform app of the GitOps repo (`secured-gitops-tailscale-homelab`, `platform/longhorn`, wave 0, gated by a CSI readiness Job). The Longhorn node prerequisites still live in this repo at cluster level: kubelet extraMounts for `/var/lib/longhorn` and the `iscsi-tools` / `util-linux-tools` system extensions.
 
-### Setup flow
+### Setup flow (composed)
 
-1. `just provider=proxmox env=prod tf-apply` — provisions the cluster; the health gate (`talos_cluster_health`) blocks the apply until kube-apiserver, etcd, and all nodes are Ready.
-2. `just provider=proxmox env=prod setup-cli` — regenerates `secrets/proxmox/prod/kubeconfig.yaml` and merges it into the local CLI configs.
-3. `just provider=proxmox env=prod tf-platform-apply` — applies the platform layer: waits for Ready nodes and installs ArgoCD (uses `platform/environments/proxmox/prod/terraform.tfstate`).
-4. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
+1. `just provider=proxmox env=prod tf-apply` — provisions the cluster (VMs, Talos bootstrap) and then the platform (ArgoCD). The infra health gate (`talos_cluster_health`) blocks until kube-apiserver, etcd, and all nodes are Ready; `module.platform.terraform_data.wait_nodes` then waits for `Ready` nodes before the Helm release.
+2. `just provider=proxmox env=prod setup-cli` — regenerates `secrets/proxmox/prod/kubeconfig.yaml` and merges it into the local CLI configs (still useful for out-of-band debugging).
+3. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
 
-The platform root uses `infra_provider` (default `proxmox`) and `env_name` (default `prod`) to pick the kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`; to target another environment, pass both explicitly: `just provider=libvirt env=dev tf-platform-apply` or `terraform -chdir=platform apply -var="infra_provider=libvirt" -var="env_name=dev"`.
+Each environment configures the `helm` provider against `secrets/<provider>/<env>/kubeconfig.yaml` (see `environments/<provider>/<env>/provider.tf`). The module accepts `kubeconfig_path = abspath("${path.root}/../../../secrets/<provider>/<env>/kubeconfig.yaml")` and re-triggers the node gate when the kubeconfig hash changes.
 
-**Destroy order:** tear down platform before infra — `just provider=proxmox env=prod tf-platform-destroy` then `just provider=proxmox env=prod tf-destroy` — so Helm releases are removed before VMs disappear.
+**Destroy:** a single `just provider=proxmox env=prod tf-destroy` tears down both infra and platform (one state). To remove only the platform release: `terraform -chdir=environments/proxmox/prod destroy -target=module.platform.helm_release.argocd`.
 
 ### Migrating an existing cluster
 
 If the cluster already has ArgoCD installed (for example, via the `init-infra.sh` script from the GitOps repo), you can adopt the existing release into the Terraform state with `terraform import`:
 
 ```bash
-terraform -chdir=platform import 'helm_release.argocd' argocd/argocd
+terraform -chdir=environments/proxmox/prod import 'module.platform.helm_release.argocd' argocd/argocd
 ```
 
-#### Migrating Longhorn to the GitOps repo
+For legacy `platform/` states, see `platform/DEPRECATED.md` for `terraform state mv` from the standalone root into the composed environment state.
+
+#### Migrating Longhorn to the GitOps repo (legacy)
+
+Longhorn is no longer managed here. If you still have a legacy `platform/` state that contains `helm_release.longhorn`:
 
 ```bash
 # 1) In the secured repo: push the changes (platform/longhorn + gitops/values) and
 #    wait until the longhorn ArgoCD app is Healthy (CSI gate Job completed).
-# 2) Only then, in this repo, remove the resources from the TF state so the next
+# 2) Only then, in the legacy root, remove the resources from the TF state so the next
 #    apply does NOT destroy them:
 terraform -chdir=platform state rm helm_release.longhorn kubernetes_namespace_v1.longhorn_system kubernetes_manifest.longhorn_prod_storageclass terraform_data.csi_waiter
-# 3) Apply the reduced platform layer (ArgoCD only):
-just tf-platform-apply
+# 3) Apply the reduced platform layer (ArgoCD only) in the composed model:
+just provider=proxmox env=prod tf-apply
 # Do NOT run terraform destroy on helm_release.longhorn: it would delete the volumes.
 ```
 
 ### State
 
-Platform state is symmetrical per provider/env at `platform/environments/<provider>/<env>/terraform.tfstate` (local backend with `-backend-config="path=environments/<provider>/<env>/terraform.tfstate"` when running from `platform/`). CI restores/backs it up as artifact `tfstate-platform-<provider>-<env>`.
+Platform is now composed in each environment root — single state at `environments/<provider>/<env>/terraform.tfstate` (covers both infra `module.proxmox`/`module.libvirt` and `module.platform`). CI restores/backs up a single artifact `tfstate-<provider>-<env>`.
 
-> **Migration note:** legacy locations `platform/terraform.tfstate` and `platform/environments/prod/platform-terraform.tfstate` / `platform/environments/<env>/platform-terraform.tfstate` are superseded. The canonical path is now `platform/environments/<provider>/<env>/terraform.tfstate` (e.g. `platform/environments/proxmox/prod/terraform.tfstate`, already present). Keep old files on disk for manual `terraform state` migration if needed, but new `just tf-platform-*` and CI tasks use the provider-aware path.
+> **Migration note:** legacy locations `platform/terraform.tfstate`, `platform/environments/prod/platform-terraform.tfstate`, `platform/environments/<env>/platform-terraform.tfstate`, and `platform/environments/<provider>/<env>/terraform.tfstate` are superseded by the composed model. Keep old files on disk for manual `terraform state mv` into `environments/<provider>/<env>/module.platform.*` (see `platform/DEPRECATED.md`), but new `just tf-apply` and CI use the single environment state.
 
 ## CI/CD
 

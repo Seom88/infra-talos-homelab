@@ -8,24 +8,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - **Provider modules (`modules/proxmox`, `modules/libvirt`)** — extracted hypervisor-specific infrastructure logic into reusable Terraform modules, consuming the underlying `modules/talos-cluster` module.
 - **Symmetrical Environments (`environments/<provider>/<env>/`)** — unified structure for both Proxmox (`dev`, `prod`) and Libvirt (`dev`, `prod` scaffold). Terraform roots now live directly in their environment directories, auto-loading `terraform.tfvars` and storing state locally without needing `-var-file` or `-backend-config` flags.
-- **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (ArgoCD) after the cluster:
-  - `validate` job: platform format check + init/validate
-  - `deploy` job: `azure/setup-kubectl` + `azure/setup-helm` actions, platform secrets from cluster outputs, platform state restore/backup as artifact (mirrors the proxmox flow), and `terraform apply -var=env_name`
+- **Platform layer in CI** — `.github/workflows/deploy.yaml` now does single `terraform apply` per environment (infra+platform atomic) in `environments/${TF_ROOT}/${TF_ENV}` (artifact `tfstate-${TF_ROOT}-${TF_ENV}`); `validate` job checks `modules/platform` (format + init/validate).
 - **README risk section** — "⚠️ Changes that destroy your cluster": traffic-light tables mapping `terraform.tfvars` changes to VM-destroy (cluster wipe), outage-only, or no-effect, plus the bootstrap-only upgrade guidance
-- **Platform root** (`platform/`) — new Terraform workspace that installs **ArgoCD** (v9.5.13) from outside this repo's cluster roots:
-  - `platform/main.tf` — declarative pipeline: wait for all nodes Ready → ArgoCD Helm chart
-  - `platform/providers.tf` — `helm` provider configured against `secrets/<env>/kubeconfig.yaml`
-  - `platform/variables.tf` — `env_name` (default `prod`), `argocd_version` (default `9.5.13`); pinned exact, overridable per environment
-  - `platform/values/argocd/` — ArgoCD values moved verbatim from the GitOps repo (`secured-gitops-tailscale-homelab`)
+- **Platform module (`modules/platform`)** — composable Terraform module that installs ArgoCD (v9.5.13) *inside* each environment root: `main.tf` wait for Ready nodes → ArgoCD Helm chart, `variables.tf` `kubeconfig_path`/`argocd_version`, `values/argocd/` copied from GitOps repo. Helm provider is now configured in each `environments/<provider>/<env>/provider.tf`, not in a separate root.
 - **Cluster health gate** — `data "talos_cluster_health"` in `proxmox/main.tf` and `libvirt/cluster.tf`: `terraform apply` blocks until kube-apiserver, etcd and all nodes are Ready (protects both local and CI applies)
 - **SDN networking (Proxmox)** — `proxmox/network.tf` now creates the cluster network via Proxmox SDN: simple zone + VNet (the `talosvn` bridge, id matches `network_bridge`, max 8 chars) + subnet (`snat = true`, so VMs reach the internet through the node via MASQUERADE) + `proxmox_sdn_applier` (performs the SDN Apply — without it the bridge does not exist on the node and VM creation fails). VMs depend on the applier so the network exists before they boot
-- **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply`, `tf-platform-destroy` (agnostic of provider/env)
+- **Justfile platform tasks** — `tf-platform-init`, `tf-platform-plan`, `tf-platform-apply`, `tf-platform-destroy` are now deprecated wrappers delegating to standard `tf-*` tasks (composed model, no separate state).
 - **`installer_image` variable** (`modules/talos-cluster/variables.tf`) — `string`, default `""`; platform-aware override for `talos_machine.image` (e.g. `factory.talos.dev/nocloud-installer/<schematic-id>:v<version>`). Secureboot roots can omit it (defaults to `factory.talos.dev/nocloud-installer-secureboot/<schematic-id>:v<version>` built from `talos_image_id` + `talos_version`)
 - **`talos_machine` resources** (`modules/talos-cluster/main.tf`) — replace `talos_machine_configuration_apply` (`control` + `worker`) with `talos_machine.control_plane` / `talos_machine.worker` (`image = local.installer_image`, `drain_on_upgrade = false`). Bumping `talos_version` now triggers an in-place pull → install → reboot without recreating VMs; `talos_machine_bootstrap` now depends on `talos_machine.control_plane`
 - **Dedicated Libvirt Storage Pool** (`libvirt/pool.tf`) — creates `talos-pool` (`libvirt_pool`) at `/var/lib/libvirt/images/talos` for persistent image and volume management
 - **Libvirt SecureBoot support** (`libvirt/vms.tf`, `libvirt/image.tf`, `libvirt/variables.tf`) — unified SecureBoot workflow with Proxmox: downloads `nocloud-amd64-secureboot.raw.xz` image, configures UEFI OVMF with host edk2 paths (`/usr/share/edk2/ovmf/OVMF_CODE.fd` and `OVMF_VARS.fd`), and binds installer image to `nocloud-installer-secureboot`
 
 ### Removed
+- **Platform root (`platform/`)** — deleted entirely. State is now single `environments/<provider>/<env>/terraform.tfstate` containing both infra and platform (`module.platform.helm_release.argocd`). Migration: `terraform state mv` or `terraform import 'module.platform.helm_release.argocd' argocd/argocd` from legacy `platform/terraform.tfstate` or `platform/environments/...`.
 - **VIP (`cluster_vip`)** — removed from `modules/talos-cluster` and all environment `terraform.tfvars`; the virtual IP caused bootstrap failures and conflicted with node reconfiguration. API server access now relies on direct per-node IPs.
 - **Tailscale MagicDNS domain (`tailscale_domain`)** — removed from `modules/talos-cluster/variables.tf`, `modules/proxmox/variables.tf`, `modules/libvirt/variables.tf` and all environment `variables.tf` / `main.tf` (`environments/proxmox/{dev,prod}`, `environments/libvirt/prod`; `environments/libvirt/dev` still has a stale passthrough). `modules/talos-cluster/main.tf` locals `cp_names` / `worker_names` no longer build FQDNs (`"${hostname}.${var.tailscale_domain}"`) — they are now verbatim `var.cp_hostnames` / `var.worker_hostnames`. Tailscale integration now relies solely on `tailscale_auth_key` (opt-in); node addressing uses IPs/short hostnames. Also removed from `modules/proxmox/main.tf` and `modules/libvirt/cluster.tf` module calls
 
@@ -33,6 +28,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Bootstrap-only `talos_machine_secrets` (`modules/proxmox` and `modules/libvirt`)** — added `lifecycle { ignore_changes = [talos_version] }` so bumping `talos_version` (upgrade or downgrade) no longer rotates the CA. In-place upgrades now flow solely through `talos_machine.image` (`factory.talos.dev/nocloud-installer*:<id>:v<version>`) as a sequential rolling reboot, preventing `x509: certificate signed by unknown authority (Ed25519 verification failure)` after version changes
 
 ### Changed
+- **Breaking: platform composed into environments** — `environments/proxmox/{dev,prod}/main.tf` and `environments/libvirt/{prod,dev}/main.tf` now compose `module "platform"` (`source = ../../../modules/platform`, `kubeconfig_path = abspath("${path.root}/../../../secrets/...")`, `argocd_version`, `depends_on = [data.talos_cluster_health.this]` / `module.proxmox/libvirt`). Each `environments/<provider>/<env>/provider.tf` now declares `helm ~>2.0` and configures `provider helm` with `config_path`. Each `variables.tf` adds `argocd_version` (default 9.5.13).
+- **Justfile** — `tf-platform-*` tasks are deprecated wrappers delegating to standard `tf-*` tasks; header updated to document composed model. Single `just tf-apply` now provisions cluster + ArgoCD.
+- **CI (`deploy.yaml`)** — removed separate platform restore/apply/backup steps; single `terraform apply` in `environments/${TF_ROOT}/${TF_ENV}` (artifact `tfstate-${TF_ROOT}-${TF_ENV}`), validate now covers `modules/platform`.
+- **README.md** — Structure, Platform (ArgoCD), Setup flow, State, and Available tasks sections rewritten for single-state composed model; `platform/` as deprecated removed.
 - **Modularized Libvirt root** — decomposed monolithic `libvirt/main.tf` into domain-focused files: `network.tf` (NAT network & DHCP), `image.tf` (Talos factory schematic & cache download), `vms.tf` (volumes & KVM domains), `cluster.tf` (bootstrap module & health gate), and `pool.tf` (storage pool)
 - **Deterministic MAC generation in Libvirt** (`libvirt/variables.tf`, `libvirt/vms.tf`, `libvirt/network.tf`) — made `mac` optional in `nodes_cp` / `nodes_worker`; when omitted, a stable QEMU OUI MAC (`52:54:00:xx:yy:zz`) is auto-generated deterministically from `md5(hostname)`, eliminating hardcoded MAC addresses in `terraform.tfvars`
 - **Eliminated Cloud-Init duplication in Libvirt** (`libvirt/vms.tf`, `libvirt/cluster.tf`) — removed redundant `libvirt_cloudinit_disk` and permanent ISO CD-ROM mounts; node IP/DNS assignment is handled natively by Libvirt DHCP reservations (`libvirt_network.talos`), and all machine configs/patches (VIP, scheduling, Longhorn, Tailscale) are delegated exclusively to `module.talos_cluster`
@@ -50,8 +49,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `proxmox/environments/{dev,prod}/terraform.tfvars` — network bridge renamed `vnet1` → `talosvn`; new `sdn_zone` / `network_cidr` variables; `cluster_vip` corrected to `10.10.0.171` (was outside the `10.10.0.0/24` subnet)
 - `proxmox/main.tf` — VM IP prefix/mask now derived from `network_cidr` instead of a hardcoded `/24`
 - `proxmox/variables.tf` — added `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` variables; `network_bridge` doc updated for SDN usage
-- **Platform root reduced to ArgoCD only** — the `platform/` Terraform workspace no longer installs Longhorn (`kubernetes_namespace_v1.longhorn_system`, `helm_release.longhorn`, `terraform_data.csi_waiter` and `kubernetes_manifest.longhorn_prod_storageclass` removed; `kubernetes` provider and `longhorn_version` variable dropped)
-- **Longhorn moved to the GitOps repo** — deployed by `secured-gitops-tailscale-homelab` as a wave-0 ArgoCD app (`platform/longhorn`) with a CSI readiness gate (Job `longhorn-csi-wait`)
+- **Longhorn moved to the GitOps repo** — deployed by `secured-gitops-tailscale-homelab` as a wave-0 ArgoCD app (`platform/longhorn`) with a CSI readiness gate (Job `longhorn-csi-wait`); `platform/` no longer installs Longhorn previously (`kubernetes_namespace_v1.longhorn_system`, `helm_release.longhorn`, `terraform_data.csi_waiter` removed) before its full deletion in this refactor
 - **Runbook for migration** — README documents `terraform state rm` for the old Longhorn resources before applying the reduced layer, so volumes are never destroyed (never `terraform destroy` `helm_release.longhorn`)
 - **Justfile unified around `provider=` / `tf_env=`** — one task set now serves both providers; the dedicated libvirt tasks (`tf-libvirt-*`, `gen-libvirt-secrets`, `setup-libvirt-cli`, `upgrade-libvirt`) were removed. Backend/var-file arguments, secrets path, and status labels are derived from the active provider/env; platform tasks no longer chain `gen-secrets` or pass backend/`env_name` flags
 - `justfile` — comments and task descriptions fully translated to English
@@ -67,7 +65,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `environments/proxmox/{dev,prod}/variables.tf` — `variable "ssh_node_address"` description example updated `node.lonk-mirfak.ts.net` → `node.tail-scale.ts.net`
 - `README.md` — Tailscale domain examples updated `lonk-mirfak.ts.net` → `tail-scale.ts.net` (Proxmox and Libvirt variable tables)
 - **Prod cluster topology (commented tfvars)** — `environments/proxmox/prod/terraform.tfvars` and `environments/libvirt/prod/terraform.tfvars` flipped for HA testing: 3 control-plane nodes active (`talos-cp2` / `talos-cp3` uncommented, `allow_scheduling = true`, libvirt memory 6 GB) and all workers commented out (previously 1 CP + 3 workers active, cp2/cp3 commented)
-- `justfile` — platform tasks (`tf-platform-init`, `tf-platform-plan`, `tf-platform-apply`) now auto-run `just provider="{{ provider }}" env="{{ env }}" gen-secrets` so `secrets/<provider>/<env>/kubeconfig.yaml` exists before `terraform -chdir=platform` init/plan/apply with `-var='infra_provider={{provider}}' -var='env_name={{env}}'` (note: `tf-platform-init` currently concatenates two `just` invocations on one line and needs a newline fix)
 
 ## [1.0.2] - 2026-07-16
 
@@ -98,7 +95,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.0.0] - 2026-07-15
 
 ### Features
-
 - **Two providers** — Proxmox VE (`bpg/proxmox`) and libvirt (`dmacvicar/libvirt`) with a shared `talos-cluster` module
 - **Modular architecture** — infrastructure (VMs) and configuration (Talos/K8s) separated; `talos-cluster` works with any provider
 - **Talos Linux 1.13** on Kubernetes 1.36 with UEFI secure-boot-ready VMs

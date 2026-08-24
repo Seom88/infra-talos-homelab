@@ -19,3 +19,13 @@ module "proxmox" {
 
   tailscale_auth_key = var.tailscale_auth_key
 }
+
+# ── Platform layer (ArgoCD) — composable module ──────────────────────────
+module "platform" {
+  source = "../../../modules/platform"
+
+  kubeconfig_path = abspath("${path.root}/../../../secrets/proxmox/${var.env_name}/kubeconfig.yaml")
+  argocd_version  = var.argocd_version
+
+  depends_on = [module.proxmox]
+}

@@ -12,12 +12,13 @@
 #    just provider=proxmox env=dev tf-apply      # proxmox, dev
 #    just provider=libvirt env=dev tf-apply      # libvirt, dev (local only)
 #
-#  Platform (ArgoCD) is provider/env-aware: it selects the kubeconfig at
-#  ./secrets/<provider>/<env>/kubeconfig.yaml and keeps its own state at
-#  ./platform/environments/<provider>/<env>/terraform.tfstate (symmetrical
-#  per provider/env, like the infra roots).
+#  Platform (ArgoCD) is now a composable module (modules/platform) called from
+#  each environment root (environments/<provider>/<env>). One `terraform apply`
+#  deploys both infra and platform (single state at
+#  environments/<provider>/<env>/terraform.tfstate). The standalone
+#  platform/ root is deprecated — see platform/DEPRECATED.md.
 #    just provider=proxmox env=prod setup-cli           # point kubectl/talosctl at proxmox/prod
-#    just provider=proxmox env=prod tf-platform-apply   # installs ArgoCD there
+#    just provider=proxmox env=prod tf-apply            # infra + platform (ArgoCD) in one apply
 
 provider := "proxmox"   # proxmox | libvirt
 env      := "prod"      # prod | dev
@@ -101,35 +102,6 @@ setup-cli:
       kubectl config view --flatten > /tmp/kube-merge
     mv /tmp/kube-merge ~/.kube/config
     echo "✓ kubectl configured ({{ label }})"
-
-# ── Platform (ArgoCD) — provider/env-aware ───────────────
-# Selects kubeconfig at ./secrets/<provider>/<env>/kubeconfig.yaml
-# Usage:
-#   just provider=libvirt env=prod tf-platform-apply
-#   just provider=proxmox env=prod tf-platform-apply
-
-platform_root := "./platform"
-
-tf-platform-init:
-    just provider="{{ provider }}" env="{{ env }}" gen-secrets
-    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
-
-tf-platform-plan:
-    just provider="{{ provider }}" env="{{ env }}" gen-secrets
-    terraform -chdir={{ platform_root }} fmt
-    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
-    terraform -chdir={{ platform_root }} plan -var='infra_provider={{provider}}' -var='env_name={{env}}'
-
-tf-platform-apply:
-    just provider="{{ provider }}" env="{{ env }}" gen-secrets
-    terraform -chdir={{ platform_root }} fmt
-    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
-    terraform -chdir={{ platform_root }} apply -var='infra_provider={{provider}}' -var='env_name={{env}}'
-
-tf-platform-destroy:
-    just provider="{{ provider }}" env="{{ env }}" gen-secrets
-    terraform -chdir={{ platform_root }} init -reconfigure -backend-config="path=environments/{{provider}}/{{env}}/terraform.tfstate"
-    terraform -chdir={{ platform_root }} destroy -var='infra_provider={{provider}}' -var='env_name={{env}}'
 
 # ── Cluster Status ─────────────────────────────
 

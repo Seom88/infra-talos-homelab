@@ -13,6 +13,10 @@ terraform {
       # Revert to stable when v0.12.0 is released.
       version = "0.12.0-alpha.5"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -27,5 +31,11 @@ provider "proxmox" {
       name    = var.node_name
       address = var.ssh_node_address
     }
+  }
+}
+
+provider "helm" {
+  kubernetes {
+    config_path = "${path.module}/../../../secrets/proxmox/${var.env_name}/kubeconfig.yaml"
   }
 }

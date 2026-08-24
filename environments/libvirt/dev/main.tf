@@ -24,3 +24,13 @@ module "libvirt" {
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = var.extra_config_patches
 }
+
+# ── Platform layer (ArgoCD) — composable module ──────────────────────────
+module "platform" {
+  source = "../../../modules/platform"
+
+  kubeconfig_path = abspath("${path.root}/../../../secrets/libvirt/${var.env_name}/kubeconfig.yaml")
+  argocd_version  = var.argocd_version
+
+  depends_on = [module.libvirt]
+}

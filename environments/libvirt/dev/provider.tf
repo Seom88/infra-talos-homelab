@@ -12,9 +12,19 @@ terraform {
       # Revert to stable when v0.12.0 is released.
       version = "0.12.0-alpha.5"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.0"
+    }
   }
 }
 
 provider "libvirt" {
   uri = "qemu:///system"
+}
+
+provider "helm" {
+  kubernetes {
+    config_path = "${path.module}/../../../secrets/libvirt/${var.env_name}/kubeconfig.yaml"
+  }
 }

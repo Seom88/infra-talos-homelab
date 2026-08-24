@@ -36,15 +36,15 @@ jobs:
           terraform validate
         working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
 
-      - name: Platform format check
+      - name: Platform module format check
         run: terraform fmt -check -recursive
-        working-directory: platform
+        working-directory: modules/platform
 
-      - name: Platform init & validate
+      - name: Platform module init & validate
         run: |
           terraform init -backend=false
           terraform validate
-        working-directory: platform
+        working-directory: modules/platform
 
   deploy:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
@@ -142,67 +142,8 @@ jobs:
           path: /tmp/secrets/
           retention-days: 7
 
-      # ── Platform layer (ArgoCD) — mirrors the proxmox flow ─────────────────
-
-      - name: Write platform secrets to workspace
-        run: |
-          mkdir -p secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
-          cp /tmp/secrets/talosconfig.yaml secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/talosconfig.yaml
-          cp /tmp/secrets/kubeconfig.yaml secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/kubeconfig.yaml
-
-      - name: Restore platform state from last successful run
-        id: restore-platform-tfstate
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "Looking for latest artifact: tfstate-platform-${{ env.TF_ROOT }}-${{ env.TF_ENV }}"
-          ARTIFACT_ID=$(gh api \
-            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-platform-${{ env.TF_ROOT }}-${{ env.TF_ENV }} \
-            --jq '.artifacts | sort_by(.created_at) | last | .id' 2>/dev/null || echo "")
-          echo "Artifact ID: $ARTIFACT_ID"
-          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
-            mkdir -p /tmp/platform-tfstate-restore
-            cd /tmp/platform-tfstate-restore
-            gh api /repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip > tfstate.zip
-            unzip -o tfstate.zip 2>/dev/null
-            rm -f tfstate.zip
-            cd -
-            if [ -f /tmp/platform-tfstate-restore/terraform.tfstate ]; then
-              mkdir -p platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
-              cp /tmp/platform-tfstate-restore/terraform.tfstate platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate
-              echo "✓ Platform state restored"
-            else
-              echo "Platform state file not found in artifact"
-            fi
-          else
-            echo "No previous platform artifact found (first run?)"
-          fi
-
-      - name: Platform Terraform init
-        run: |
-          terraform init -reconfigure \
-            -backend-config="path=environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate"
-        working-directory: platform
-
-      - name: Platform Terraform apply
-        run: |
-          terraform apply -auto-approve -no-color \
-            -var="infra_provider=${{ env.TF_ROOT }}" -var="env_name=${{ env.TF_ENV }}" 2>&1 | \
-            sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
-        working-directory: platform
-
-      - name: Backup platform state
-        if: always()
-        run: |
-          if [ -f platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate ]; then
-            mkdir -p /tmp/platform-tfstate-backup
-            cp platform/environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/terraform.tfstate /tmp/platform-tfstate-backup/
-          fi
-
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: tfstate-platform-${{ env.TF_ROOT }}-${{ env.TF_ENV }}
-          path: /tmp/platform-tfstate-backup/
-          retention-days: 90
+      # ── Platform layer (ArgoCD) is now composed in the environment root ──
+      # The single `terraform apply` above deploys both infra and platform
+      # (module.platform) in one state file at
+      # environments/<provider>/<env>/terraform.tfstate. No separate platform
+      # state or apply is needed. See platform/DEPRECATED.md for migration.
