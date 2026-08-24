@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.0] - Unreleased
+## [2.0.0] - Unreleased
 ### Added
 - **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (ArgoCD) after the cluster:
   - `validate` job: platform format check + init/validate
@@ -24,7 +24,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Libvirt SecureBoot support** (`libvirt/vms.tf`, `libvirt/image.tf`, `libvirt/variables.tf`) — unified SecureBoot workflow with Proxmox: downloads `nocloud-amd64-secureboot.raw.xz` image, configures UEFI OVMF with host edk2 paths (`/usr/share/edk2/ovmf/OVMF_CODE.fd` and `OVMF_VARS.fd`), and binds installer image to `nocloud-installer-secureboot`
 
 ### Changed
-- **Modularized Libvirt root** — decomposed monolithic `libvirt/main.tf` into domain-focused files: `network.tf` (NAT network & DHCP), `image.tf` (Talos factory schematic & cache download), `talos_config.tf` (machine config patches & secrets), `vms.tf` (volumes, cloud-init & KVM domains), `cluster.tf` (bootstrap module & health gate), and `pool.tf` (storage pool)
+- **Modularized Libvirt root** — decomposed monolithic `libvirt/main.tf` into domain-focused files: `network.tf` (NAT network & DHCP), `image.tf` (Talos factory schematic & cache download), `vms.tf` (volumes & KVM domains), `cluster.tf` (bootstrap module & health gate), and `pool.tf` (storage pool)
+- **Eliminated Cloud-Init duplication in Libvirt** (`libvirt/vms.tf`, `libvirt/cluster.tf`) — removed redundant `libvirt_cloudinit_disk` and permanent ISO CD-ROM mounts; node IP/DNS assignment is handled natively by Libvirt DHCP reservations (`libvirt_network.talos`), and all machine configs/patches (VIP, scheduling, Longhorn, Tailscale) are delegated exclusively to `module.talos_cluster`
+- **Removed fragile `wait_for_cp` local-exec** (`libvirt/cluster.tf`) — replaced raw `/dev/tcp` shell polling with native Terraform provider resource dependencies (`depends_on = [libvirt_domain.node]` on `module.talos_cluster` and `talos_machine` gRPC retry logic)
 - **Persistent Talos image cache** (`libvirt/variables.tf`, `libvirt/image.tf`) — moved default raw cache directory from `/tmp/talos-images` to `~/.cache/talos-images` with permissions fix (`chmod 644`) to prevent host reboot cache wipes and permission errors
 - **Domain recreation lifecycle** (`libvirt/vms.tf`) — bound boot volume ID to `libvirt_domain` metadata to ensure clean VM recreation during base image and SecureBoot transitions
 - **Bootstrap-only Libvirt base image** (`libvirt/image.tf`, `libvirt/vms.tf`) — decoupled `talos_version` and schematic updates from VM disk destruction using fixed image filenames and `lifecycle { ignore_changes = [create] }`, matching Proxmox behavior where in-place OS upgrades are handled solely by `talos_machine.image`

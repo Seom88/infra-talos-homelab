@@ -1,24 +1,9 @@
 # ============================================================
-# Wait for first control plane Talos API
+# Talos Machine Secrets
 # ============================================================
 
-resource "terraform_data" "wait_for_cp" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      IP="${var.nodes_cp[0].ip}"
-      echo "Waiting for ${var.nodes_cp[0].hostname} ($${IP})..."
-      for i in $(seq 1 30); do
-        if timeout 3 bash -c "echo > /dev/tcp/$${IP}/50000" 2>/dev/null \
-           || timeout 3 bash -c "echo > /dev/tcp/$${IP}/6443" 2>/dev/null; then
-          exit 0
-        fi
-        sleep 10
-      done
-      exit 1
-    EOT
-  }
-
-  depends_on = [libvirt_domain.node]
+resource "talos_machine_secrets" "this" {
+  talos_version = "v${var.talos_version}"
 }
 
 # ============================================================
@@ -30,7 +15,7 @@ module "talos_cluster" {
 
   machine_secrets      = talos_machine_secrets.this.machine_secrets
   client_configuration = talos_machine_secrets.this.client_configuration
-  cp_ips               = local.cp_ips
+  cp_ips               = [for n in var.nodes_cp : n.ip]
   cp_hostnames         = [for n in var.nodes_cp : n.hostname]
   worker_ips           = [for n in var.nodes_worker : n.ip]
   worker_hostnames     = [for n in var.nodes_worker : n.hostname]
@@ -47,7 +32,7 @@ module "talos_cluster" {
   extra_config_patches = var.extra_config_patches
 
   depends_on = [
-    terraform_data.wait_for_cp,
+    libvirt_domain.node,
   ]
 }
 

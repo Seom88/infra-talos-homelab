@@ -87,49 +87,7 @@ resource "terraform_data" "resize_boot" {
 }
 
 # ============================================================
-# Cloud-init — network-config + Talos machine config (user-data)
-# ============================================================
-
-resource "libvirt_cloudinit_disk" "cloud_init" {
-  for_each = local.nodes_all
-  name     = "${each.key}-cloudinit.iso"
-
-  meta_data = yamlencode({
-    instance-id    = each.key
-    local-hostname = each.key
-  })
-
-  network_config = yamlencode({
-    version = 1
-    config = [{
-      type        = "physical"
-      name        = "eth0"
-      mac_address = each.value.mac
-      subnets = [{
-        type    = "static"
-        address = "${each.value.ip}/${var.network_prefix}"
-        gateway = var.gateway
-      }]
-    }]
-  })
-
-  user_data = each.value.role == "cp" ? data.talos_machine_configuration.cp.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
-}
-
-resource "libvirt_volume" "cloud_init" {
-  for_each = local.nodes_all
-  name     = "${each.key}-cloudinit.iso"
-  pool     = each.value.pool
-
-  create = {
-    content = {
-      url = libvirt_cloudinit_disk.cloud_init[each.key].path
-    }
-  }
-}
-
-# ============================================================
-# VM Domains (UEFI OVMF with custom code & vars template)
+# VM Domains (UEFI OVMF with SecureBoot)
 # ============================================================
 
 resource "libvirt_domain" "node" {
@@ -198,20 +156,6 @@ resource "libvirt_domain" "node" {
           bus = "virtio"
         }
       },
-      {
-        device   = "cdrom"
-        readonly = true
-        source = {
-          volume = {
-            pool   = libvirt_volume.cloud_init[each.key].pool
-            volume = libvirt_volume.cloud_init[each.key].name
-          }
-        }
-        target = {
-          dev = "sda"
-          bus = "sata"
-        }
-      },
     ]
 
     graphics = [
@@ -238,7 +182,6 @@ resource "libvirt_domain" "node" {
 
   depends_on = [
     libvirt_volume.boot,
-    libvirt_volume.cloud_init,
     terraform_data.resize_boot,
   ]
 }

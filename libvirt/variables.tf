@@ -125,7 +125,7 @@ variable "cluster_vip" {
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.13.3)"
   type        = string
-  default     = "1.13.8"
+  default     = "1.13.9"
 }
 
 variable "kubernetes_version" {
