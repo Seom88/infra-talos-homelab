@@ -64,20 +64,19 @@ variable "gateway" {
   default     = "10.0.1.1"
 }
 
-variable "network_prefix" {
-  description = "CIDR prefix length (e.g. 24 for /24)"
-  type        = number
-  default     = 24
+variable "network_cidr" {
+  description = "Subnet CIDR for the Talos Libvirt network (e.g. 10.0.1.0/24 or 10.10.0.0/24)"
+  type        = string
+  default     = "10.0.1.0/24"
 }
 
 # ============================================================
 # Environment & Features
 # ============================================================
 
-variable "schematic_name" {
-  description = "Schematic YAML filename (e.g. schematic-dev.yaml). Overrides env_name if set."
+variable "schematic_path" {
+  description = "Absolute or root-relative path to the Talos Image Factory schematic YAML. Resolved with file()."
   type        = string
-  default     = "schematic-dev.yaml"
 }
 
 variable "secureboot" {
@@ -116,11 +115,6 @@ variable "cluster_name" {
   description = "Talos / Kubernetes cluster name"
   type        = string
   default     = "talos-cluster"
-}
-
-variable "cluster_vip" {
-  description = "Virtual IP address for the Kubernetes API endpoint"
-  type        = string
 }
 
 variable "talos_version" {

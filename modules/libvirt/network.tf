@@ -11,12 +11,13 @@ resource "libvirt_network" "talos" {
   bridge = {
     name = "virbr-talos"
     stp  = "on"
+    zone = "libvirt"
   }
 
   ips = [
     {
-      address = "10.0.1.1"
-      netmask = "255.255.255.0"
+      address = var.gateway
+      netmask = cidrnetmask(var.network_cidr)
       dhcp = {
         hosts = [
           for hostname, n in local.nodes_all : {
@@ -31,6 +32,10 @@ resource "libvirt_network" "talos" {
 
   dns = {
     enable = "yes"
+    forwarders = [
+      { addr = "1.1.1.1" },
+      { addr = "8.8.8.8" },
+    ]
     host = [
       for hostname, n in local.nodes_all : {
         ip        = n.ip

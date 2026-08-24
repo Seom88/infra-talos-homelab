@@ -3,14 +3,14 @@
 # ──────────────────────────────────────────────
 #  All commands run from the repo root.
 #
-#  Providers:  proxmox (envs: prod, dev)  |  libvirt (no envs)
-#  Terraform:  {{ tf_root }}/    (./proxmox or ./libvirt)
-#  Secrets:    ./secrets/<env-or-provider>/   (.gitignored)
+#  Providers:  proxmox (envs: prod, dev)  |  libvirt (envs: dev, prod)
+#  Terraform:  ./environments/<provider>/<env>/
+#  Secrets:    ./secrets/<provider>/<env>/   (.gitignored)
 #
 #  Usage:
-#    just tf-apply                              # proxmox, prod (default)
-#    just provider=proxmox tf_env=dev tf-apply  # proxmox, dev
-#    just provider=libvirt tf-apply             # libvirt (no env)
+#    just tf-apply                               # proxmox, prod (default)
+#    just provider=proxmox env=dev tf-apply      # proxmox, dev
+#    just provider=libvirt env=dev tf-apply      # libvirt, dev (local only)
 #
 #  Platform (ArgoCD) does NOT depend on provider/env: it applies to
 #  the kubeconfig context that is active at that moment.
@@ -18,17 +18,14 @@
 #    just tf-platform-apply   # installs ArgoCD there
 
 provider := "proxmox"   # proxmox | libvirt
-tf_env   := "prod"      # only applies when provider == proxmox
+env      := "prod"      # prod | dev
 
-tf_root      := if provider == "proxmox" { "./proxmox" } else { "./libvirt" }
-env_dir      := if provider == "proxmox" { tf_root + "/environments/" + tf_env } else { tf_root }
-secrets_dir  := if provider == "proxmox" { "./secrets/" + tf_env } else { "./secrets/libvirt" }
-backend_arg  := if provider == "proxmox" { "-backend-config=path=environments/" + tf_env + "/terraform.tfstate" } else { "" }
-var_file_arg := if provider == "proxmox" { "-var-file=environments/" + tf_env + "/terraform.tfvars" } else { "" }
-tfvars_path  := env_dir + "/terraform.tfvars"
-label        := if provider == "proxmox" { provider + "/" + tf_env } else { provider }
+tf_root     := "./environments/" + provider + "/" + env
+secrets_dir := "./secrets/" + provider + "/" + env
+tfvars_path := tf_root + "/terraform.tfvars"
+label       := provider + "/" + env
 
-# ── Terraform (proxmox or libvirt, per `provider=`) ───────────
+# ── Terraform (proxmox or libvirt, per `provider=` / `env=`) ──
 
 # Format all Terraform files recursively
 tf-fmt:
@@ -36,13 +33,13 @@ tf-fmt:
 
 # Init terraform with local backend for the active provider/env
 tf-init:
-    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
+    terraform -chdir={{ tf_root }} init -reconfigure
 
 # Plan changes (auto-init to ensure the correct backend)
 tf-plan:
     terraform -chdir={{ tf_root }} fmt
-    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
-    terraform -chdir={{ tf_root }} plan {{ var_file_arg }}
+    terraform -chdir={{ tf_root }} init -reconfigure
+    terraform -chdir={{ tf_root }} plan
 
 # Apply changes (auto-init to ensure the correct backend).
 # IaC upgrades via var.talos_version use talos_machine.image — those reboots
@@ -51,8 +48,8 @@ tf-plan:
 # want fast parallel bootstrap and accept parallel upgrade risk.
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
-    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
-    terraform -chdir={{ tf_root }} apply {{ var_file_arg }} -parallelism=1
+    terraform -chdir={{ tf_root }} init -reconfigure
+    terraform -chdir={{ tf_root }} apply -parallelism=1
 
 # Destroy the active provider/env (auto-init for the correct backend)
 tf-destroy:
@@ -64,8 +61,8 @@ tf-destroy:
         {{ tfvars_path }} lonk-mirfak || \
         echo "⚠ Tailscale cleanup failed, continuing with destroy"
     fi
-    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
-    terraform -chdir={{ tf_root }} destroy {{ var_file_arg }}
+    terraform -chdir={{ tf_root }} init -reconfigure
+    terraform -chdir={{ tf_root }} destroy
 
 # ── Secrets ────────────────────────────────────
 
@@ -75,7 +72,7 @@ gen-secrets:
     set -euo pipefail
     SECRETS="{{ secrets_dir }}"
     mkdir -p "$SECRETS"
-    terraform -chdir={{ tf_root }} init -reconfigure {{ backend_arg }}
+    terraform -chdir={{ tf_root }} init -reconfigure
     terraform -chdir={{ tf_root }} output -raw talosconfig > "$SECRETS/talosconfig.yaml"
     terraform -chdir={{ tf_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
     echo "✓ secrets regenerated ({{ label }})"
@@ -84,7 +81,7 @@ gen-secrets:
 setup-cli:
     #!/usr/bin/env bash
     set -euo pipefail
-    just provider="{{ provider }}" tf_env="{{ tf_env }}" gen-secrets
+    just provider="{{ provider }}" env="{{ env }}" gen-secrets
     SECRETS="{{ secrets_dir }}"
     TC="$SECRETS/talosconfig.yaml"
     KC="$SECRETS/kubeconfig.yaml"
@@ -161,3 +158,24 @@ cluster-schematic-id:
     echo "Schematic ID ({{ label }}):"
     talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
+
+# ── Host Prerequisites (libvirt) ───────
+# Ensures firewalld NAT for talos-net (virbr-talos) - required for Talos image pulls (factory.talos.dev).
+# libvirt_network with forward nat + bridge.zone=libvirt creates the network, but host firewalld must have masquerade.
+# Run once per hypervisor host (needs sudo/polkit). Idempotent.
+setup-host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Ensuring firewalld masquerade/forward for libvirt zone..."
+    if ! firewall-cmd --zone=libvirt --query-masquerade >/dev/null 2>&1; then
+      echo "Enabling masquerade..."
+      sudo firewall-cmd --zone=libvirt --add-masquerade --permanent || pkexec firewall-cmd --zone=libvirt --add-masquerade --permanent
+      sudo firewall-cmd --zone=libvirt --add-masquerade || pkexec firewall-cmd --zone=libvirt --add-masquerade || true
+    fi
+    if ! firewall-cmd --zone=libvirt --query-forward >/dev/null 2>&1; then
+      sudo firewall-cmd --zone=libvirt --add-forward --permanent || pkexec firewall-cmd --zone=libvirt --add-forward --permanent || true
+      sudo firewall-cmd --zone=libvirt --add-forward || pkexec firewall-cmd --zone=libvirt --add-forward || true
+    fi
+    sudo firewall-cmd --reload 2>/dev/null || pkexec firewall-cmd --reload 2>/dev/null || true
+    firewall-cmd --zone=libvirt --query-masquerade && echo "✓ masquerade: yes" || echo "✗ masquerade still no"
+    firewall-cmd --zone=libvirt --query-forward && echo "✓ forward: yes" || echo "✗ forward still no"

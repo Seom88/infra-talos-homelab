@@ -34,11 +34,6 @@ variable "cluster_name" {
   default     = "talos-cluster"
 }
 
-variable "cluster_vip" {
-  description = "Virtual IP address for the Kubernetes API endpoint"
-  type        = string
-}
-
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.13.3)"
   type        = string

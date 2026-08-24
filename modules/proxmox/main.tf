@@ -1,6 +1,6 @@
 # ── Talos Schematic ──────────────────────────────
 resource "talos_image_factory_schematic" "this" {
-  schematic = file("${path.module}/../schematic-${var.env_name}.yaml")
+  schematic = file(var.schematic_path)
 }
 
 # ── Proxmox Image ────────────────────────────────
@@ -139,7 +139,7 @@ resource "talos_machine_secrets" "this" {
 }
 
 module "talos" {
-  source = "../modules/talos-cluster"
+  source = "../talos-cluster"
 
   machine_secrets      = talos_machine_secrets.this.machine_secrets
   client_configuration = talos_machine_secrets.this.client_configuration
@@ -147,11 +147,10 @@ module "talos" {
   cp_hostnames         = [for node in var.nodes_cp : node.hostname]
   worker_ips           = [for node in var.nodes_worker : node.ip]
   worker_hostnames     = [for node in var.nodes_worker : node.hostname]
-  cluster_vip          = var.cluster_vip
   talos_version        = var.talos_version
   talos_image_id       = talos_image_factory_schematic.this.id
-  tailscale_domain     = var.env_name == "prod" ? var.tailscale_domain : ""
-  tailscale_auth_key   = var.env_name == "prod" ? var.tailscale_auth_key : ""
+  tailscale_domain     = var.tailscale_domain
+  tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
 
   depends_on = [

@@ -1,5 +1,5 @@
 # ============================================================
-# Proxmox Provider — credentials and endpoint
+# Proxmox Resources — networking, storage, node settings
 # ============================================================
 
 variable "env_name" {
@@ -7,48 +7,21 @@ variable "env_name" {
   type        = string
 }
 
-# variable "username" {
-#   description = "Proxmox API user (e.g. root@pam or an API token name)"
-#   type        = string
-# }
-
-# variable "password" {
-#   description = "Proxmox API password or API token secret"
-#   type        = string
-#   sensitive   = true
-# }
-
-variable "api_token" {
-  description = "Proxmox API token in format 'user@realm!tokenid=secret'"
-  type        = string
-  sensitive   = true
-}
-
-variable "ssh_username" {
-  description = "SSH user for Proxmox node operations (e.g. root)"
-  type        = string
-  default     = "root"
-}
-
-variable "ssh_node_address" {
-  description = "SSH address for the Proxmox node (Tailscale hostname, e.g. node.lonk-mirfak.ts.net)"
+variable "node_name" {
+  description = "Proxmox node name where the Talos image will be downloaded"
   type        = string
 }
 
-variable "insecure" {
-  description = "Skip TLS verification for the Proxmox API (default: false)"
-  type        = bool
-  default     = false
-}
-
-variable "endpoint" {
-  description = "Proxmox API endpoint URL (e.g. https://10.1.3.1:8006)"
+variable "gateway" {
+  description = "Default gateway for the VM nodes (usually your router IP)"
   type        = string
 }
 
-# ============================================================
-# Proxmox Resources — networking, storage, node settings
-# ============================================================
+variable "datastore_iso" {
+  description = "Proxmox datastore ID for ISO/raw images (e.g. local, hdd)"
+  type        = string
+  default     = "local"
+}
 
 variable "network_bridge" {
   description = "Proxmox network bridge to attach VMs to. When using SDN, this must match the SDN VNet id — max 8 chars (e.g. talosvn)"
@@ -75,25 +48,9 @@ variable "network_mtu" {
 }
 
 variable "network_snat" {
-  description = "Enable SNAT on the SDN subnet so VMs reach the internet via the node (the gateway IP is taken by the node's bridge). Disable only if an external router handles routing/NAT for the subnet"
+  description = "Enable SNAT on the SDN subnet so VMs reach the internet via the node. Disable only if an external router handles routing/NAT for the subnet"
   type        = bool
   default     = true
-}
-
-variable "node_name" {
-  description = "Proxmox node name where the Talos image will be downloaded"
-  type        = string
-}
-
-variable "gateway" {
-  description = "Default gateway for the VM nodes (usually your router IP)"
-  type        = string
-}
-
-variable "datastore_iso" {
-  description = "Proxmox datastore ID for ISO/raw images (e.g. local, hdd)"
-  type        = string
-  default     = "local"
 }
 
 variable "nodes_cp" {
@@ -132,20 +89,14 @@ variable "nodes_worker" {
   }))
 }
 
-variable "cluster_vip" {
-  description = "Virtual IP for the cluster control plane (e.g. 10.1.3.10)"
-  type        = string
-}
-
 # ============================================================
 # Talos — shared between Proxmox image download and talos-cluster module
 # ============================================================
 
 # Bootstrap-only pin: bumping this replaces the node disks (etcd wipe) and
-# recreates the VMs. Run 'just upgrade' / 'just upgrade-libvirt' to roll
-# Talos to the latest release in place.
+# recreates the VMs. Run 'just upgrade' to roll Talos in-place via talos_machine.image.
 variable "talos_version" {
-  description = "Talos Linux version to install on the nodes (e.g. 1.13.3)"
+  description = "Talos Linux version to install on the nodes (e.g. 1.13.9)"
   type        = string
   default     = "1.13.9"
 }
@@ -165,4 +116,13 @@ variable "tailscale_domain" {
   description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net)"
   type        = string
   default     = "lonk-mirfak.ts.net"
+}
+
+# ============================================================
+# Schematic
+# ============================================================
+
+variable "schematic_path" {
+  description = "Absolute or root-relative path to the Talos Image Factory schematic YAML (e.g. schematic-prod.yaml). Resolved with file()."
+  type        = string
 }

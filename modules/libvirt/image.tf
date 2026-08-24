@@ -3,7 +3,7 @@
 # ============================================================
 
 resource "talos_image_factory_schematic" "this" {
-  schematic = file("${path.module}/../${var.schematic_name}")
+  schematic = file(var.schematic_path)
 }
 
 locals {
@@ -40,10 +40,13 @@ resource "libvirt_volume" "talos_base_image" {
   ]
 }
 
-# Image downloader: bootstrap-only cache (does not re-download on talos_version bump)
+# Image downloader: version/schematic-aware cache
+# Re-downloads only when talos_version or schematic changes (via triggers_replace).
+# Uses a sidecar file to track which schematic produced the cached raw, so stale
+# cache (e.g. old schematic with same filename) is correctly invalidated and
+# talos_machine.image does not trigger a spurious upgrade on fresh bootstrap.
 resource "terraform_data" "talos_nocloud_image" {
-  # Only recreate if secureboot mode or cache dir path changes
-  triggers_replace = "${var.secureboot}-${local.image_cache_dir}"
+  triggers_replace = "${var.secureboot}-${local.image_cache_dir}-${var.talos_version}-${talos_image_factory_schematic.this.id}"
 
   provisioner "local-exec" {
     command = <<-EOT
@@ -52,18 +55,25 @@ resource "terraform_data" "talos_nocloud_image" {
       SCHEMATIC_ID="${talos_image_factory_schematic.this.id}"
       RAW_PATH="${local.cached_raw_path}"
       IMAGE_TYPE="${var.secureboot ? "nocloud-amd64-secureboot.raw.xz" : "nocloud-amd64.raw.xz"}"
+      MARKER_FILE="$${CACHE_DIR}/.schematic-$${SCHEMATIC_ID}-v${var.talos_version}"
       mkdir -p "$${CACHE_DIR}"
 
-      if [ -f "$${RAW_PATH}" ]; then
-        echo "Bootstrap image already cached: $${RAW_PATH}"
+      if [ -f "$${RAW_PATH}" ] && [ -f "$${MARKER_FILE}" ]; then
+        echo "Bootstrap image already cached for $${SCHEMATIC_ID} v${var.talos_version}: $${RAW_PATH}"
         chmod 644 "$${RAW_PATH}" || true
         exit 0
       fi
 
+      echo "Downloading Talos nocloud image $${SCHEMATIC_ID} v${var.talos_version} ($${IMAGE_TYPE})..."
       curl -fsSL "https://factory.talos.dev/image/$${SCHEMATIC_ID}/v${var.talos_version}/$${IMAGE_TYPE}" \
-        | xz -d > "$${RAW_PATH}"
+        | xz -d > "$${RAW_PATH}.tmp"
 
-      chmod 644 "$${RAW_PATH}" || true
+      chmod 644 "$${RAW_PATH}.tmp" || true
+      mv "$${RAW_PATH}.tmp" "$${RAW_PATH}"
+      # Mark this schematic/version as cached (clean old markers)
+      rm -f "$${CACHE_DIR}/.schematic-"* 2>/dev/null || true
+      touch "$${MARKER_FILE}"
+      echo "Cached: $${RAW_PATH} ($${SCHEMATIC_ID} v${var.talos_version})"
     EOT
   }
 

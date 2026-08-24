@@ -8,36 +8,42 @@ insecure         = true
 network_bridge   = "dev"
 sdn_zone         = "talos"
 network_cidr     = "10.10.1.0/24"
-cluster_vip      = "10.10.1.171"
 nodes_cp = [
   {
-    hostname     = "talos-cp1"
-    ip           = "10.10.1.172"
-    cores        = 4
-    memory       = 4 * 1024
-    proxmox_node = "pve01"
-    disk_size    = 25
-    datastore    = "ssd01"
+    hostname         = "talos-cp1"
+    ip               = "10.10.1.11"
+    cores            = 4
+    memory           = 4 * 1024
+    proxmox_node     = "pve01"
+    disk_size        = 25
+    datastore        = "ssd01"
+    allow_scheduling = false
   },
   # {
-  #   hostname     = "talos-cp2"
-  #   ip           = "10.10.1.173"
-  #   cores        = 4
-  #   memory       = 6 * 1024
-  #   proxmox_node = "pve01"
+  #   hostname         = "talos-cp2"
+  #   ip               = "10.10.1.12"
+  #   cores            = 4
+  #   memory           = 6 * 1024
+  #   proxmox_node     = "pve01"
+  #   disk_size        = 25
+  #   datastore        = "ssd01"
+  #   allow_scheduling = false
   # },
   # {
-  #   hostname     = "talos-cp3"
-  #   ip           = "10.10.1.174"
-  #   cores        = 4
-  #   memory       = 6 * 1024
-  #   proxmox_node = "pve01"
+  #   hostname         = "talos-cp3"
+  #   ip               = "10.10.1.13"
+  #   cores            = 4
+  #   memory           = 6 * 1024
+  #   proxmox_node     = "pve01"
+  #   disk_size        = 25
+  #   datastore        = "ssd01"
+  #   allow_scheduling = false
   # }
 ]
 nodes_worker = [
   {
     hostname     = "talos-w1"
-    ip           = "10.10.1.181"
+    ip           = "10.10.1.101"
     cores        = 4
     memory       = 4 * 1024
     proxmox_node = "pve01"
@@ -46,7 +52,7 @@ nodes_worker = [
   },
   {
     hostname     = "talos-w2"
-    ip           = "10.10.1.182"
+    ip           = "10.10.1.102"
     cores        = 4
     memory       = 4 * 1024
     proxmox_node = "pve01"
@@ -55,7 +61,7 @@ nodes_worker = [
   },
   {
     hostname     = "talos-w3"
-    ip           = "10.10.1.183"
+    ip           = "10.10.1.103"
     cores        = 4
     memory       = 4 * 1024
     proxmox_node = "pve01"

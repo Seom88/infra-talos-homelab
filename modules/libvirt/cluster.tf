@@ -11,7 +11,7 @@ resource "talos_machine_secrets" "this" {
 # ============================================================
 
 module "talos_cluster" {
-  source = "../modules/talos-cluster"
+  source = "../talos-cluster"
 
   machine_secrets      = talos_machine_secrets.this.machine_secrets
   client_configuration = talos_machine_secrets.this.client_configuration
@@ -20,7 +20,6 @@ module "talos_cluster" {
   worker_ips           = [for n in var.nodes_worker : n.ip]
   worker_hostnames     = [for n in var.nodes_worker : n.hostname]
   cluster_name         = var.cluster_name
-  cluster_vip          = var.cluster_vip
   talos_version        = var.talos_version
   kubernetes_version   = var.kubernetes_version
   talos_image_id       = talos_image_factory_schematic.this.id
@@ -31,9 +30,7 @@ module "talos_cluster" {
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = var.extra_config_patches
 
-  depends_on = [
-    libvirt_domain.node,
-  ]
+  depends_on = [libvirt_domain.node]
 }
 
 # ── Cluster Health Gate ─────────────────────────

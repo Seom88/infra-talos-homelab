@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [2.0.0] - Unreleased
 ### Added
+- **Provider modules (`modules/proxmox`, `modules/libvirt`)** — extracted hypervisor-specific infrastructure logic into reusable Terraform modules, consuming the underlying `modules/talos-cluster` module.
+- **Symmetrical Environments (`environments/<provider>/<env>/`)** — unified structure for both Proxmox (`dev`, `prod`) and Libvirt (`dev`, `prod` scaffold). Terraform roots now live directly in their environment directories, auto-loading `terraform.tfvars` and storing state locally without needing `-var-file` or `-backend-config` flags.
 - **Platform layer in CI** — `.github/workflows/deploy.yaml` now deploys the `platform/` workspace (ArgoCD) after the cluster:
   - `validate` job: platform format check + init/validate
   - `deploy` job: `azure/setup-kubectl` + `azure/setup-helm` actions, platform secrets from cluster outputs, platform state restore/backup as artifact (mirrors the proxmox flow), and `terraform apply -var=env_name`
@@ -22,6 +24,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`talos_machine` resources** (`modules/talos-cluster/main.tf`) — replace `talos_machine_configuration_apply` (`control` + `worker`) with `talos_machine.control_plane` / `talos_machine.worker` (`image = local.installer_image`, `drain_on_upgrade = false`). Bumping `talos_version` now triggers an in-place pull → install → reboot without recreating VMs; `talos_machine_bootstrap` now depends on `talos_machine.control_plane`
 - **Dedicated Libvirt Storage Pool** (`libvirt/pool.tf`) — creates `talos-pool` (`libvirt_pool`) at `/var/lib/libvirt/images/talos` for persistent image and volume management
 - **Libvirt SecureBoot support** (`libvirt/vms.tf`, `libvirt/image.tf`, `libvirt/variables.tf`) — unified SecureBoot workflow with Proxmox: downloads `nocloud-amd64-secureboot.raw.xz` image, configures UEFI OVMF with host edk2 paths (`/usr/share/edk2/ovmf/OVMF_CODE.fd` and `OVMF_VARS.fd`), and binds installer image to `nocloud-installer-secureboot`
+
+### Removed
+- **VIP (`cluster_vip`)** — removed from `modules/talos-cluster` and all environment `terraform.tfvars`; the virtual IP caused bootstrap failures and conflicted with node reconfiguration. API server access now relies on direct per-node IPs.
 
 ### Changed
 - **Modularized Libvirt root** — decomposed monolithic `libvirt/main.tf` into domain-focused files: `network.tf` (NAT network & DHCP), `image.tf` (Talos factory schematic & cache download), `vms.tf` (volumes & KVM domains), `cluster.tf` (bootstrap module & health gate), and `pool.tf` (storage pool)

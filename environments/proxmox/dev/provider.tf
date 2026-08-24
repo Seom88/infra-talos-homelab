@@ -17,14 +17,8 @@ terraform {
 }
 
 provider "proxmox" {
-  insecure = var.insecure
-  endpoint = var.endpoint
-
-  # User authentication via username/password
-  # username = var.username
-  # password = var.password
-
-  # Token authentication via API token
+  insecure  = var.insecure
+  endpoint  = var.endpoint
   api_token = var.api_token
   ssh {
     agent    = true
@@ -34,5 +28,4 @@ provider "proxmox" {
       address = var.ssh_node_address
     }
   }
-
 }

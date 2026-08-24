@@ -10,12 +10,12 @@ terraform {
 }
 
 locals {
-  cp_names         = var.tailscale_domain != "" ? [for hostname in var.cp_hostnames : "${hostname}.${var.tailscale_domain}"] : []
-  worker_names     = var.tailscale_domain != "" ? [for hostname in var.worker_hostnames : "${hostname}.${var.tailscale_domain}"] : []
-  all_nodes_names  = concat(local.cp_names, local.worker_names)
-  cluster_endpoint = "https://${var.cluster_vip}:6443"
+  cp_names           = var.tailscale_domain != "" ? [for hostname in var.cp_hostnames : "${hostname}.${var.tailscale_domain}"] : []
+  worker_names       = var.tailscale_domain != "" ? [for hostname in var.worker_hostnames : "${hostname}.${var.tailscale_domain}"] : []
+  all_nodes_names    = concat(local.cp_names, local.worker_names)
+  cluster_endpoint   = "https://${var.cp_ips[0]}:6443"
   base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"
-  installer_image = var.installer_image != "" ? var.installer_image : local.base_install_image
+  installer_image    = var.installer_image != "" ? var.installer_image : local.base_install_image
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
       kubelet = {
@@ -64,18 +64,12 @@ data "talos_machine_configuration" "control_machine_config" {
   config_patches = compact(concat([
     yamlencode({
       machine = {
-        certSANs = concat([var.cluster_vip], local.cp_names, var.cp_ips)
+        certSANs = concat(local.cp_names, var.cp_ips)
         install = {
           disk  = "/dev/vda"
           image = local.installer_image
         }
       }
-    }),
-    yamlencode({
-      apiVersion = "v1alpha1"
-      kind       = "Layer2VIPConfig"
-      name       = var.cluster_vip
-      link       = "eth0"
     }),
     var.tailscale_auth_key != "" ? yamlencode({
       apiVersion = "v1alpha1"
@@ -96,7 +90,6 @@ data "talos_machine_configuration" "control_machine_config" {
 # in-place upgrade (pull → install → reboot) without recreating VMs — the
 # download_file has `ignore_changes = [url]` so the bootstrap disk stays.
 # Drain is off (workloads on CPs, no workers yet); revisit when workers exist.
-
 resource "talos_machine" "control_plane" {
   for_each              = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
   node                  = each.value
@@ -139,6 +132,10 @@ data "talos_machine_configuration" "worker_machine_config" {
 }
 
 resource "talos_machine" "worker" {
+  # Workers must wait for the control plane to be bootstrapped before applying
+  # their config. Without this, workers attempt to reach the API server before
+  # etcd is up, resulting in connection refused errors.
+  depends_on            = [talos_machine_bootstrap.bootstrap]
   for_each              = { for i, hostname in var.worker_hostnames : hostname => var.worker_ips[i] }
   node                  = each.value
   client_configuration  = var.client_configuration
