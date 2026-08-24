@@ -14,11 +14,8 @@ locals {
   worker_names     = var.tailscale_domain != "" ? [for hostname in var.worker_hostnames : "${hostname}.${var.tailscale_domain}"] : []
   all_nodes_names  = concat(local.cp_names, local.worker_names)
   cluster_endpoint = "https://${var.cluster_vip}:6443"
-  install_image    = "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}"
-  # Installer image consumed by talos_machine to keep the OS version in sync.
-  # Roots with different platforms (e.g. libvirt, non-secureboot) override it;
-  # defaults to the secureboot nocloud installer derived from the schematic.
-  installer_image = var.installer_image != "" ? var.installer_image : local.install_image
+  base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"
+  installer_image = var.installer_image != "" ? var.installer_image : local.base_install_image
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
       kubelet = {
@@ -67,10 +64,10 @@ data "talos_machine_configuration" "control_machine_config" {
   config_patches = compact(concat([
     yamlencode({
       machine = {
-        certSANs = concat(local.cp_names, var.cp_ips)
+        certSANs = concat([var.cluster_vip], local.cp_names, var.cp_ips)
         install = {
           disk  = "/dev/vda"
-          image = local.install_image
+          image = local.installer_image
         }
       }
     }),
@@ -124,7 +121,7 @@ data "talos_machine_configuration" "worker_machine_config" {
         certSANs = local.worker_names
         install = {
           disk  = "/dev/vda"
-          image = local.install_image
+          image = local.installer_image
         }
       }
     }),

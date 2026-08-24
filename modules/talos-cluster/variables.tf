@@ -62,10 +62,16 @@ variable "installer_image" {
     Must match the platform flavor of the nodes: roots booting secureboot images
     can omit it (defaults to the nocloud-installer-secureboot built from
     talos_image_id + talos_version); non-secureboot roots (e.g. libvirt) must
-    override it.
+    override it or set secureboot=false.
   EOF
   type        = string
   default     = ""
+}
+
+variable "secureboot" {
+  description = "Whether to use the secureboot installer flavor (factory.talos.dev/nocloud-installer-secureboot). Libvirt (q35 without secureboot) should set false; Proxmox (ovmf) should keep true."
+  type        = bool
+  default     = true
 }
 
 variable "tailscale_domain" {

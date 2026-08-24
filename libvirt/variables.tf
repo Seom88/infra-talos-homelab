@@ -114,6 +114,7 @@ variable "tailscale_auth_key" {
 variable "tailscale_domain" {
   description = "Tailscale MagicDNS domain (e.g. my-tailnet.ts.net)"
   type        = string
+  default     = "lonk-mirfak.ts.net"
 }
 
 variable "longhorn_enabled" {

@@ -82,8 +82,7 @@ locals {
     } },
   )
 
-  cp_ips  = [for n in var.nodes_cp : n.ip]
-  netmask = cidrnetmask("${local.cp_ips[0]}/${var.network_prefix}")
+  cp_ips = [for n in var.nodes_cp : n.ip]
 
   cluster_endpoint = "https://${var.cluster_vip}:6443"
   install_image    = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
@@ -145,6 +144,7 @@ data "talos_machine_configuration" "cp" {
     yamlencode({
       machine = {
         certSANs = concat(
+          [var.cluster_vip],
           local.cp_ips,
           local.tailscale_cp_names,
         )
@@ -226,6 +226,7 @@ resource "libvirt_volume" "boot" {
   for_each = local.nodes_all
   name     = "${each.key}.raw"
   pool     = each.value.pool
+  capacity = each.value.disk_size * 1024 * 1024 * 1024
 
   target = {
     format = {
@@ -240,6 +241,43 @@ resource "libvirt_volume" "boot" {
   }
 
   depends_on = [terraform_data.talos_nocloud_image]
+}
+
+# Workaround for dmacvicar/libvirt#capacity-ignored-with-file-url:
+# When create.content.url is a local file://, the provider ignores `capacity`
+# and creates the volume sized to the source image (4.1 GiB). The Talos
+# health check then fails: ephemeral partition 2.1 GiB < 3.8 GiB required.
+# This post-create resize runs before the domains start and needs no manual
+# virsh trips. It uses qemu:///system, so add your user to the libvirt group
+# once to avoid password prompts: sudo usermod -aG libvirt,kvm $USER && newgrp libvirt
+resource "terraform_data" "resize_boot" {
+  for_each = local.nodes_all
+
+  triggers_replace = "${each.key}-${each.value.disk_size}-${libvirt_volume.boot[each.key].id}"
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      VOL="${each.key}.raw"
+      POOL="${each.value.pool}"
+      WANT_GB="${each.value.disk_size}"
+      # virsh vol-info returns Capacity in the pool's default unit (GiB here); use vol-dumpxml bytes for exact check
+      CUR_BYTES=$(virsh --connect qemu:///system vol-dumpxml --pool "$POOL" "$VOL" 2>/dev/null | sed -n "s/.*<capacity unit='bytes'>\([0-9]*\)<\/capacity>.*/\1/p")
+      WANT_BYTES=$(( WANT_GB * 1024 * 1024 * 1024 ))
+      if [ -z "$CUR_BYTES" ]; then
+        echo "resize_boot: could not read $POOL/$VOL, skipping"
+        exit 0
+      fi
+      if [ "$CUR_BYTES" -ge "$WANT_BYTES" ]; then
+        echo "resize_boot: $POOL/$VOL already $CUR_BYTES >= $WANT_BYTES, skip"
+        exit 0
+      fi
+      echo "resize_boot: resizing $POOL/$VOL from $CUR_BYTES to $WANT_BYTES ($WANT_GB GiB)"
+      virsh --connect qemu:///system vol-resize --pool "$POOL" "$VOL" "$${WANT_GB}G"
+    EOT
+  }
+
+  depends_on = [libvirt_volume.boot]
 }
 
 # ============================================================
@@ -263,7 +301,7 @@ resource "libvirt_cloudinit_disk" "cloud_init" {
       mac_address = each.value.mac
       subnets = [{
         type    = "static"
-        address = "${each.value.ip}/${local.netmask}"
+        address = "${each.value.ip}/${var.network_prefix}"
         gateway = var.gateway
       }]
     }]
@@ -317,6 +355,16 @@ resource "libvirt_domain" "node" {
   }
 
   devices = {
+    channels = [
+      {
+        target = {
+          virt_io = {
+            name = "org.qemu.guest_agent.0"
+          }
+        }
+      },
+    ]
+
     consoles = [
       {
         type = "pty"
@@ -381,6 +429,7 @@ resource "libvirt_domain" "node" {
   depends_on = [
     libvirt_volume.boot,
     libvirt_volume.cloud_init,
+    terraform_data.resize_boot,
   ]
 }
 
@@ -425,8 +474,7 @@ module "talos_cluster" {
   talos_version        = var.talos_version
   kubernetes_version   = var.kubernetes_version
   talos_image_id       = talos_image_factory_schematic.this.id
-  # Non-secureboot platform flavor: the module default is the secureboot installer.
-  installer_image      = "factory.talos.dev/nocloud-installer/${talos_image_factory_schematic.this.id}:v${var.talos_version}"
+  secureboot           = false
   tailscale_domain     = var.tailscale_domain
   tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
