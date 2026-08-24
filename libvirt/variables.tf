@@ -5,13 +5,14 @@
 variable "nodes_cp" {
   description = <<-EOF
     Control plane nodes.
-    Required: hostname, ip, mac (static), cores, memory (MiB),
-    disk_size (GiB), pool (optional, defaults to var.pool_name) and allow_scheduling.
+    Required: hostname, ip, cores, memory (MiB), disk_size (GiB),
+    allow_scheduling. Optional: mac (auto-generated if omitted),
+    pool (defaults to var.pool_name).
   EOF
   type = list(object({
     hostname         = string
     ip               = string
-    mac              = string
+    mac              = optional(string)
     cores            = number
     memory           = number
     disk_size        = number
@@ -23,13 +24,13 @@ variable "nodes_cp" {
 variable "nodes_worker" {
   description = <<-EOF
     Worker nodes.
-    Required: hostname, ip, mac (static), cores, memory (MiB),
-    disk_size (GiB) and pool (optional, defaults to var.pool_name).
+    Required: hostname, ip, cores, memory (MiB), disk_size (GiB).
+    Optional: mac (auto-generated if omitted), pool (defaults to var.pool_name).
   EOF
   type = list(object({
     hostname  = string
     ip        = string
-    mac       = string
+    mac       = optional(string)
     cores     = number
     memory    = number
     disk_size = number

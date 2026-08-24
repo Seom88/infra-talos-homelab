@@ -1,12 +1,12 @@
 # ============================================================
-# Locals & Node Mapping
+# Locals & Node Mapping with Deterministic MAC Generation
 # ============================================================
 
 locals {
   nodes_all = merge(
     { for n in var.nodes_cp : n.hostname => {
       role      = "cp"
-      mac       = n.mac
+      mac       = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
       ip        = n.ip
       cores     = n.cores
       memory    = n.memory
@@ -15,7 +15,7 @@ locals {
     } },
     { for n in var.nodes_worker : n.hostname => {
       role      = "worker"
-      mac       = n.mac
+      mac       = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
       ip        = n.ip
       cores     = n.cores
       memory    = n.memory

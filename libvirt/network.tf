@@ -19,9 +19,9 @@ resource "libvirt_network" "talos" {
       netmask = "255.255.255.0"
       dhcp = {
         hosts = [
-          for n in concat(var.nodes_cp, var.nodes_worker) : {
+          for hostname, n in local.nodes_all : {
             mac  = n.mac
-            name = n.hostname
+            name = hostname
             ip   = n.ip
           }
         ]
@@ -32,9 +32,9 @@ resource "libvirt_network" "talos" {
   dns = {
     enable = "yes"
     host = [
-      for n in concat(var.nodes_cp, var.nodes_worker) : {
+      for hostname, n in local.nodes_all : {
         ip        = n.ip
-        hostnames = [{ hostname = n.hostname }]
+        hostnames = [{ hostname = hostname }]
       }
     ]
   }
