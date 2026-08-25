@@ -18,13 +18,17 @@ locals {
   installer_image    = var.installer_image != "" ? var.installer_image : local.base_install_image
   # SideroLabs multi-disk recommendation: Disk1 = system (EFI/META/STATE/EPHEMERAL),
   # Disk2 = user volumes via UserVolumeConfig diskSelector "!system_disk" mounted at /var/mnt/<name>.
-  # When a UserVolumeConfig "data" exists (proxmox/libvirt auto-append it when any node has
-  # data_disk_size), the volume is mounted at /var/mnt/data. Longhorn should then use
-  # /var/mnt/data as its defaultDataPath (configure via Helm values: persistence.defaultDataPath).
-  # The kubelet extraMount below keeps /var/lib/longhorn bind-mounted for single-disk
-  # (backward compatible) and also works when UserVolumeConfig is present — Longhorn
-  # can be pointed at /var/mnt/data without changing this mount. If you want Longhorn
-  # directly on the data volume, set source = "/var/mnt/data" and update Helm values.
+  # We intentionally use UserVolumeConfig name="data" -> /var/mnt/data (generic, reusable) instead of
+  # Sidero's official Longhorn example name="longhorn" -> /var/mnt/longhorn (grow:false,
+  # diskSelector `disk.transport == 'nvme' && !system_disk`). Prod is already provisioned as
+  # u-data on /dev/vdb1 at /var/mnt/data (verified via talosctl); renaming to "longhorn" would
+  # orphan the volume, so the name stays "data".
+  # Longhorn Helm must be: --set defaultSettings.defaultDataPath=/var/mnt/data
+  # (would be /var/mnt/longhorn if you follow Sidero's name verbatim — see modules/*/ UserVolumeConfig).
+  # The kubelet extraMount below keeps /var/lib/longhorn bind-mounted (Sidero privileged requirement:
+  # kubelet needs rshared bind at /var/lib/longhorn) for both single-disk (backward compat) and
+  # dual-disk setups — Longhorn is pointed at /var/mnt/data via Helm without changing this mount.
+  # Direct-mount variant if desired: source = "/var/mnt/data" + update Helm defaultDataPath.
   has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {

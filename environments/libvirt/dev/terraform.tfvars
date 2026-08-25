@@ -21,27 +21,30 @@ nodes_cp = [
 
 nodes_worker = [
   {
-    hostname  = "talos-w1"
-    ip        = "10.10.20.101"
-    cores     = 4
-    memory    = 4 * 1024
-    disk_size = 100
-    pool      = "talos-pool"
+    hostname       = "talos-w1"
+    ip             = "10.10.20.101"
+    cores          = 4
+    memory         = 4 * 1024
+    disk_size      = 30
+    pool           = "talos-pool"
+    data_disk_size = 60
   },
   {
-    hostname  = "talos-w2"
-    ip        = "10.10.20.102"
-    cores     = 4
-    memory    = 4 * 1024
-    disk_size = 100
-    pool      = "talos-pool"
+    hostname       = "talos-w2"
+    ip             = "10.10.20.102"
+    cores          = 4
+    memory         = 4 * 1024
+    disk_size      = 30
+    pool           = "talos-pool"
+    data_disk_size = 60
   },
   {
-    hostname  = "talos-w3"
-    ip        = "10.10.20.103"
-    cores     = 4
-    memory    = 4 * 1024
-    disk_size = 100
-    pool      = "talos-pool"
+    hostname       = "talos-w3"
+    ip             = "10.10.20.103"
+    cores          = 4
+    memory         = 4 * 1024
+    disk_size      = 30
+    pool           = "talos-pool"
+    data_disk_size = 60
   },
 ]

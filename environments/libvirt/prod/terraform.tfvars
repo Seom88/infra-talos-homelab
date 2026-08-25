@@ -13,8 +13,8 @@ nodes_cp = [
     ip               = "10.10.10.11"
     cores            = 4
     memory           = 6 * 1024
-    disk_size        = 25
-    allow_scheduling = false
+    disk_size        = 30
+    allow_scheduling = true
     pool             = "talos-pool"
   },
   {
@@ -22,44 +22,49 @@ nodes_cp = [
     ip               = "10.10.10.12"
     cores            = 4
     memory           = 6 * 1024
-    disk_size        = 100
+    disk_size        = 40
     allow_scheduling = true
     pool             = "talos-pool"
+    data_disk_size   = 100
   },
   {
     hostname         = "talos-cp3"
     ip               = "10.10.10.13"
     cores            = 4
     memory           = 6 * 1024
-    disk_size        = 100
+    disk_size        = 40
     allow_scheduling = true
     pool             = "talos-pool"
+    data_disk_size   = 100
   },
 ]
 
 nodes_worker = [
   # {
-  #   hostname  = "talos-w1"
-  #   ip        = "10.10.10.101"
-  #   cores     = 8
-  #   memory    = 4 * 1024
-  #   disk_size = 100
-  #   pool      = "talos-pool"
+  #   hostname       = "talos-w1"
+  #   ip             = "10.10.10.101"
+  #   cores          = 8
+  #   memory         = 4 * 1024
+  #   disk_size      = 40
+  #   pool           = "talos-pool"
+  #   data_disk_size = 100
   # },
   # {
-  #   hostname  = "talos-w2"
-  #   ip        = "10.10.10.102"
-  #   cores     = 8
-  #   memory    = 4 * 1024
-  #   disk_size = 100
-  #   pool      = "talos-pool"
+  #   hostname       = "talos-w2"
+  #   ip             = "10.10.10.102"
+  #   cores          = 8
+  #   memory         = 4 * 1024
+  #   disk_size      = 40
+  #   pool           = "talos-pool"
+  #   data_disk_size = 100
   # },
   # {
-  #   hostname  = "talos-w3"
-  #   ip        = "10.10.10.103"
-  #   cores     = 8
-  #   memory    = 4 * 1024
-  #   disk_size = 100
-  #   pool      = "talos-pool"
+  #   hostname       = "talos-w3"
+  #   ip             = "10.10.10.103"
+  #   cores          = 8
+  #   memory         = 4 * 1024
+  #   disk_size      = 40
+  #   pool           = "talos-pool"
+  #   data_disk_size = 100
   # },
 ]

@@ -4,17 +4,9 @@
 
 variable "nodes_cp" {
   description = <<-EOF
-    Control plane nodes.
-    Required: hostname, ip, cores, memory (MiB), disk_size (GiB),
-    allow_scheduling. Optional: mac (auto-generated if omitted),
-    pool (defaults to var.pool_name).
-    Optional second disk (SideroLabs multi-disk layout): data_disk_size (GiB)
-    creates a second virtio disk for user volumes (STATE/EPHEMERAL stay on
-    Disk1, user volumes move to Disk2 so VM recreate does not wipe data).
-    Disk1 = system EFI/META/STATE/EPHEMERAL, Disk2 = user volumes via
-    UserVolumeConfig diskSelector "!system_disk" mounted at /var/mnt/data.
-    data_pool defaults to pool/var.pool_name when null; omit data_disk_size
-    for single-disk (backward compatible).
+    Control plane nodes. Required: hostname, ip, cores, memory (MiB), disk_size (GiB), allow_scheduling. Optional: mac, pool.
+    Optional second disk for Longhorn: data_disk_size (GiB) creates vdb (data_pool defaults to pool; omit for single-disk).
+    Auto UserVolumeConfig with diskSelector "!system_disk" -> /var/mnt/data when any node has data_disk_size.
   EOF
   type = list(object({
     hostname         = string
@@ -28,17 +20,29 @@ variable "nodes_cp" {
     data_disk_size   = optional(number)
     data_pool        = optional(string)
   }))
+
+  validation {
+    condition     = alltrue([for n in var.nodes_cp : n.disk_size > 0])
+    error_message = "disk_size must be >0"
+  }
+
+  validation {
+    condition = alltrue([
+      for n in var.nodes_cp : (
+        try(n.data_pool, null) != null ? try(n.data_disk_size, null) != null : true
+        ) && (
+        try(n.data_disk_size, null) == null ? true : try(n.data_disk_size, 0) > 0
+      )
+    ])
+    error_message = "data_disk_size must be >0 when set; data_datastore/data_pool requires data_disk_size"
+  }
 }
 
 variable "nodes_worker" {
   description = <<-EOF
-    Worker nodes.
-    Required: hostname, ip, cores, memory (MiB), disk_size (GiB).
-    Optional: mac (auto-generated if omitted), pool (defaults to var.pool_name).
-    Optional second disk (SideroLabs multi-disk layout): data_disk_size (GiB)
-    creates a second virtio disk for user volumes. See nodes_cp for details.
-    data_pool defaults to pool/var.pool_name when null; omit data_disk_size
-    for single-disk (backward compatible).
+    Worker nodes. Required: hostname, ip, cores, memory (MiB), disk_size (GiB). Optional: mac, pool.
+    Optional second disk for Longhorn: data_disk_size (GiB) creates vdb (data_pool defaults to pool; omit for single-disk).
+    Auto UserVolumeConfig with diskSelector "!system_disk" -> /var/mnt/data when any node has data_disk_size.
   EOF
   type = list(object({
     hostname       = string
@@ -51,6 +55,22 @@ variable "nodes_worker" {
     data_disk_size = optional(number)
     data_pool      = optional(string)
   }))
+
+  validation {
+    condition     = alltrue([for n in var.nodes_worker : n.disk_size > 0])
+    error_message = "disk_size must be >0"
+  }
+
+  validation {
+    condition = alltrue([
+      for n in var.nodes_worker : (
+        try(n.data_pool, null) != null ? try(n.data_disk_size, null) != null : true
+        ) && (
+        try(n.data_disk_size, null) == null ? true : try(n.data_disk_size, 0) > 0
+      )
+    ])
+    error_message = "data_disk_size must be >0 when set; data_datastore/data_pool requires data_disk_size"
+  }
 }
 
 # ============================================================
@@ -152,13 +172,13 @@ variable "tailscale_auth_key" {
 }
 
 variable "longhorn_enabled" {
-  description = "Inject kubelet extraMounts for Longhorn on all nodes"
+  description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data_disk_size."
   type        = bool
   default     = true
 }
 
 variable "extra_config_patches" {
-  description = "Additional Talos machine configuration patches (raw YAML strings). UserVolumeConfig for data disk is auto-appended when any node has data_disk_size."
+  description = "Extra Talos patches (YAML strings) for all nodes. UserVolumeConfig auto-appended when any node has data_disk_size."
   type        = list(string)
   default     = []
 }

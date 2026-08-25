@@ -1,11 +1,19 @@
 locals {
   has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if try(n.data_disk_size, null) != null]) > 0
+  # UserVolumeConfig intentionally named "data" -> /var/mnt/data (generic, not workload-specific).
+  # Sidero official Longhorn example uses name="longhorn" -> /var/mnt/longhorn with grow:false and
+  # diskSelector `disk.transport == 'nvme' && !system_disk`. We use name="data" for flexibility
+  # (other workloads can reuse it) — set Helm `defaultSettings.defaultDataPath=/var/mnt/data`
+  # accordingly (would be /var/mnt/longhorn if you follow Sidero's name verbatim).
+  # virtio disks: "!system_disk" alone is sufficient; nvme filter only applies to bare-metal NVMe.
   data_volume_patch = local.has_data_disk ? yamlencode({
     apiVersion = "v1alpha1"
     kind       = "UserVolumeConfig"
     name       = "data"
     provisioning = {
       diskSelector = { match = "!system_disk" }
+      grow         = false
+      minSize      = "10GB"
     }
   }) : ""
 }
