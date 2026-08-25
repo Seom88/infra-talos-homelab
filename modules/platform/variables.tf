@@ -3,6 +3,12 @@ variable "kubeconfig_path" {
   type        = string
 }
 
+variable "kubeconfig_hash" {
+  description = "Optional hash of kubeconfig content to trigger re-run when cluster rotates. When null, wait_nodes is recreated only via depends_on. Prefer local_file.kubeconfig.content_base64sha256 to avoid filesha256 race on same-apply file mutation."
+  type        = string
+  default     = null
+}
+
 variable "argocd_version" {
   description = "Exact ArgoCD Helm chart version to install (argo-helm). Bump here, never use ranges."
   type        = string

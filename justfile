@@ -52,7 +52,7 @@ tf-plan:
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure
-    terraform -chdir={{ tf_root }} apply -parallelism=1
+    terraform -chdir={{ tf_root }} apply
 
 # Destroy the active provider/env (auto-init for the correct backend)
 tf-destroy:

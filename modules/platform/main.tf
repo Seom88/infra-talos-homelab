@@ -12,9 +12,12 @@
 
 # ── 1. Node readiness gate (Layer 2) ──────────────────────────────────────
 resource "terraform_data" "wait_nodes" {
-  # Re-run when the kubeconfig changes (e.g. after a cluster rebuild)
+  # Re-run when the kubeconfig changes (e.g. after a cluster rebuild).
+  # Use var.kubeconfig_hash (content_base64sha256 from local_file.kubeconfig)
+  # instead of filesha256 on disk — filesha256 races with local_file which
+  # mutates the same path between plan and apply ("inconsistent result").
   triggers_replace = {
-    kubeconfig_hash = fileexists(var.kubeconfig_path) ? filesha256(var.kubeconfig_path) : "kubeconfig-missing"
+    kubeconfig_hash = var.kubeconfig_hash != null ? var.kubeconfig_hash : (fileexists(var.kubeconfig_path) ? "exists" : "missing")
   }
 
   provisioner "local-exec" {

@@ -50,12 +50,12 @@ module "talos_cluster" {
 }
 
 # ── Bootstrap settle wait ───────────────────────
-# Talos etcd learner promotion + static pod rendering needs a short settle after
-# bootstrap before scheduler becomes healthy. Tuned for disposable homelab:
-# 30s is enough to avoid the cp1-Ready-but-cp2/3-SCHEDULER-Unhealthy race.
+# 45s is enough for etcd learner promotion + static pods, keeps disposable fast
+# (was 90s, too slow). Without this, data.talos_cluster_health can pass with
+# cp1 Ready but cp2/cp3 still SCHEDULER Unhealthy (disposable clusters).
 resource "time_sleep" "post_bootstrap" {
   depends_on      = [module.talos_cluster]
-  create_duration = "30s"
+  create_duration = "45s"
 }
 
 # ── Cluster Health Gate ─────────────────────────
