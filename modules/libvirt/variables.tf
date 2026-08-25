@@ -8,6 +8,13 @@ variable "nodes_cp" {
     Required: hostname, ip, cores, memory (MiB), disk_size (GiB),
     allow_scheduling. Optional: mac (auto-generated if omitted),
     pool (defaults to var.pool_name).
+    Optional second disk (SideroLabs multi-disk layout): data_disk_size (GiB)
+    creates a second virtio disk for user volumes (STATE/EPHEMERAL stay on
+    Disk1, user volumes move to Disk2 so VM recreate does not wipe data).
+    Disk1 = system EFI/META/STATE/EPHEMERAL, Disk2 = user volumes via
+    UserVolumeConfig diskSelector "!system_disk" mounted at /var/mnt/data.
+    data_pool defaults to pool/var.pool_name when null; omit data_disk_size
+    for single-disk (backward compatible).
   EOF
   type = list(object({
     hostname         = string
@@ -18,6 +25,8 @@ variable "nodes_cp" {
     disk_size        = number
     pool             = optional(string)
     allow_scheduling = bool
+    data_disk_size   = optional(number)
+    data_pool        = optional(string)
   }))
 }
 
@@ -26,15 +35,21 @@ variable "nodes_worker" {
     Worker nodes.
     Required: hostname, ip, cores, memory (MiB), disk_size (GiB).
     Optional: mac (auto-generated if omitted), pool (defaults to var.pool_name).
+    Optional second disk (SideroLabs multi-disk layout): data_disk_size (GiB)
+    creates a second virtio disk for user volumes. See nodes_cp for details.
+    data_pool defaults to pool/var.pool_name when null; omit data_disk_size
+    for single-disk (backward compatible).
   EOF
   type = list(object({
-    hostname  = string
-    ip        = string
-    mac       = optional(string)
-    cores     = number
-    memory    = number
-    disk_size = number
-    pool      = optional(string)
+    hostname       = string
+    ip             = string
+    mac            = optional(string)
+    cores          = number
+    memory         = number
+    disk_size      = number
+    pool           = optional(string)
+    data_disk_size = optional(number)
+    data_pool      = optional(string)
   }))
 }
 
@@ -143,7 +158,7 @@ variable "longhorn_enabled" {
 }
 
 variable "extra_config_patches" {
-  description = "Additional Talos machine configuration patches (raw YAML strings)"
+  description = "Additional Talos machine configuration patches (raw YAML strings). UserVolumeConfig for data disk is auto-appended when any node has data_disk_size."
   type        = list(string)
   default     = []
 }

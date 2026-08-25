@@ -5,22 +5,26 @@
 locals {
   nodes_all = merge(
     { for n in var.nodes_cp : n.hostname => {
-      role      = "cp"
-      mac       = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
-      ip        = n.ip
-      cores     = n.cores
-      memory    = n.memory
-      disk_size = n.disk_size
-      pool      = coalesce(n.pool, libvirt_pool.talos.name)
+      role           = "cp"
+      mac            = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
+      ip             = n.ip
+      cores          = n.cores
+      memory         = n.memory
+      disk_size      = n.disk_size
+      pool           = coalesce(n.pool, libvirt_pool.talos.name)
+      data_disk_size = try(n.data_disk_size, null)
+      data_pool      = coalesce(try(n.data_pool, null), try(n.pool, null), libvirt_pool.talos.name)
     } },
     { for n in var.nodes_worker : n.hostname => {
-      role      = "worker"
-      mac       = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
-      ip        = n.ip
-      cores     = n.cores
-      memory    = n.memory
-      disk_size = n.disk_size
-      pool      = coalesce(n.pool, libvirt_pool.talos.name)
+      role           = "worker"
+      mac            = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
+      ip             = n.ip
+      cores          = n.cores
+      memory         = n.memory
+      disk_size      = n.disk_size
+      pool           = coalesce(n.pool, libvirt_pool.talos.name)
+      data_disk_size = try(n.data_disk_size, null)
+      data_pool      = coalesce(try(n.data_pool, null), try(n.pool, null), libvirt_pool.talos.name)
     } },
   )
 }
@@ -87,6 +91,23 @@ resource "terraform_data" "resize_boot" {
 }
 
 # ============================================================
+# Data Volumes (optional second disk for user volumes)
+# ============================================================
+
+resource "libvirt_volume" "data" {
+  for_each = { for k, v in local.nodes_all : k => v if try(v.data_disk_size, null) != null }
+  name     = "${each.key}-data.raw"
+  pool     = each.value.data_pool
+  capacity = each.value.data_disk_size * 1024 * 1024 * 1024
+
+  target = {
+    format = {
+      type = "raw"
+    }
+  }
+}
+
+# ============================================================
 # VM Domains (UEFI OVMF with SecureBoot)
 # ============================================================
 
@@ -143,20 +164,36 @@ resource "libvirt_domain" "node" {
       },
     ]
 
-    disks = [
-      {
-        source = {
-          volume = {
-            pool   = libvirt_volume.boot[each.key].pool
-            volume = libvirt_volume.boot[each.key].name
+    disks = concat(
+      [
+        {
+          source = {
+            volume = {
+              pool   = libvirt_volume.boot[each.key].pool
+              volume = libvirt_volume.boot[each.key].name
+            }
           }
-        }
-        target = {
-          dev = "vda"
-          bus = "virtio"
-        }
-      },
-    ]
+          target = {
+            dev = "vda"
+            bus = "virtio"
+          }
+        },
+      ],
+      try(local.nodes_all[each.key].data_disk_size, null) != null ? [
+        {
+          source = {
+            volume = {
+              pool   = libvirt_volume.data[each.key].pool
+              volume = libvirt_volume.data[each.key].name
+            }
+          }
+          target = {
+            dev = "vdb"
+            bus = "virtio"
+          }
+        },
+      ] : []
+    )
 
     graphics = [
       {
@@ -182,6 +219,7 @@ resource "libvirt_domain" "node" {
 
   depends_on = [
     libvirt_volume.boot,
+    libvirt_volume.data,
     terraform_data.resize_boot,
   ]
 }

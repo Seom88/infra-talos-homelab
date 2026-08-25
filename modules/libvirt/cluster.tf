@@ -1,3 +1,15 @@
+locals {
+  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if try(n.data_disk_size, null) != null]) > 0
+  data_volume_patch = local.has_data_disk ? yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "UserVolumeConfig"
+    name       = "data"
+    provisioning = {
+      diskSelector = { match = "!system_disk" }
+    }
+  }) : ""
+}
+
 # ============================================================
 # Talos Machine Secrets
 # ============================================================
@@ -32,7 +44,7 @@ module "talos_cluster" {
   tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
-  extra_config_patches = var.extra_config_patches
+  extra_config_patches = compact(concat(var.extra_config_patches, [local.data_volume_patch]))
 
   depends_on = [libvirt_domain.node]
 }

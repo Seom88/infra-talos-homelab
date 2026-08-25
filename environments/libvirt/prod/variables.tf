@@ -8,18 +8,22 @@ variable "nodes_cp" {
     disk_size        = number
     pool             = optional(string)
     allow_scheduling = bool
+    data_disk_size   = optional(number)
+    data_pool        = optional(string)
   }))
 }
 
 variable "nodes_worker" {
   type = list(object({
-    hostname  = string
-    ip        = string
-    mac       = optional(string)
-    cores     = number
-    memory    = number
-    disk_size = number
-    pool      = optional(string)
+    hostname       = string
+    ip             = string
+    mac            = optional(string)
+    cores          = number
+    memory         = number
+    disk_size      = number
+    pool           = optional(string)
+    data_disk_size = optional(number)
+    data_pool      = optional(string)
   }))
 }
 
