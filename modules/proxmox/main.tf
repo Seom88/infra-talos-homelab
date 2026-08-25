@@ -196,16 +196,26 @@ module "talos" {
   ]
 }
 
+# ── Bootstrap settle wait ───────────────────────
+# Talos etcd learner promotion + static pod rendering needs a short settle after
+# bootstrap before scheduler becomes healthy. Tuned for disposable homelab:
+# 30s is enough to avoid the cp1-Ready-but-cp2/3-SCHEDULER-Unhealthy race that
+# needed 7m+ before, without adding the previous 90s penalty.
+resource "time_sleep" "post_bootstrap" {
+  depends_on      = [module.talos]
+  create_duration = "30s"
+}
+
 # ── Cluster Health Gate ─────────────────────────
 # Blocks apply until kube-apiserver, etcd, and all nodes are Ready,
 # so dependent roots (platform/) never race the cluster bootstrap.
 data "talos_cluster_health" "this" {
-  depends_on           = [module.talos]
+  depends_on           = [module.talos, time_sleep.post_bootstrap]
   client_configuration = talos_machine_secrets.this.client_configuration
   control_plane_nodes  = [for node in var.nodes_cp : node.ip]
   worker_nodes         = [for node in var.nodes_worker : node.ip]
   endpoints            = [for node in var.nodes_cp : node.ip]
   timeouts = {
-    read = "15m"
+    read = "20m"
   }
 }
