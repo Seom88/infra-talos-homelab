@@ -16,6 +16,16 @@ locals {
   cluster_endpoint   = "https://${var.cp_ips[0]}:6443"
   base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"
   installer_image    = var.installer_image != "" ? var.installer_image : local.base_install_image
+  # SideroLabs multi-disk recommendation: Disk1 = system (EFI/META/STATE/EPHEMERAL),
+  # Disk2 = user volumes via UserVolumeConfig diskSelector "!system_disk" mounted at /var/mnt/<name>.
+  # When a UserVolumeConfig "data" exists (proxmox/libvirt auto-append it when any node has
+  # data_disk_size), the volume is mounted at /var/mnt/data. Longhorn should then use
+  # /var/mnt/data as its defaultDataPath (configure via Helm values: persistence.defaultDataPath).
+  # The kubelet extraMount below keeps /var/lib/longhorn bind-mounted for single-disk
+  # (backward compatible) and also works when UserVolumeConfig is present — Longhorn
+  # can be pointed at /var/mnt/data without changing this mount. If you want Longhorn
+  # directly on the data volume, set source = "/var/mnt/data" and update Helm values.
+  has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
       kubelet = {

@@ -88,7 +88,7 @@ variable "longhorn_enabled" {
 }
 
 variable "extra_config_patches" {
-  description = "Additional Talos machine configuration patches (raw YAML strings) applied to all nodes (control plane + workers)"
+  description = "Additional Talos machine configuration patches (raw YAML strings) applied to all nodes (control plane + workers). UserVolumeConfig patches (e.g. data disk with diskSelector \"!system_disk\" mounted at /var/mnt/<name>) should be passed here; proxmox/libvirt modules auto-append it when any node has data_disk_size."
   type        = list(string)
   default     = []
 }
