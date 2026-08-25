@@ -162,3 +162,9 @@ variable "extra_config_patches" {
   type        = list(string)
   default     = []
 }
+
+variable "enable_health_check" {
+  description = "Enable post-bootstrap health gate (talos_cluster_health). Set false to skip health during destroy."
+  type        = bool
+  default     = true
+}

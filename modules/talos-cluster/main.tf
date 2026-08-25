@@ -2,8 +2,8 @@ terraform {
   required_providers {
     talos = {
       source = "siderolabs/talos"
-      # TODO: using alpha to fix "inconsistent final plan" bug (siderolabs/terraform-provider-talos#352).
-      # Revert to stable when v0.12.0 is released.
+      # Pre-release 0.12.0-alpha.5: latest pre-release fixing "inconsistent final plan" bug (siderolabs/terraform-provider-talos#352).
+      # Successor is stable 0.12.0 (not yet released) — switch to "0.12.0" when available.
       version = "0.12.0-alpha.5"
     }
   }
@@ -54,6 +54,11 @@ locals {
   })
 }
 
+# Talos client configuration derived from machine secrets — used for talosctl.
+# Note: Terraform >=1.11 best practice is to avoid persisting secrets in state via
+# ephemeral resources + write-only arguments (client_configuration_wo / machine_configuration_wo).
+# See commented ephemeral "talos_cluster_kubeconfig" example below and
+# https://registry.terraform.io/providers/siderolabs/talos/latest/docs#write-only-arguments
 data "talos_client_configuration" "client_config" {
   cluster_name         = var.cluster_name
   client_configuration = var.client_configuration
@@ -64,13 +69,12 @@ data "talos_client_configuration" "client_config" {
 # --- Control Plane Configuration (per node: scheduling patch is node-specific) ---
 
 data "talos_machine_configuration" "control_machine_config" {
-  for_each           = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
-  cluster_name       = var.cluster_name
-  cluster_endpoint   = local.cluster_endpoint
-  machine_type       = "controlplane"
-  machine_secrets    = var.machine_secrets
-  kubernetes_version = "v${var.kubernetes_version}"
-  talos_version      = "v${var.talos_version}"
+  for_each         = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
+  cluster_name     = var.cluster_name
+  cluster_endpoint = local.cluster_endpoint
+  machine_type     = "controlplane"
+  machine_secrets  = var.machine_secrets
+  talos_version    = "v${var.talos_version}"
   config_patches = compact(concat([
     yamlencode({
       machine = {
@@ -107,17 +111,33 @@ resource "talos_machine" "control_plane" {
   machine_configuration = data.talos_machine_configuration.control_machine_config[each.key].machine_configuration
   image                 = local.installer_image
   drain_on_upgrade      = false
+  # When used with talos_cluster, Kubernetes upgrades are driven by
+  # talos_cluster.kubernetes_version (via upgrade-k8s). Ignore drift so
+  # out-of-band k8s upgrades don't force config re-apply.
+  # https://registry.terraform.io/providers/siderolabs/talos/latest/docs/resources/machine#ignore_kubernetes_upgrade_drift
+  ignore_kubernetes_upgrade_drift = true
+}
+
+# --- Bootstrap (replaces talos_machine_bootstrap) ---
+
+resource "talos_cluster" "cluster" {
+  depends_on           = [talos_machine.control_plane]
+  node                 = var.cp_ips[0]
+  client_configuration = var.client_configuration
+  kubernetes_version   = "v${var.kubernetes_version}"
+  control_plane_nodes  = var.cp_ips
+
+  timeouts = { create = "15m", update = "30m" }
 }
 
 # --- Worker Configuration ---
 
 data "talos_machine_configuration" "worker_machine_config" {
-  cluster_name       = var.cluster_name
-  cluster_endpoint   = local.cluster_endpoint
-  machine_type       = "worker"
-  machine_secrets    = var.machine_secrets
-  kubernetes_version = "v${var.kubernetes_version}"
-  talos_version      = "v${var.talos_version}"
+  cluster_name     = var.cluster_name
+  cluster_endpoint = local.cluster_endpoint
+  machine_type     = "worker"
+  machine_secrets  = var.machine_secrets
+  talos_version    = "v${var.talos_version}"
   config_patches = compact(concat([
     yamlencode({
       machine = {
@@ -145,26 +165,32 @@ resource "talos_machine" "worker" {
   # Workers must wait for the control plane to be bootstrapped before applying
   # their config. Without this, workers attempt to reach the API server before
   # etcd is up, resulting in connection refused errors.
-  depends_on            = [talos_machine_bootstrap.bootstrap]
+  depends_on            = [talos_cluster.cluster]
   for_each              = { for i, hostname in var.worker_hostnames : hostname => var.worker_ips[i] }
   node                  = each.value
   client_configuration  = var.client_configuration
   machine_configuration = data.talos_machine_configuration.worker_machine_config.machine_configuration
   image                 = local.installer_image
   drain_on_upgrade      = false
+  # See control_plane comment: Kubernetes version is owned by talos_cluster.
+  # https://registry.terraform.io/providers/siderolabs/talos/latest/docs/resources/machine#ignore_kubernetes_upgrade_drift
+  ignore_kubernetes_upgrade_drift = true
 }
 
-# --- Bootstrap & Kubeconfig ---
-
-resource "talos_machine_bootstrap" "bootstrap" {
-  depends_on           = [talos_machine.control_plane]
+# Live retrieval (provider-recommended replacement for deprecated data source).
+# Stores kubeconfig in state (sensitive) but validates against live API.
+# Ephemeral offline generation (from machine_secrets) is the secret-free ideal on TF >= 1.11,
+# but local_file/local_sensitive_file don't yet support write-only (hashicorp/local#373),
+# so the ephemeral value can't be written to disk without hitting "Ephemeral value not allowed".
+# Keep this resource until local provider supports write-only; then switch to:
+# ephemeral "talos_cluster_kubeconfig" "kubeconfig" {
+#   cluster_name    = var.cluster_name
+#   endpoint        = local.cluster_endpoint
+#   machine_secrets = var.machine_secrets
+# }
+resource "talos_cluster_kubeconfig" "kubeconfig" {
+  depends_on           = [talos_cluster.cluster]
   client_configuration = var.client_configuration
   node                 = var.cp_ips[0]
   endpoint             = var.cp_ips[0]
-}
-
-resource "talos_cluster_kubeconfig" "kubeconfig" {
-  depends_on           = [talos_machine_bootstrap.bootstrap]
-  client_configuration = var.client_configuration
-  node                 = var.cp_ips[0]
 }

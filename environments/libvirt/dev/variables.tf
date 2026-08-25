@@ -110,3 +110,9 @@ variable "argocd_version" {
   type        = string
   default     = "9.5.13"
 }
+
+variable "enable_health_check" {
+  description = "Enable post-bootstrap health gate. Set false for destroy."
+  type        = bool
+  default     = true
+}

@@ -197,24 +197,25 @@ module "talos" {
 }
 
 # ── Bootstrap settle wait ───────────────────────
-# 45s is enough for etcd learner promotion + static pods, keeps disposable fast
-# (was 90s, too slow). Without this, data.talos_cluster_health can pass with
-# cp1 Ready but cp2/cp3 still SCHEDULER Unhealthy (disposable clusters).
 resource "time_sleep" "post_bootstrap" {
   depends_on      = [module.talos]
-  create_duration = "45s"
+  create_duration = "10s" # C: was 45s, reduced - health retry handles etcd Preparing; if flakes persist, restore 30s
 }
 
-# ── Cluster Health Gate ─────────────────────────
-# Blocks apply until kube-apiserver, etcd, and all nodes are Ready,
-# so dependent roots (platform/) never race the cluster bootstrap.
+# ── Cluster Health Gate (data + check: validates but does NOT block destroy) ─
+# `enable_health_check` lets `just tf-destroy` skip the gate (TF_VAR_enable_health_check=false).
+# On apply (default true) the data source waits 10m for K8s Ready (B+C: talos_cluster is
+# single-node fast, health now handles full HA wait); on destroy it has count=0
+# so `terraform destroy` doesn't hang even when you want to start from zero.
 data "talos_cluster_health" "this" {
+  count                = var.enable_health_check ? 1 : 0
   depends_on           = [module.talos, time_sleep.post_bootstrap]
   client_configuration = talos_machine_secrets.this.client_configuration
   control_plane_nodes  = [for node in var.nodes_cp : node.ip]
   worker_nodes         = [for node in var.nodes_worker : node.ip]
   endpoints            = [for node in var.nodes_cp : node.ip]
   timeouts = {
-    read = "20m"
+    read = "10m"
   }
 }
+

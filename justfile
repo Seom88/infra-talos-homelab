@@ -45,14 +45,17 @@ tf-plan:
     terraform -chdir={{ tf_root }} plan
 
 # Apply changes (auto-init to ensure the correct backend).
-# IaC upgrades via var.talos_version use talos_machine.image — those reboots
-# must be sequential to protect etcd quorum, so we serialize. Bootstrap from
-# scratch will be slower (15m x3) but safe; remove `-parallelism=1` if you
-# want fast parallel bootstrap and accept parallel upgrade risk.
+# C: parallel 10 for bootstrap, use tf-apply-upgrade for talos_version bumps
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure
-    terraform -chdir={{ tf_root }} apply
+    terraform -chdir={{ tf_root }} apply -parallelism=10
+
+# Apply with sequential parallelism for talos_version upgrades (protects etcd quorum)
+tf-apply-upgrade:
+    terraform -chdir={{ tf_root }} fmt
+    terraform -chdir={{ tf_root }} init -reconfigure
+    terraform -chdir={{ tf_root }} apply -parallelism=1
 
 # Destroy the active provider/env (auto-init for the correct backend)
 tf-destroy:
@@ -65,7 +68,8 @@ tf-destroy:
         echo "⚠ Tailscale cleanup failed, continuing with destroy"
     fi
     terraform -chdir={{ tf_root }} init -reconfigure
-    terraform -chdir={{ tf_root }} destroy
+    # Health gate would otherwise block destroy when cluster is already unhealthy / you want to start from zero
+    TF_VAR_enable_health_check=false terraform -chdir={{ tf_root }} destroy
 
 # ── Secrets ────────────────────────────────────
 

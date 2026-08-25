@@ -23,6 +23,7 @@ module "libvirt" {
   tailscale_auth_key   = var.tailscale_auth_key
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = var.extra_config_patches
+  enable_health_check  = var.enable_health_check
 }
 
 # ── Kubeconfig auto-generation (avoids stale file race) ──────────────────

@@ -5,13 +5,13 @@ output "talosconfig" {
 }
 
 output "kubeconfig" {
-  description = "Standard kubeconfig for kubectl"
+  description = "Standard kubeconfig for kubectl (via resource, sensitive — see ephemeral alternative in main.tf)"
   value       = talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw
   sensitive   = true
 }
 
 output "kubeconfig_tailscale" {
-  description = "Kubeconfig with one context per Tailscale hostname. Switch with: kubectl config use-context <name>"
+  description = "Kubeconfig with one context per Tailscale hostname. Switch with: kubectl config use-context <name> (derived from resource kubeconfig)"
   sensitive   = true
   value = yamlencode({
     apiVersion      = "v1"

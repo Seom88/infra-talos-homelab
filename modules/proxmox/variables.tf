@@ -141,3 +141,9 @@ variable "schematic_path" {
   description = "Absolute or root-relative path to the Talos Image Factory schematic YAML (e.g. schematic-prod.yaml). Resolved with file()."
   type        = string
 }
+
+variable "enable_health_check" {
+  description = "Enable post-bootstrap health gate (talos_cluster_health). Set false to skip health during destroy."
+  type        = bool
+  default     = true
+}

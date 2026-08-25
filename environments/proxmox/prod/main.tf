@@ -17,7 +17,8 @@ module "proxmox" {
   # Schematic path resolved relative to the repo root (3 levels up from this environment)
   schematic_path = "${path.module}/../../../schematic-${var.env_name}.yaml"
 
-  tailscale_auth_key = var.tailscale_auth_key
+  tailscale_auth_key  = var.tailscale_auth_key
+  enable_health_check = var.enable_health_check
 }
 
 # ── Kubeconfig auto-generation (avoids stale file race) ──────────────────

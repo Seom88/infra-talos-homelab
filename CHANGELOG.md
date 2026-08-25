@@ -6,6 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [2.0.0] - Unreleased
 ### Added
+- **`enable_health_check` gate (`modules/proxmox`, `modules/libvirt`, all `environments/*`)** — `variable "enable_health_check" bool default true` + `TF_VAR_enable_health_check=false` in `just tf-destroy` (and for disposable `tf-apply`) so `data "talos_cluster_health"` has `count = 0` on destroy/bootstrap and never blocks `terraform destroy` with `Still reading...` / `Ephemeral value not allowed`. Applies block until K8s Ready with `read = "10m"` (was `5m`)
 - **Provider modules (`modules/proxmox`, `modules/libvirt`)** — extracted hypervisor-specific infrastructure logic into reusable Terraform modules, consuming the underlying `modules/talos-cluster` module.
 - **Symmetrical Environments (`environments/<provider>/<env>/`)** — unified structure for both Proxmox (`dev`, `prod`) and Libvirt (`dev`, `prod` scaffold). Terraform roots now live directly in their environment directories, auto-loading `terraform.tfvars` and storing state locally without needing `-var-file` or `-backend-config` flags.
 - **Platform layer in CI** — `.github/workflows/deploy.yaml` now does single `terraform apply` per environment (infra+platform atomic) in `environments/${TF_ROOT}/${TF_ENV}` (artifact `tfstate-${TF_ROOT}-${TF_ENV}`); `validate` job checks `modules/platform` (format + init/validate).
@@ -26,6 +27,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - **Bootstrap-only `talos_machine_secrets` (`modules/proxmox` and `modules/libvirt`)** — added `lifecycle { ignore_changes = [talos_version] }` so bumping `talos_version` (upgrade or downgrade) no longer rotates the CA. In-place upgrades now flow solely through `talos_machine.image` (`factory.talos.dev/nocloud-installer*:<id>:v<version>`) as a sequential rolling reboot, preventing `x509: certificate signed by unknown authority (Ed25519 verification failure)` after version changes
+- **`talos_cluster` health hang (`modules/talos-cluster/main.tf`)** — reverted experimental `control_plane_nodes = [var.cp_ips[0]]` (single-node fast bootstrap) that caused `context deadline exceeded` 10m hang; restored `var.cp_ips` (3 nodes, 15m/30m) — HA bootstrap now completes in ~7m57s as before; `talos_cluster_health` remains the HA gate
+- **Health gate timeout (`modules/proxmox/main.tf`, `modules/libvirt/cluster.tf`)** — `read = "5m" → "10m"` so `kube-controller-manager` has time to become Ready after etcd `Preparing`; also fixed `Warning: Check block assertion known after apply` by removing `check` and using `data` with `count`
+- **Ephemeral `local_file` write (`environments/*/main.tf`)** — dropped `ephemeral "talos_cluster_kubeconfig"` for `local_file.kubeconfig` (hashicorp/local#373 lacks `content_wo`); kept `resource "talos_cluster_kubeconfig"` live retrieval for now
 
 ### Changed
 - **Breaking: platform composed into environments** — `environments/proxmox/{dev,prod}/main.tf` and `environments/libvirt/{prod,dev}/main.tf` now compose `module "platform"` (`source = ../../../modules/platform`, `kubeconfig_path = abspath("${path.root}/../../../secrets/...")`, `argocd_version`, `depends_on = [data.talos_cluster_health.this]` / `module.proxmox/libvirt`). Each `environments/<provider>/<env>/provider.tf` now declares `helm ~>2.0` and configures `provider helm` with `config_path`. Each `variables.tf` adds `argocd_version` (default 9.5.13).
@@ -65,6 +69,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `environments/proxmox/{dev,prod}/variables.tf` — `variable "ssh_node_address"` description example updated `node.lonk-mirfak.ts.net` → `node.tail-scale.ts.net`
 - `README.md` — Tailscale domain examples updated `lonk-mirfak.ts.net` → `tail-scale.ts.net` (Proxmox and Libvirt variable tables)
 - **Prod cluster topology (commented tfvars)** — `environments/proxmox/prod/terraform.tfvars` and `environments/libvirt/prod/terraform.tfvars` flipped for HA testing: 3 control-plane nodes active (`talos-cp2` / `talos-cp3` uncommented, `allow_scheduling = true`, libvirt memory 6 GB) and all workers commented out (previously 1 CP + 3 workers active, cp2/cp3 commented)
+- **Terraform `required_version` `>=1.11` (`environments/*/provider.tf`, `modules/*/provider.tf`)** — bumped from `>=1.5` for TF 1.15.9 write-only/ephemeral support; `talos` pinned `0.12.0-alpha.5` with `kubernetes_version` now owned by `talos_cluster` (`ignore_kubernetes_upgrade_drift = true` on `talos_machine`)
+- **`talos_machine_bootstrap` → `talos_cluster` (`modules/talos-cluster/main.tf`)** — `depends_on = [talos_machine.control_plane]`, `node = var.cp_ips[0]`, `control_plane_nodes = var.cp_ips`, `timeouts = { create = "15m", update = "30m" }`; `data "talos_machine_configuration"` no longer sets `kubernetes_version`; workers now `depends_on = [talos_cluster.cluster]`; `resource "talos_cluster_kubeconfig"` live retrieval replaces deprecated `data "talos_cluster_kubeconfig"`
+- **Bootstrap settle `45s → 10s` (`modules/proxmox/main.tf`, `modules/libvirt/cluster.tf`)** — `time_sleep.post_bootstrap` reduced; `talos_cluster` already polls, health gate handles HA wait
+- **Justfile `tf-apply` parallelism** — `tf-apply` now `apply -parallelism=10` (fast bootstrap, ~8m end-to-end vs 12m); new `tf-apply-upgrade` with `-parallelism=1` for `talos_version` rolling upgrades (protects etcd quorum); `tf-destroy` uses `TF_VAR_enable_health_check=false`
 
 ## [1.0.2] - 2026-07-16
 

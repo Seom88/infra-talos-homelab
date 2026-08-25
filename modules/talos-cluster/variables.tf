@@ -40,7 +40,7 @@ variable "talos_version" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version to install (e.g. 1.36.1)"
+  description = "Kubernetes version to install (e.g. 1.36.1). Must stay in sync with talos_cluster.kubernetes_version; only used at bootstrap when ignore_kubernetes_upgrade_drift=true (subsequent upgrades via talos_cluster with upgrade-k8s)."
   type        = string
   default     = "1.36.2"
 }

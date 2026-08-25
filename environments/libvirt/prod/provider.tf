@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.11"
   backend "local" {}
 
   required_providers {
