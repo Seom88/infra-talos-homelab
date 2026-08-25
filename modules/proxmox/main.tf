@@ -1,3 +1,15 @@
+locals {
+  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if try(n.data_disk_size, null) != null]) > 0
+  data_volume_patch = local.has_data_disk ? yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "UserVolumeConfig"
+    name       = "data"
+    provisioning = {
+      diskSelector = { match = "!system_disk" }
+    }
+  }) : ""
+}
+
 # ── Talos Schematic ──────────────────────────────
 resource "talos_image_factory_schematic" "this" {
   schematic = file(var.schematic_path)
@@ -60,6 +72,16 @@ resource "proxmox_virtual_environment_vm" "talos" {
     discard      = "on"
     size         = each.value.disk_size
   }
+  dynamic "disk" {
+    for_each = try(each.value.data_disk_size, null) != null ? [1] : []
+    content {
+      datastore_id = coalesce(try(each.value.data_datastore, null), each.value.datastore)
+      interface    = "virtio1"
+      iothread     = true
+      discard      = "on"
+      size         = each.value.data_disk_size
+    }
+  }
   cpu {
     cores = each.value.cores
     type  = "host"
@@ -114,6 +136,16 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     discard      = "on"
     size         = each.value.disk_size
   }
+  dynamic "disk" {
+    for_each = try(each.value.data_disk_size, null) != null ? [1] : []
+    content {
+      datastore_id = coalesce(try(each.value.data_datastore, null), each.value.datastore)
+      interface    = "virtio1"
+      iothread     = true
+      discard      = "on"
+      size         = each.value.data_disk_size
+    }
+  }
   cpu {
     cores = each.value.cores
     type  = "host"
@@ -156,6 +188,7 @@ module "talos" {
   talos_image_id       = talos_image_factory_schematic.this.id
   tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
+  extra_config_patches = compact(concat(var.extra_config_patches, [local.data_volume_patch]))
 
   depends_on = [
     proxmox_virtual_environment_vm.talos,

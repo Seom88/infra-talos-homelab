@@ -59,6 +59,13 @@ variable "nodes_cp" {
     Each node requires: hostname, ip, cores, memory, proxmox_node,
     per-node disk_size (GB) and datastore; allow_scheduling opts this CP
     out of the control-plane taint.
+    Optional second disk (SideroLabs multi-disk layout): data_disk_size (GB)
+    creates a second virtio disk for user volumes (STATE/EPHEMERAL stay on
+    Disk1, user volumes move to Disk2 so VM recreate does not wipe data).
+    Disk1 = system EFI/META/STATE/EPHEMERAL, Disk2 = user volumes via
+    UserVolumeConfig diskSelector "!system_disk" mounted at /var/mnt/data.
+    data_datastore defaults to datastore when null; omit data_disk_size for
+    single-disk (backward compatible).
   EOF
   type = list(object({
     hostname         = string
@@ -69,6 +76,8 @@ variable "nodes_cp" {
     disk_size        = number
     datastore        = string
     allow_scheduling = bool
+    data_disk_size   = optional(number)
+    data_datastore   = optional(string)
   }))
 }
 
@@ -77,16 +86,28 @@ variable "nodes_worker" {
     Worker nodes and their configurations.
     Each node requires: hostname, ip, cores, memory, proxmox_node,
     per-node disk_size (GB) and datastore.
+    Optional second disk (SideroLabs multi-disk layout): data_disk_size (GB)
+    creates a second virtio disk for user volumes. See nodes_cp for details.
+    data_datastore defaults to datastore when null; omit data_disk_size for
+    single-disk (backward compatible).
   EOF
   type = list(object({
-    hostname     = string
-    ip           = string
-    cores        = number
-    memory       = number
-    proxmox_node = string
-    disk_size    = number
-    datastore    = string
+    hostname       = string
+    ip             = string
+    cores          = number
+    memory         = number
+    proxmox_node   = string
+    disk_size      = number
+    datastore      = string
+    data_disk_size = optional(number)
+    data_datastore = optional(string)
   }))
+}
+
+variable "extra_config_patches" {
+  description = "Additional Talos machine configuration patches (raw YAML strings) applied to all nodes. UserVolumeConfig for data disk is auto-appended when any node has data_disk_size."
+  type        = list(string)
+  default     = []
 }
 
 # ============================================================

@@ -82,18 +82,22 @@ variable "nodes_cp" {
     disk_size        = number
     datastore        = string
     allow_scheduling = bool
+    data_disk_size   = optional(number)
+    data_datastore   = optional(string)
   }))
 }
 
 variable "nodes_worker" {
   type = list(object({
-    hostname     = string
-    ip           = string
-    cores        = number
-    memory       = number
-    proxmox_node = string
-    disk_size    = number
-    datastore    = string
+    hostname       = string
+    ip             = string
+    cores          = number
+    memory         = number
+    proxmox_node   = string
+    disk_size      = number
+    datastore      = string
+    data_disk_size = optional(number)
+    data_datastore = optional(string)
   }))
 }
 
