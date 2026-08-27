@@ -21,7 +21,8 @@ resource "terraform_data" "wait_nodes" {
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
       set -euo pipefail
       export KUBECONFIG=${abspath(var.kubeconfig_path)}
       kubectl wait --for=condition=Ready node --all --timeout=600s

@@ -49,7 +49,8 @@ resource "terraform_data" "talos_nocloud_image" {
   triggers_replace = "${var.secureboot}-${local.image_cache_dir}-${var.talos_version}-${talos_image_factory_schematic.this.id}"
 
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
       set -euo pipefail
       CACHE_DIR="${local.image_cache_dir}"
       SCHEMATIC_ID="${talos_image_factory_schematic.this.id}"
