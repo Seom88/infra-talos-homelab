@@ -15,15 +15,19 @@ terraform {
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 2.0"
+      version = "~> 2.17"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.38"
     }
     local = {
       source  = "hashicorp/local"
-      version = "~> 2.0"
+      version = "~> 2.9"
     }
     time = {
       source  = "hashicorp/time"
-      version = "~> 0.9"
+      version = "~> 0.14"
     }
   }
 }

@@ -1,6 +1,18 @@
 terraform {
   required_version = ">= 1.11"
-  backend "local" {}
+  backend "s3" {
+    bucket                      = "terraform-homelab"
+    key                         = "libvirt/prod/terraform.tfstate"
+    endpoints = {
+      s3 = "https://rustfs.lonk-mirfak.ts.net"
+    }
+    region                      = "us-east-1"
+    skip_credentials_validation = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    use_path_style              = true
+  }
 
   required_providers {
     libvirt = {
@@ -15,15 +27,19 @@ terraform {
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 2.0"
+      version = "~> 2.17"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.38"
     }
     local = {
       source  = "hashicorp/local"
-      version = "~> 2.0"
+      version = "~> 2.9"
     }
     time = {
       source  = "hashicorp/time"
-      version = "~> 0.9"
+      version = "~> 0.14"
     }
   }
 }

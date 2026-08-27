@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [2.0.0] - Unreleased
 ### Added
+- **S3 backend for prod state (`environments/proxmox/prod`, `environments/libvirt/prod`)** — migrated from `backend "local"` to `backend "s3"` backed by RustFS (`https://rustfs.lonk-mirfak.ts.net`, bucket `terraform-homelab`, path-style, `skip_*` for S3-compatible API). Keys `proxmox/prod/terraform.tfstate` and `libvirt/prod/terraform.tfstate`. Credentials via `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars
+- **`.env.example` with S3 credentials** — template for `TF_VAR_api_token`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (RustFS endpoint)
 - **`enable_health_check` gate (`modules/proxmox`, `modules/libvirt`, all `environments/*`)** — `variable "enable_health_check" bool default true` + `TF_VAR_enable_health_check=false` in `just tf-destroy` (and for disposable `tf-apply`) so `data "talos_cluster_health"` has `count = 0` on destroy/bootstrap and never blocks `terraform destroy` with `Still reading...` / `Ephemeral value not allowed`. Applies block until K8s Ready with `read = "10m"` (was `5m`)
 - **Provider modules (`modules/proxmox`, `modules/libvirt`)** — extracted hypervisor-specific infrastructure logic into reusable Terraform modules, consuming the underlying `modules/talos-cluster` module.
 - **Symmetrical Environments (`environments/<provider>/<env>/`)** — unified structure for both Proxmox (`dev`, `prod`) and Libvirt (`dev`, `prod` scaffold). Terraform roots now live directly in their environment directories, auto-loading `terraform.tfvars` and storing state locally without needing `-var-file` or `-backend-config` flags.
@@ -73,6 +75,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`talos_machine_bootstrap` → `talos_cluster` (`modules/talos-cluster/main.tf`)** — `depends_on = [talos_machine.control_plane]`, `node = var.cp_ips[0]`, `control_plane_nodes = var.cp_ips`, `timeouts = { create = "15m", update = "30m" }`; `data "talos_machine_configuration"` no longer sets `kubernetes_version`; workers now `depends_on = [talos_cluster.cluster]`; `resource "talos_cluster_kubeconfig"` live retrieval replaces deprecated `data "talos_cluster_kubeconfig"`
 - **Bootstrap settle `45s → 10s` (`modules/proxmox/main.tf`, `modules/libvirt/cluster.tf`)** — `time_sleep.post_bootstrap` reduced; `talos_cluster` already polls, health gate handles HA wait
 - **Justfile `tf-apply` parallelism** — `tf-apply` now `apply -parallelism=10` (fast bootstrap, ~8m end-to-end vs 12m); new `tf-apply-upgrade` with `-parallelism=1` for `talos_version` rolling upgrades (protects etcd quorum); `tf-destroy` uses `TF_VAR_enable_health_check=false`
+- **Provider version bumps (`environments/*/provider.tf`)** — `hashicorp/helm` `~> 2.0` → `~> 2.17`, `hashicorp/local` `~> 2.0` → `~> 2.9`, `hashicorp/time` `~> 0.9` → `~> 0.14`; added `hashicorp/kubernetes` `~> 2.38` to `required_providers` (all 4 envs) so `provider helm.kubernetes` resolves its schema and VSCode `terraform-ls` stops reporting `Blocks of type "kubernetes" are not expected here`
 
 ## [1.0.2] - 2026-07-16
 
