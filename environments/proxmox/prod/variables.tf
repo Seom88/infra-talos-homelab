@@ -106,11 +106,13 @@ variable "talos_version" {
   default = "1.13.9"
 }
 
-variable "tailscale_auth_key" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
+# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
+# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# variable "tailscale_auth_key" {
+#   type      = string
+#   default   = ""
+#   sensitive = true
+# }
 
 variable "argocd_version" {
   description = "Exact ArgoCD Helm chart version to install (argo-helm). Bump here, never use ranges."

@@ -9,9 +9,3 @@ output "kubeconfig" {
   value       = module.proxmox.kubeconfig
   sensitive   = true
 }
-
-output "kubeconfig_tailscale" {
-  description = "Kubeconfig with one context per Tailscale hostname"
-  value       = module.proxmox.kubeconfig_tailscale
-  sensitive   = true
-}

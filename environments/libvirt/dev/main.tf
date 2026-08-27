@@ -17,10 +17,11 @@ module "libvirt" {
   ovmf_vars_secboot     = var.ovmf_vars_secboot
   talos_image_cache_dir = var.talos_image_cache_dir
 
-  cluster_name         = var.cluster_name
-  talos_version        = var.talos_version
-  kubernetes_version   = var.kubernetes_version
-  tailscale_auth_key   = var.tailscale_auth_key
+  cluster_name       = var.cluster_name
+  talos_version      = var.talos_version
+  kubernetes_version = var.kubernetes_version
+  # tailscale disabled - see docs/adr/001-remove-tailscale-extension.md
+  # tailscale_auth_key   = var.tailscale_auth_key
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = var.extra_config_patches
   enable_health_check  = var.enable_health_check

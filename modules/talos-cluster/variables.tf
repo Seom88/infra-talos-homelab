@@ -69,12 +69,14 @@ variable "secureboot" {
   default     = true
 }
 
-variable "tailscale_auth_key" {
-  description = "Tailscale pre-authentication key for node registration. Omit or leave empty to skip Tailscale."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
+# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
+# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# variable "tailscale_auth_key" {
+#   description = "Tailscale pre-authentication key for node registration. Omit or leave empty to skip Tailscale."
+#   type        = string
+#   default     = ""
+#   sensitive   = true
+# }
 
 variable "cp_allow_scheduling" {
   description = "Per control plane node: allow workloads on that node. Index-aligned with cp_hostnames / cp_ips. Each node's machine config gets cluster.allowSchedulingOnControlPlanes: true when its value is true (Talos v1.13 supports per-node machine config)."

@@ -89,15 +89,16 @@ data "talos_machine_configuration" "control_machine_config" {
         }
       }
     }),
-    var.tailscale_auth_key != "" ? yamlencode({
-      apiVersion = "v1alpha1"
-      kind       = "ExtensionServiceConfig"
-      name       = "tailscale"
-      environment = [
-        "TS_AUTHKEY=${var.tailscale_auth_key}",
-        "TS_ACCEPT_DNS=true"
-      ]
-    }) : "",
+    # Tailscale ExtensionServiceConfig disabled - uncomment together with variable and schematic
+    # var.tailscale_auth_key != "" ? yamlencode({
+    #   apiVersion = "v1alpha1"
+    #   kind       = "ExtensionServiceConfig"
+    #   name       = "tailscale"
+    #   environment = [
+    #     "TS_AUTHKEY=${var.tailscale_auth_key}",
+    #     "TS_ACCEPT_DNS=true"
+    #   ]
+    # }) : "",
     local.cp_allow_scheduling_map[each.key] ? local.scheduling_patch : "",
     local.longhorn_patch,
   ], var.extra_config_patches))
@@ -152,15 +153,16 @@ data "talos_machine_configuration" "worker_machine_config" {
         }
       }
     }),
-    var.tailscale_auth_key != "" ? yamlencode({
-      apiVersion = "v1alpha1"
-      kind       = "ExtensionServiceConfig"
-      name       = "tailscale"
-      environment = [
-        "TS_AUTHKEY=${var.tailscale_auth_key}",
-        "TS_ACCEPT_DNS=false"
-      ]
-    }) : "",
+    # Tailscale ExtensionServiceConfig disabled - uncomment together with variable and schematic
+    # var.tailscale_auth_key != "" ? yamlencode({
+    #   apiVersion = "v1alpha1"
+    #   kind       = "ExtensionServiceConfig"
+    #   name       = "tailscale"
+    #   environment = [
+    #     "TS_AUTHKEY=${var.tailscale_auth_key}",
+    #     "TS_ACCEPT_DNS=false"
+    #   ]
+    # }) : "",
     local.longhorn_patch,
   ], var.extra_config_patches))
 }

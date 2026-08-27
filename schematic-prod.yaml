@@ -3,6 +3,7 @@ customization:
         officialExtensions:
             - siderolabs/iscsi-tools
             - siderolabs/qemu-guest-agent
+            # To re-enable Tailscale on nodes: uncomment below AND uncomment tailscale_auth_key in variables.tf / main.tf - see ADR docs/adr/001-remove-tailscale-extension.md
             # Disable because subnets is easier to manage and talos use an old version of tailscale
             # - siderolabs/tailscale
             - siderolabs/util-linux-tools

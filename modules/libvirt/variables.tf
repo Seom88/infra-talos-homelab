@@ -164,12 +164,14 @@ variable "kubernetes_version" {
   default     = "1.36.2"
 }
 
-variable "tailscale_auth_key" {
-  description = "Tailscale pre-authentication key. Omit or empty to skip."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
+# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
+# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# variable "tailscale_auth_key" {
+#   description = "Tailscale pre-authentication key. Omit or empty to skip."
+#   type        = string
+#   default     = ""
+#   sensitive   = true
+# }
 
 variable "longhorn_enabled" {
   description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data_disk_size."

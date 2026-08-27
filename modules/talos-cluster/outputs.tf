@@ -10,43 +10,6 @@ output "kubeconfig" {
   sensitive   = true
 }
 
-output "kubeconfig_tailscale" {
-  description = "Kubeconfig with one context per Tailscale hostname. Switch with: kubectl config use-context <name> (derived from resource kubeconfig)"
-  sensitive   = true
-  value = yamlencode({
-    apiVersion      = "v1"
-    kind            = "Config"
-    current-context = "${var.cluster_name}-0"
-    clusters = [
-      for i, host in local.all_nodes_names : {
-        name = "${var.cluster_name}-${i}"
-        cluster = {
-          server                     = "https://${host}:6443"
-          certificate-authority-data = yamldecode(talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw).clusters[0].cluster["certificate-authority-data"]
-        }
-      }
-    ]
-    contexts = [
-      for i, host in local.all_nodes_names : {
-        name = "${var.cluster_name}-${i}"
-        context = {
-          cluster = "${var.cluster_name}-${i}"
-          user    = "${var.cluster_name}-${i}"
-        }
-      }
-    ]
-    users = [
-      for i, host in local.all_nodes_names : {
-        name = "${var.cluster_name}-${i}"
-        user = {
-          client-certificate-data = yamldecode(talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw).users[0].user["client-certificate-data"]
-          client-key-data         = yamldecode(talos_cluster_kubeconfig.kubeconfig.kubeconfig_raw).users[0].user["client-key-data"]
-        }
-      }
-    ]
-  })
-}
-
 output "machine_configuration_cp" {
   description = "Talos machine configuration per control plane node, keyed by hostname (for cloud-init user-data). Per-node because of the scheduling patch."
   value = {

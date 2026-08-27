@@ -23,9 +23,6 @@ jobs:
     if: github.event.inputs.confirm == 'destroy'
     runs-on: ubuntu-latest
     environment: prod
-    env:
-      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
 
     steps:
       - uses: actions/checkout@v7
@@ -42,70 +39,21 @@ jobs:
           tags: tag:terraform
           use-cache: 'true'
 
-      - name: Restore Terraform state from last successful run
-        id: restore-tfstate
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "Looking for latest artifact: tfstate-${{ env.TF_ENV }}"
-          ARTIFACT_ID=$(gh api \
-            /repos/${{ github.repository }}/actions/artifacts?name=tfstate-${{ env.TF_ENV }} \
-            --jq '.artifacts | sort_by(.created_at) | last | .id' 2>/dev/null || echo "")
-          echo "Artifact ID: $ARTIFACT_ID"
-          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
-            mkdir -p /tmp/tfstate-restore
-            cd /tmp/tfstate-restore
-            gh api /repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip > tfstate.zip
-            unzip -o tfstate.zip 2>/dev/null
-            rm -f tfstate.zip
-            cd -
-            if [ -f /tmp/tfstate-restore/terraform.tfstate ]; then
-              mkdir -p environments/${{ env.TF_ENV }}
-              cp /tmp/tfstate-restore/terraform.tfstate environments/${{ env.TF_ENV }}/terraform.tfstate
-              echo "✓ State restored"
-            else
-              echo "State file not found in artifact"
-            fi
-          else
-            echo "No previous artifact found — nothing to destroy?"
-          fi
-        working-directory: ${{ env.TF_ROOT }}
-
       - name: Terraform init
         run: |
-          terraform init -reconfigure \
-            -backend-config="path=environments/${{ env.TF_ENV }}/terraform.tfstate"
-        working-directory: ${{ env.TF_ROOT }}
-
-      - name: Clean up Tailscale devices
-        if: ${{ env.TS_OAUTH_CLIENT_ID != '' }}
-        run: |
-          ./scripts/destroy-tailscale-devices.sh \
-            ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfvars lonk-mirfak || \
-            echo "⚠ Tailscale cleanup failed, continuing with destroy"
+          terraform init -reconfigure
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform destroy
         run: |
-          terraform destroy -auto-approve -no-color \
-            -var-file=environments/${{ env.TF_ENV }}/terraform.tfvars 2>&1 | \
+          terraform destroy -auto-approve -no-color 2>&1 | \
             sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'
-        working-directory: ${{ env.TF_ROOT }}
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
-          TF_VAR_tailscale_auth_key: ${{ secrets.TAILSCALE_AUTH_KEY }}
-
-      - name: Backup Terraform state
-        if: always()
-        run: |
-          if [ -f ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate ]; then
-            mkdir -p /tmp/tfstate-backup
-            cp ${{ env.TF_ROOT }}/environments/${{ env.TF_ENV }}/terraform.tfstate /tmp/tfstate-backup/
-          fi
-
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: tfstate-${{ env.TF_ENV }}
-          path: /tmp/tfstate-backup/
-          retention-days: 90
+          TF_VAR_enable_health_check: "false"

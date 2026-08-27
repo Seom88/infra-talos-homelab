@@ -146,12 +146,14 @@ variable "talos_version" {
 # Module pass-through — forwarded to talos-cluster module
 # ============================================================
 
-variable "tailscale_auth_key" {
-  description = "Tailscale pre-authentication key. Pass-through to talos-cluster module. Omit or set empty to skip Tailscale."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
+# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
+# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# variable "tailscale_auth_key" {
+#   description = "Tailscale pre-authentication key. Pass-through to talos-cluster module. Omit or set empty to skip Tailscale."
+#   type        = string
+#   default     = ""
+#   sensitive   = true
+# }
 
 variable "longhorn_enabled" {
   description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data_disk_size."

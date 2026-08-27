@@ -194,7 +194,8 @@ module "talos" {
   worker_hostnames     = [for node in var.nodes_worker : node.hostname]
   talos_version        = var.talos_version
   talos_image_id       = talos_image_factory_schematic.this.id
-  tailscale_auth_key   = var.tailscale_auth_key
+  # tailscale disabled - see docs/adr/001-remove-tailscale-extension.md
+  # tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = compact(concat(var.extra_config_patches, [local.data_volume_patch]))
