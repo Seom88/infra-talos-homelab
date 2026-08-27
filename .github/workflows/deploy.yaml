@@ -63,6 +63,9 @@ jobs:
 
       - uses: azure/setup-helm@v5
 
+      - name: Prepare kubeconfig placeholder
+        run: mkdir -p secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }} && touch secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/kubeconfig.yaml
+
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
         with:

@@ -61,12 +61,6 @@ tf-apply-upgrade:
 tf-destroy:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Clean up Tailscale devices before destroy
-    if [[ -n "${TS_OAUTH_CLIENT_ID:-}" && -n "${TS_OAUTH_SECRET:-}" ]]; then
-      ./scripts/destroy-tailscale-devices.sh \
-        {{ tfvars_path }} lonk-mirfak || \
-        echo "⚠ Tailscale cleanup failed, continuing with destroy"
-    fi
     terraform -chdir={{ tf_root }} init -reconfigure
     # Health gate would otherwise block destroy when cluster is already unhealthy / you want to start from zero
     TF_VAR_enable_health_check=false terraform -chdir={{ tf_root }} destroy
