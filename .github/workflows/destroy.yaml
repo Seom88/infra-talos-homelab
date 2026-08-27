@@ -50,6 +50,14 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: Restore kubeconfig from state
+        run: |
+          terraform output -raw kubeconfig > ../../../secrets/${{ env.TF_ROOT }}/${{ env.TF_ENV }}/kubeconfig.yaml 2>/dev/null || echo "no prior kubeconfig in state, keeping placeholder"
+        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
       - name: Terraform destroy
         run: |
           terraform destroy -auto-approve -no-color 2>&1 | \
