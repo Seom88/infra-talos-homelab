@@ -19,6 +19,14 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - tf_root: proxmox
+            tf_env: prod
+          - tf_root: libvirt
+            tf_env: dev
+          # TODO: add proxmox/dev, libvirt/prod to matrix when S3/local drift is covered by dedicated runners (see I4).
     steps:
       - uses: actions/checkout@v7
         with:
@@ -26,21 +34,23 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v4
 
-      - name: Format check
+      - name: Format check (${{ matrix.tf_root }}/${{ matrix.tf_env }})
         run: terraform fmt -check -recursive
-        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+        working-directory: environments/${{ matrix.tf_root }}/${{ matrix.tf_env }}
 
-      - name: Init & validate
+      - name: Init & validate (${{ matrix.tf_root }}/${{ matrix.tf_env }})
         run: |
           terraform init -backend=false
           terraform validate
-        working-directory: environments/${{ env.TF_ROOT }}/${{ env.TF_ENV }}
+        working-directory: environments/${{ matrix.tf_root }}/${{ matrix.tf_env }}
 
       - name: Platform module format check
+        if: matrix.tf_root == 'proxmox' && matrix.tf_env == 'prod'
         run: terraform fmt -check -recursive
         working-directory: modules/platform
 
       - name: Platform module init & validate
+        if: matrix.tf_root == 'proxmox' && matrix.tf_env == 'prod'
         run: |
           terraform init -backend=false
           terraform validate

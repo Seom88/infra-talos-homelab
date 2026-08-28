@@ -7,6 +7,12 @@
 #  Terraform:  ./environments/<provider>/<env>/
 #  Secrets:    ./secrets/<provider>/<env>/   (.gitignored)
 #
+#  Backend: prod uses S3 (RustFS) via environments/<provider>/prod/provider.tf.
+#           Both justfile and CI use `terraform init -reconfigure` with
+#           AWS_* env vars (see .github/workflows/deploy.yaml). No extra
+#           -backend-config needed — bucket/key are in provider.tf.
+#           Dev uses backend \"local\" — no credentials required.
+#
 #  Usage:
 #    just tf-apply                               # proxmox, prod (default)
 #    just provider=proxmox env=dev tf-apply      # proxmox, dev

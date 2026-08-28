@@ -47,10 +47,10 @@ resource "libvirt_volume" "talos_base_image" {
 # talos_machine.image does not trigger a spurious upgrade on fresh bootstrap.
 resource "terraform_data" "talos_nocloud_image" {
   triggers_replace = {
-    secureboot   = var.secureboot
-    cache_dir    = local.image_cache_dir
+    secureboot    = var.secureboot
+    cache_dir     = local.image_cache_dir
     talos_version = var.talos_version
-    schematic_id = talos_image_factory_schematic.this.id
+    schematic_id  = talos_image_factory_schematic.this.id
   }
 
   provisioner "local-exec" {
