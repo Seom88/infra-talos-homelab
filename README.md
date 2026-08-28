@@ -1,6 +1,6 @@
 # infra-talos-homelab
 
-![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.5-7B42BC?logo=terraform)
+![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.11-7B42BC?logo=terraform)
 ![Talos](https://img.shields.io/badge/Talos_Linux-1.13-000000?logo=linux)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Seom88/infra-talos-homelab/deploy.yaml?label=CI)
