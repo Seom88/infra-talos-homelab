@@ -1,13 +1,13 @@
 terraform {
   required_version = ">= 1.11"
   required_providers {
-    libvirt = {
-      source  = "dmacvicar/libvirt"
-      version = "~> 0.9.8"
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.17"
     }
-    talos = {
-      source  = "siderolabs/talos"
-      version = "0.12.0-alpha.5"
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.38"
     }
     time = {
       source  = "hashicorp/time"
@@ -15,4 +15,3 @@ terraform {
     }
   }
 }
-
