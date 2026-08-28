@@ -104,7 +104,12 @@ variable "extra_config_patches" {
 variable "env_name" {
   description = "Selects which schematic-<env_name>.yaml is used (e.g. dev → schematic-dev.yaml)"
   type        = string
-  default     = "dev"
+  default     = "prod"
+
+  validation {
+    condition     = can(regex("^(dev|prod)$", var.env_name))
+    error_message = "env_name must be 'dev' or 'prod'."
+  }
 }
 
 variable "argocd_version" {
