@@ -24,9 +24,12 @@ jobs:
         include:
           - tf_root: proxmox
             tf_env: prod
+          - tf_root: proxmox
+            tf_env: dev
+          - tf_root: libvirt
+            tf_env: prod
           - tf_root: libvirt
             tf_env: dev
-          # TODO: add proxmox/dev, libvirt/prod to matrix when S3/local drift is covered by dedicated runners (see I4).
     steps:
       - uses: actions/checkout@v7
         with:
