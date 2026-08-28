@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![CI](https://img.shields.io/github/actions/workflow/status/Seom88/infra-talos-homelab/deploy.yaml?label=CI)
 
-Terraform modules that provision a Talos Linux Kubernetes cluster on **Proxmox VE** (via `bpg/proxmox`) or **libvirt** (via `dmacvicar/libvirt`). One `terraform apply` goes from bare hypervisor or host to a working cluster with Tailscale mesh networking.
+Terraform modules that provision a Talos Linux Kubernetes cluster on **Proxmox VE** (via `bpg/proxmox`) or **libvirt** (via `dmacvicar/libvirt`). One `terraform apply` goes from bare hypervisor or host to a working cluster with direct per-node API endpoints (health-gated) and Tailscale subnet routing for reachability.
 
 ![Demo](docs/demo.png)
 
@@ -14,116 +14,89 @@ Terraform modules that provision a Talos Linux Kubernetes cluster on **Proxmox V
 ### Proxmox provider
 
 ```
-Proxmox VE
-├── N × control plane nodes  (L2 VIP shared, Tailscale in prod)
-└── M × worker nodes         (Tailscale in prod)
+Proxmox VE (SDN talosvn — VNet 10.10.0.0/24, SNAT)
+├── N × control plane nodes  (direct IP, health-gated, optional allow_scheduling)
+└── M × worker nodes
 
-Terraform (proxmox/)
-├── Per-env backend          (environments/{dev,prod}/terraform.tfstate)
-├── Per-env tfvars           (environments/{dev,prod}/terraform.tfvars)
-├── Image download           (proxmox_download_file from Image Factory)
+Terraform (environments/proxmox/<env>/)
+├── Backend                  (dev: local, prod: s3 RustFS terraform-homelab)
+├── SDN network              (proxmox_sdn_zone + VNet talosvn + subnet + applier, modules/proxmox/network.tf)
+├── Image download           (proxmox_download_file bootstrap-only, modules/proxmox/main.tf)
 ├── VMs                      (proxmox_virtual_environment_vm per node)
 └── modules/talos-cluster/
-    ├── Bootstrap
-    └── Kubeconfig           (LAN + Tailscale contexts)
+    ├── Bootstrap (talos_cluster, health gate talos_cluster_health)
+    └── Kubeconfig (single context via subnet route 10.10.0.0/24)
 ```
 
 ### Libvirt provider
 
 ```
 Libvirt (qemu:///system)
-├── talos-cp1         (control plane, L2 VIP 10.0.1.10)
+├── talos-cp1         (control plane)
 ├── talos-w1          (worker)
 ├── talos-w2          (worker)
 └── talos-w3          (worker)
 
-Terraform (libvirt/)
-├── NAT network       (10.0.1.0/24, DHCP from node MACs)
-├── Image cache       (nocloud raw image from Image Factory)
-├── Boot volumes      (one raw volume per node)
-├── Cloud-init        (static IPs, Talos machine config as user-data)
+Terraform (environments/libvirt/<env>/)
+├── NAT network       (virbr-talos, 10.0.1.0/24 DHCP from node MACs, modules/libvirt/network.tf)
+├── Image cache       (nocloud raw image, persistent ~/.cache/talos-images, modules/libvirt/image.tf)
+├── Storage pool      (talos-pool at /var/lib/libvirt/images/talos, modules/libvirt/pool.tf)
+├── Boot volumes + domains (modules/libvirt/vms.tf, deterministic MAC via md5 when omitted)
 └── modules/talos-cluster/
-    ├── Bootstrap
-    └── Kubeconfig     (LAN + Tailscale contexts)
+    ├── Bootstrap (talos_cluster) + health gate (talos_cluster_health)
+    └── Kubeconfig (single context via subnet route)
 ```
 
 ## Structure
 
 ```
-.github/
-└── workflows/
-    ├── deploy.yaml                 # CI/CD: automated Terraform apply
-    └── destroy.yaml                # CI/CD: tear down cluster + Tailscale cleanup
-
-scripts/
-└── destroy-tailscale-devices.sh    # Pre-destroy Tailscale device cleanup
-
-proxmox/                        # Proxmox VE root module
-├── provider.tf                  # bpg/proxmox v0.109.0
-├── main.tf                      # Image download, VMs, talos module call
-├── variables.tf                 # Proxmox + pass-through vars
-├── outputs.tf                   # talosconfig, kubeconfig, kubeconfig_tailscale
-└── environments/
-    ├── dev/
-    │   ├── terraform.tfvars      # Dev node definitions (3 cp, optional workers)
-    │   └── terraform.tfstate     # Per-env local backend state
-    └── prod/
-        └── terraform.tfvars      # Prod node definitions (3 cp, optional workers)
-
-libvirt/                        # Libvirt root module
-├── provider.tf                  # dmacvicar/libvirt ~> 0.9.8 + siderolabs/talos ~> 0.11
-├── main.tf                      # NAT network, boot volumes, cloud-init, VMs, talos-cluster
-├── variables.tf                 # Node definitions, network, schematic, pass-through vars
-├── outputs.tf                   # talosconfig, kubeconfig, kubeconfig_tailscale
-└── terraform.tfvars             # Node IPs, MACs, specs
-
-environments/                  # Composed roots (infra + platform in one state)
-├── proxmox/{prod,dev}/         # bpg/proxmox + helm provider + module.platform
-└── libvirt/{prod,dev}/         # dmacvicar/libvirt + helm provider + module.platform
-
-platform/                       # DEPRECATED standalone root (kept for state migration)
-├── DEPRECATED.md               # Migration guide (terraform state mv)
-├── main.tf                     # (deprecated) Node readiness gate + ArgoCD Helm chart
-├── providers.tf                # (deprecated) helm provider
-└── values/argocd/              # (deprecated) duplicate — canonical is modules/platform/values
-
-modules/
-├── talos-cluster/               # Provider-agnostic child module
-│   ├── main.tf                  # Talos resources (bootstrap, kubeconfig)
-│   ├── variables.tf
-│   └── outputs.tf
-└── platform/                    # Composable platform module (ArgoCD)
-    ├── main.tf                  # Node readiness gate + ArgoCD Helm chart (no backend)
-    ├── variables.tf             # kubeconfig_path, argocd_version, argocd_namespace
-    ├── outputs.tf
-    └── values/argocd/           # ArgoCD Helm values (canonical)
-
-schematic-dev.yaml               # Dev Image Factory extensions
-schematic-prod.yaml              # Prod Image Factory extensions
-LICENSE                          # MIT License
-secrets/                         # Generated credentials (.gitignored)
-└── <provider>/<env>/            # e.g. proxmox/prod, libvirt/dev — talosconfig.yaml, kubeconfig.yaml
+.
+├── .github/workflows/
+│   ├── deploy.yaml                 # CI: validate + single terraform apply per env (S3 state for prod)
+│   └── destroy.yaml                # CI: terraform destroy (S3 state for prod, RustFS)
+├── docs/
+│   ├── adr/                        # Architecture Decision Records (MADR: 001, 002, ...)
+│   └── demo.png
+├── environments/                   # Composed roots — one state per env (infra + platform)
+│   ├── proxmox/
+│   │   ├── dev/                    # backend local — bpg/proxmox 0.111.1, helm ~>2.17, talos 0.12.0-alpha.5
+│   │   └── prod/                   # backend s3 (RustFS bucket terraform-homelab, key proxmox/prod/terraform.tfstate)
+│   └── libvirt/
+│       ├── dev/                    # backend local — dmacvicar/libvirt ~>0.9.8, talos 0.12.0-alpha.5
+│       └── prod/                   # backend s3 (RustFS bucket terraform-homelab, key libvirt/prod/terraform.tfstate)
+│       # each env: main.tf, provider.tf, variables.tf, outputs.tf, terraform.tfvars
+├── modules/
+│   ├── talos-cluster/              # Provider-agnostic: bootstrap (talos_cluster), kubeconfig, machine configs
+│   ├── proxmox/                    # Proxmox VE: SDN talosvn (network.tf), VMs (main.tf), talos-cluster call
+│   ├── libvirt/                    # Libvirt: network.tf, image.tf, pool.tf, vms.tf, cluster.tf (health gate)
+│   └── platform/                   # Composable ArgoCD (helm_release) — called from each environment root
+├── schematic-dev.yaml / schematic-prod.yaml  # Image Factory system extensions (iscsi-tools, qemu-guest-agent, util-linux-tools)
+├── secrets/<provider>/<env>/       # Generated talosconfig.yaml, kubeconfig.yaml (.gitignored, per env)
+├── justfile                        # Unified tasks: just provider=<proxmox|libvirt> env=<prod|dev> tf-apply / tf-apply-upgrade / tf-destroy ...
+└── LICENSE, README.md, CHANGELOG.md, CONTRIBUTING.md
 ```
 
 ## Highlights
 
 - **Two providers** — choose Proxmox VE (`bpg/proxmox`) or libvirt (`dmacvicar/libvirt`); both share the same provider-agnostic `talos-cluster` module
 - **Modular design** — infrastructure (VMs) and configuration (Talos/K8s) are separated; `talos-cluster` module works with any provider
-- **Control plane** — 1–3 nodes with L2 VIP; HA with 3+ nodes. Proxmox prod runs 3 CP nodes, dev runs 1
-- **Dedicated workers** — worker VMs keep workloads off the control plane; disk sizes configurable per node (20 GB CP default, 100 GB worker default)
-- **Tailscale integration** — optional MagicDNS for multi-network access with per-node kubeconfig contexts
+- **Control plane** — 1–3 nodes with direct per-node IPs health-gated via `talos_cluster_health`. HA with 3+ nodes. Proxmox prod runs 3 CP nodes, dev runs 1
+- **Dedicated workers** — worker VMs keep workloads off the control plane; disk sizes and datastores configurable per node (20 GB CP default, 100 GB worker default, `disk_size` + `datastore`/`pool` required per node)
+- **Per-node scheduling** — `nodes_cp[].allow_scheduling` controls `cluster.allowSchedulingOnControlPlanes` per control-plane node (replaces the old global flag)
+- **Tailscale subnet routing only** — Tailscale Talos extension disabled (see ADR 001). Cluster reachability for `10.10.0.0/24` is via a Tailscale subnet router (`tailscale set --advertise-routes=10.10.0.0/24` on the Proxmox host, `tailscale/github-action` in CI). No per-node Tailscale kubeconfigs — single context via subnet route
 - **Longhorn-ready** — kubelet extraMounts for `/var/lib/longhorn` injected by default on all nodes; system extensions (`iscsi-tools`, `util-linux-tools`) bundled in the Image Factory schematic
 - **Image caching (libvirt)** — nocloud raw images are downloaded, cached, and reused across applies; only the first apply downloads
 - **NAT networking (libvirt)** — dedicated `virbr-talos` bridge with DHCP reservations and DNS entries from node MACs
-- **Custom Talos image** — Image Factory schematic bundles `iscsi-tools`, `qemu-guest-agent`, `tailscale`, `util-linux-tools`
-- **In-place Talos upgrades** — `talos_machine` keeps the OS version in sync via `image`; bumping `talos_version` triggers a sequential rolling upgrade (pull → install → reboot) with `drain_on_upgrade = false` and `-parallelism=1`, so etcd quorum is protected without VM recreation. Installer images are platform-aware (`nocloud-installer-secureboot` by default, `nocloud-installer` override for libvirt)
+- **Custom Talos image** — Image Factory schematic bundles `iscsi-tools`, `qemu-guest-agent`, `util-linux-tools` (tailscale extension removed — see ADR 001, subnet routing only)
+- **SDN networking (Proxmox)** — `talosvn` VNet (`proxmox_sdn_zone` + `proxmox_sdn_vnet` + `proxmox_sdn_subnet` with `snat = true`) plus `proxmox_sdn_applier` so the bridge exists before VMs boot; VMs get outbound internet via MASQUERADE
+- **In-place Talos upgrades** — `talos_machine` keeps the OS version in sync via `image`; bumping `talos_version` triggers a sequential rolling upgrade (pull → install → reboot) with `drain_on_upgrade = false` and `-parallelism=1` (`just tf-apply-upgrade`), so etcd quorum is protected without VM recreation. Installer images are platform-aware (`nocloud-installer-secureboot` by default, `nocloud-installer` override for libvirt)
 
 ## Requirements
 
 - **Proxmox path**: Proxmox VE 8.x with API access
 - **Network access (Proxmox SDN)**: the machine running `terraform apply` (laptop or CI) must be able to reach the cluster subnet `10.10.0.0/24`. The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT but nothing from outside reaches them directly. For `prod`, expose the subnet through a Tailscale subnet router (see [Quick start → Proxmox](#proxmox-1))
 - **Libvirt path**: Linux host with libvirt + KVM and `qemu:///system` accessible
-- Terraform >= 1.5
+- Terraform >= 1.11
 - Talos Image Factory schematic ID
 
 ## How it works
@@ -134,38 +107,31 @@ flowchart TD
     B --> C[Download Talos raw image]
     C --> D{Provider?}
 
-    D -->|Proxmox| E[Create VMs via Proxmox API]
+    D -->|Proxmox| E[Create SDN talosvn + VMs via Proxmox API]
     D -->|libvirt| F[Create boot volumes + cloud-init]
 
     E --> G[VM boots Talos]
     F --> G
 
-    G --> H[Talos bootstrap]
-    H --> I[Control plane ready]
-    I --> J[Generate kubeconfig + talosconfig]
-
-    J --> K{Tailscale enabled?}
-    K -->|Yes| L[Per-node Tailscale contexts]
-    K -->|No| M[LAN-only contexts]
-
-    L --> N[kubectl / talosctl ready]
-    M --> N
+    G --> H[talos_cluster bootstrap]
+    H --> I[talos_cluster_health gate — kube-apiserver/etcd/Ready]
+    I --> J[Generate kubeconfig single context via subnet route 10.10.0.0/24]
+    J --> K[module.platform terraform_data.wait_nodes — kubectl wait Ready]
+    K --> L[helm_release.argocd]
+    L --> M[kubectl / talosctl ready]
 ```
 
-**Proxmox path**: Terraform talks to the Proxmox API to download the Talos image and create VMs with cloud-init. Talos boots, the cluster bootstraps, and kubeconfig is generated with both LAN (VIP) and Tailscale contexts.
+**Proxmox path**: Terraform creates the SDN stack (`proxmox_sdn_zone` + VNet `talosvn` + subnet `snat = true` + `proxmox_sdn_applier`), downloads the Talos image and creates VMs with cloud-init. Talos boots, `talos_cluster` bootstraps the first control plane node, `talos_cluster_health` blocks until kube-apiserver, etcd and all nodes are Ready (direct per-node IPs, health-gated), `local_file.kubeconfig` materializes a single-context kubeconfig via the subnet route `10.10.0.0/24`, and `module.platform` installs ArgoCD in the same apply.
 
-**Libvirt path**: Terraform downloads the nocloud raw image, creates boot volumes, and injects cloud-init with static IPs and Talos machine config. VMs boot via libvirt, the cluster bootstraps, and kubeconfig is generated.
+**Libvirt path**: Terraform downloads the nocloud raw image, creates boot volumes, and injects cloud-init with static IPs and Talos machine config. VMs boot via libvirt, the cluster bootstraps, the health gate blocks until Ready, and the same single-context kubeconfig + platform flow runs.
 
-Both paths share the same `talos-cluster` module for bootstrap and kubeconfig generation.
+Both paths share the same `talos-cluster` module for bootstrap and kubeconfig generation (`talos_machine.control_plane`/`talos_machine.worker` + `talos_cluster`, not legacy `talos_machine_configuration_apply`).
 
 ## Quick start
 
 ### Proxmox
 
 ```bash
-# (Optional) enable Tailscale for prod
-export TF_VAR_tailscale_auth_key="tskey-auth-..."
-
 # Bootstrap the prod cluster (default env)
 just tf-apply
 
@@ -177,7 +143,7 @@ just setup-cli                         # proxmox/prod (default)
 just provider=proxmox env=dev setup-cli  # proxmox/dev
 ```
 
-All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state at `environments/<provider>/<env>/terraform.tfstate` (single file now includes both infra and platform via `module.platform`), and secrets at `secrets/<provider>/<env>/`. Tailscale is only enabled for `prod`.
+All `just` commands run from the repo root. Each environment has its own `terraform.tfvars`, backend state at `environments/<provider>/<env>/terraform.tfstate` (single file now includes both infra and platform via `module.platform`), and secrets at `secrets/<provider>/<env>/`. Tailscale node extension is disabled (ADR 001) — reachability to `10.10.0.0/24` is via subnet routing (see below), not `TF_VAR_tailscale_auth_key`.
 
 > **Network reachability (Proxmox SDN)**: Terraform must be able to reach the cluster IPs (`10.10.0.0/24`). The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT (subnet `snat = true`), but traffic from outside cannot reach them directly. If you are not on the same network as the Proxmox host, expose the subnet through Tailscale from the Proxmox node (prod):
 >
@@ -189,14 +155,11 @@ All `just` commands run from the repo root. Each environment has its own `terraf
 > 2. Approve the route: admin console → **Machines** → the host row → **Subnets** → **Edit route settings** → tick `10.10.0.0/24` → **Save**
 > 3. On the device running Terraform: `sudo tailscale set --accept-routes` (Linux only — Windows/macOS accept routes by default)
 >
-> Without the route, the `talos_cluster_health` gate waits until its 15 m timeout because it cannot reach the control plane endpoints.
+> Without the route, the `talos_cluster_health` gate waits until its 15 m timeout because it cannot reach the control plane endpoints (direct per-node IPs).
 
 ### Libvirt
 
 ```bash
-# (Optional) enable Tailscale
-export TF_VAR_tailscale_auth_key="tskey-auth-..."
-
 # Bootstrap the cluster
 just provider=libvirt tf-apply
 
@@ -204,13 +167,15 @@ just provider=libvirt tf-apply
 just provider=libvirt setup-cli
 ```
 
+Libvirt uses the same subnet-routing model for remote reachability; no `TF_VAR_tailscale_auth_key` is required on nodes (extension disabled).
+
 ## Variables
 
 ### Proxmox
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `env_name` | Environment name (`dev` / `prod`); selects schematic file, enables Tailscale on prod | — |
+| `env_name` | Environment name (`dev` / `prod`); selects schematic file | — |
 | `endpoint` | Proxmox API URL (e.g. `https://10.10.10.1:8006`) | — |
 | `api_token` | Proxmox API token in format `user@realm!tokenid=secret` | — |
 | `username` | Proxmox API user — legacy, commented out in code | — |
@@ -220,12 +185,19 @@ just provider=libvirt setup-cli
 | `insecure` | Skip TLS verification | `false` |
 | `node_name` | Proxmox node for image download | — |
 | `gateway` | VM default gateway | — |
-| `network_bridge` | Proxmox network bridge (e.g. `vmbr0`, `vnet1`) | `vmbr0` |
+| `network_bridge` | Proxmox network bridge (must match SDN VNet id `talosvn` when using SDN) | `vmbr0` |
+| `sdn_zone` | SDN zone id for the Talos network | `talos` |
+| `network_cidr` | CIDR for the SDN VNet subnet (must contain node IPs) | `10.10.0.0/24` |
+| `network_mtu` | MTU for the SDN zone | `1500` |
+| `network_snat` | Enable SNAT on the SDN subnet (MASQUERADE for VM egress) | `true` |
 | `datastore_iso` | Datastore for ISO/raw images | `local` |
-| `cluster_vip` | Virtual IP for the Kubernetes API endpoint | — |
 | `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required) | — |
 | `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required) | — |
-| `tailscale_domain` | Tailscale MagicDNS domain | `tail-scale.ts.net` |
+| `talos_version` | Talos Linux version | `1.13.9` |
+| `argocd_version` | ArgoCD Helm chart version | `9.5.13` |
+| `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
+
+> Tailscale node extension is disabled (ADR 001): node extension variables are commented out in `variables.tf` as `Tailscale extension disabled`. Subnet routing only (`10.10.0.0/24`). API uses direct per-node IPs (health-gated, removed in 2.0.0).
 
 ### Libvirt
 
@@ -233,34 +205,36 @@ just provider=libvirt setup-cli
 |----------|-------------|---------|
 | `nodes_cp` | Control plane nodes (hostname, ip, mac, cores, memory, disk_size, pool, allow_scheduling — all required) | — |
 | `nodes_worker` | Worker nodes (hostname, ip, mac, cores, memory, disk_size, pool — all required) | — |
+| `pool_name` | Dedicated storage pool name | `talos-pool` |
+| `pool_path` | Filesystem path for the pool | `/var/lib/libvirt/images/talos` |
 | `gateway` | Default gateway IPv4 | `10.0.1.1` |
-| `network_prefix` | CIDR prefix length | `24` |
-| `schematic_name` | Schematic YAML filename | `schematic-dev.yaml` |
-| `talos_image_cache_dir` | Local cache for nocloud raw images | `/tmp/talos-images` |
+| `network_cidr` | Subnet CIDR for the Libvirt NAT network | `10.0.1.0/24` |
+| `secureboot` | Enable UEFI SecureBoot (q35) | `true` |
+| `talos_image_cache_dir` | Local cache for nocloud raw images | `~/.cache/talos-images` |
 | `cluster_name` | Talos / Kubernetes cluster name | `talos-cluster` |
-| `cluster_vip` | Virtual IP for the Kubernetes API endpoint | — |
-| `talos_version` | Talos Linux version | `1.13.8` |
+| `talos_version` | Talos Linux version | `1.13.9` |
 | `kubernetes_version` | Kubernetes version | `1.36.2` |
-| `tailscale_auth_key` | Tailscale auth key (empty = skip) | `""` |
-| `tailscale_domain` | Tailscale MagicDNS domain | — |
 | `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
 | `extra_config_patches` | Additional Talos machine config patches | `[]` |
+| `env_name` | Selects schematic file (`schematic-<env_name>.yaml`) | `dev` |
+| `argocd_version` | ArgoCD Helm chart version | `9.5.13` |
+| `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
+
+> Tailscale node extension is disabled: extension variables commented out (see ADR 001). API uses direct per-node IPs.
 
 ### Shared
 
 | Variable | Providers | Description | Default |
 |----------|-----------|-------------|---------|
-| `talos_version` | both | Talos Linux version | `1.13.9` (Proxmox default; libvirt default `1.13.8`) |
-| `cluster_vip` | both | Virtual IP for the Kubernetes API endpoint | — |
-| `tailscale_auth_key` | both | Tailscale auth key (empty = skip) | `""` (opt-in) |
+| `talos_version` | both | Talos Linux version | `1.13.9` |
 | `installer_image` | module | Installer container image for `talos_machine.image` (e.g. `factory.talos.dev/nocloud-installer/<schematic-id>:v<version>`). Must match platform flavor — secureboot roots can omit (defaults to `nocloud-installer-secureboot` built from `talos_image_id` + `talos_version`); non-secureboot roots (e.g. libvirt) must override | `""` |
 | `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Applied per node via the Talos `cluster.allowSchedulingOnControlPlanes` machine-config patch (Sidero docs) | — |
 
-> **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly.
+> **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly. Tailscale node extension and the former shared API address were removed in 2.0.0 (direct per-node IPs via health gate).
 
 ## ⚠️ Changes that destroy your cluster
 
-Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** instead of updating them in place. A recreated control plane node loses its etcd data; if more than one node is replaced, the cluster loses quorum and the L2 VIP goes down — the cluster comes back empty, and the platform layer (`longhorn`, `argocd`) must be re-applied.
+Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** instead of updating them in place. A recreated control plane node loses its etcd data; if more than one node is replaced, the cluster loses quorum — the cluster comes back empty, and the platform layer is re-provisioned on the next single `terraform apply` (ArgoCD via `module.platform`, Longhorn via the GitOps repo wave-0 app).
 
 > **Rule of thumb**: `terraform apply` provisions and updates *configuration* and now also drives **rolling Talos upgrades** via `talos_machine.image` (see [Upgrading Talos](#upgrading-talos) below). Only bootstrap image changes and destructive `tfvars` keys still force VM recreation.
 
@@ -281,53 +255,48 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 | `talos_version` | Bumping the version triggers a **sequential rolling upgrade** via `talos_machine.image` (pull → install → reboot, one node at a time with `-parallelism=1` to protect etcd quorum). No VM recreation, no etcd wipe. `drain_on_upgrade = false`. A fresh `terraform destroy` + `apply` or manually tainting `proxmox_download_file.talos_image` still pulls a new bootstrap image |
 | `schematic-{env}.yaml` (editing system extensions) | New schematic ID changes `local.installer_image` → same rolling upgrade path as `talos_version`. The bootstrap disk (`proxmox_download_file.talos_image`) ignores `url` changes (`lifecycle { ignore_changes = [url] }`), so etcd is preserved |
 | `network_bridge`, `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` | SDN config re-pushed, VMs reboot |
-| `gateway`, `cluster_vip` | Machine config re-pushed; cluster endpoint changes |
+| `gateway` | Machine config re-pushed; cluster endpoint (direct per-node IPs) changes |
 | `kubernetes_version` | Machine config re-pushed (rolling kubelet update) |
 
-> **Note**: `proxmox_download_file.talos_image` now uses a shared `file_name` (`talos-nocloud-amd64-secureboot.img`, no `env`/`version` suffix) and `lifecycle { ignore_changes = [url] }` — bumping `talos_version` or editing the schematic no longer recreates the download file/disks. Upgrades are handled by `talos_machine.image`. `justfile`'s `tf-apply` runs with `-parallelism=1` so those rolling reboots are sequential (bootstrap from scratch is slower — ~15 min × 3 — but etcd-safe; remove the flag if you prefer fast parallel bootstrap).
+> **Note**: `proxmox_download_file.talos_image` now uses a shared `file_name` (`talos-nocloud-amd64-secureboot.img`, no `env`/`version` suffix) and `lifecycle { ignore_changes = [url] }` — bumping `talos_version` or editing the schematic no longer recreates the download file/disks. Upgrades are handled by `talos_machine.image`. `justfile`'s `tf-apply` runs with `-parallelism=10` for fast bootstrap; use `tf-apply-upgrade` (`-parallelism=1`) for sequential Talos rolling upgrades.
 
 ### 🟢 Safe to change
 
-`endpoint`, `api_token`, `ssh_username`, `ssh_node_address`, `insecure`, `tailscale_auth_key`, `tailscale_domain`, `nodes_cp[].allow_scheduling`.
+`endpoint`, `api_token`, `ssh_username`, `ssh_node_address`, `insecure`, `nodes_cp[].allow_scheduling`.
+
+> Tailscale node extension is disabled (ADR 001) — uncomment variables in `variables.tf` / `schematic-*.yaml` to re-enable.
 
 ### Upgrading Talos
 
-Bumping `talos_version` and running `just tf-apply` performs a sequential in-place upgrade via `talos_machine.image` (control planes first, then workers) with `-parallelism=1` to protect etcd quorum. The installer image is platform-aware: `factory.talos.dev/nocloud-installer-secureboot/...` by default (Proxmox/secureboot), overridden to `factory.talos.dev/nocloud-installer/...` for libvirt via `var.installer_image`. `drain_on_upgrade = false` (revisit when dedicated workers carry workloads). Bump the pin in `proxmox/variables.tf` (default `1.13.9`), `libvirt/variables.tf` (`1.13.8`) or `proxmox/environments/<env>/terraform.tfvars`, then apply.
+Bumping `talos_version` and running `just tf-apply-upgrade` (or `just tf-apply -parallelism=1`) performs a sequential in-place upgrade via `talos_machine.image` (control planes first, then workers) with `-parallelism=1` to protect etcd quorum. The installer image is platform-aware: `factory.talos.dev/nocloud-installer-secureboot/...` by default (Proxmox/secureboot), overridden to `factory.talos.dev/nocloud-installer/...` for libvirt via `var.installer_image`. `drain_on_upgrade = false` (revisit when dedicated workers carry workloads). Bump the pin in `modules/proxmox/variables.tf` (default `1.13.9`), `modules/libvirt/variables.tf` (`1.13.9`) or `environments/<provider>/<env>/terraform.tfvars`, then apply.
 
 ## Outputs
 
 | Output | Providers | Description |
 |--------|-----------|-------------|
 | `talosconfig` | both | Talos client configuration for talosctl |
-| `kubeconfig` | both | Standard kubeconfig for kubectl |
-| `kubeconfig_tailscale` | both | Kubeconfig with one context per Tailscale hostname |
+| `kubeconfig` | both | Standard kubeconfig for kubectl (single context via subnet route `10.10.0.0/24`) |
 | `machine_configuration_cp` | module | Talos machine config for control plane nodes (used by libvirt cloud-init) |
 | `machine_configuration_worker` | module | Talos machine config for worker nodes (used by libvirt cloud-init) |
 
 ## Access
 
-Use `provider` and `env` to select the cluster (defaults: `proxmox` / `prod`).
+Use `provider` and `env` to select the cluster (defaults: `proxmox` / `prod`). API access is via direct per-node IPs (`10.10.0.0/24` via subnet route), health-gated by `talos_cluster_health`. Kubeconfig has a single context via subnet route.
 
 ### Proxmox
 
 ```bash
-# LAN (L2 VIP, check your environment's cluster_vip)
-talosctl --talosconfig secrets/proxmox/prod/talosconfig.yaml version
-
-# Tailscale (per-node contexts, prod only)
+# Direct per-node IP (via subnet route 10.10.0.0/24)
+talosctl --talosconfig secrets/proxmox/prod/talosconfig.yaml -n 10.10.0.11 version
 kubectl --kubeconfig secrets/proxmox/prod/kubeconfig.yaml get nodes
-kubectl --kubeconfig secrets/proxmox/prod/kubeconfig.yaml config use-context talos-cp1
 ```
 
 ### Libvirt
 
 ```bash
-# LAN (L2 VIP)
-talosctl --talosconfig secrets/libvirt/dev/talosconfig.yaml version
-
-# Tailscale (per-node contexts)
+# Direct per-node IP (via NAT / subnet route)
+talosctl --talosconfig secrets/libvirt/dev/talosconfig.yaml -n 10.0.1.11 version
 kubectl --kubeconfig secrets/libvirt/dev/kubeconfig.yaml get nodes
-kubectl --kubeconfig secrets/libvirt/dev/kubeconfig.yaml config use-context talos-cp1
 ```
 
 ## Why
@@ -348,10 +317,11 @@ just provider=libvirt env=prod tf-apply    # libvirt/prod
 | Task | Description |
 |------|-------------|
 | `tf-fmt` | Format all Terraform files recursively |
-| `tf-init` | Initialize Terraform with local backend for the active provider/env |
+| `tf-init` | Initialize Terraform with the env backend (local for dev, S3 RustFS for prod) |
 | `tf-plan` | Plan changes for the active provider/env |
-| `tf-apply` | Apply changes (bootstrap or update) — runs with `-parallelism=1` to serialize `talos_machine` reboots and protect etcd quorum (slower cold bootstrap, ~15 min × 3) |
-| `tf-destroy` | Tear down the active provider/env (cleans up Tailscale devices first) |
+| `tf-apply` | Apply changes (bootstrap or update) — runs with `-parallelism=10` (fast bootstrap, use `tf-apply-upgrade -parallelism=1` for Talos rolling upgrades) |
+| `tf-apply-upgrade` | Apply with `-parallelism=1` for sequential Talos rolling upgrades (protects etcd quorum) |
+| `tf-destroy` | Tear down the active provider/env (`TF_VAR_enable_health_check=false` so the health gate does not block) |
 | `gen-secrets` | Extract talosconfig + kubeconfig from state |
 | `setup-cli` | `gen-secrets` + merge into `~/.talos/config` and `~/.kube/config` |
 | `status` | Show Talos version, extensions, and cluster members |
@@ -360,7 +330,7 @@ just provider=libvirt env=prod tf-apply    # libvirt/prod
 
 ### Platform (ArgoCD) — now composed
 
-Platform (ArgoCD) is a composable module (`modules/platform`) called from each environment root. One `terraform apply` deploys both infra and platform in one state file at `environments/<provider>/<env>/terraform.tfstate` (kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`). The standalone `platform/` root is deprecated — see `platform/DEPRECATED.md` for `terraform state mv` migration.
+Platform (ArgoCD) is a composable module (`modules/platform`) called from each environment root. One `terraform apply` deploys both infra and platform in one state file at `environments/<provider>/<env>/terraform.tfstate` (kubeconfig at `secrets/<provider>/<env>/kubeconfig.yaml`). The standalone `platform/` root was removed in 2.0.0 — see `CHANGELOG.md` and `modules/platform/README.md` for `terraform state mv` migration.
 
 `tf-platform-*` tasks are kept for backward compatibility and now delegate to `tf-apply`/`tf-plan`/`tf-init` with a deprecation warning:
 
@@ -397,7 +367,7 @@ If the cluster already has ArgoCD installed (for example, via the `init-infra.sh
 terraform -chdir=environments/proxmox/prod import 'module.platform.helm_release.argocd' argocd/argocd
 ```
 
-For legacy `platform/` states, see `platform/DEPRECATED.md` for `terraform state mv` from the standalone root into the composed environment state.
+For legacy `platform/` states, see `CHANGELOG.md` (2.0.0) and `modules/platform/README.md` for `terraform state mv` from the standalone root into the composed environment state.
 
 #### Migrating Longhorn to the GitOps repo (legacy)
 
@@ -416,9 +386,9 @@ just provider=proxmox env=prod tf-apply
 
 ### State
 
-Platform is now composed in each environment root — single state at `environments/<provider>/<env>/terraform.tfstate` (covers both infra `module.proxmox`/`module.libvirt` and `module.platform`). CI restores/backs up a single artifact `tfstate-<provider>-<env>`.
+Platform is now composed in each environment root — single state at `environments/<provider>/<env>/terraform.tfstate` (covers both infra `module.proxmox`/`module.libvirt` and `module.platform`). Prod state is on S3 (RustFS bucket `terraform-homelab`); dev state is local (intentional, no lock — see C1). CI no longer uses `tfstate-*` artifacts.
 
-> **Migration note:** legacy locations `platform/terraform.tfstate`, `platform/environments/prod/platform-terraform.tfstate`, `platform/environments/<env>/platform-terraform.tfstate`, and `platform/environments/<provider>/<env>/terraform.tfstate` are superseded by the composed model. Keep old files on disk for manual `terraform state mv` into `environments/<provider>/<env>/module.platform.*` (see `platform/DEPRECATED.md`), but new `just tf-apply` and CI use the single environment state.
+> **Migration note:** legacy locations `platform/terraform.tfstate`, `platform/environments/prod/platform-terraform.tfstate`, `platform/environments/<env>/platform-terraform.tfstate`, and `platform/environments/<provider>/<env>/terraform.tfstate` are superseded by the composed model. Keep old files on disk for manual `terraform state mv` into `environments/<provider>/<env>/module.platform.*` (see `CHANGELOG.md` 2.0.0), but new `just tf-apply` and CI use the single environment state.
 
 ## CI/CD
 
@@ -456,11 +426,10 @@ To use it from a fork:
 | `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client ID |
 | `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
 | `PROXMOX_API_TOKEN` | Proxmox API token |
-| `TAILSCALE_AUTH_KEY` | Tailscale auth key — **reusable** (see below) |
 
-5. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts
+5. Push to `main` — the workflow validates, applies, and uploads `talosconfig` + `kubeconfig` as artifacts. `tailscale/github-action` is used in CI only for subnet-route reachability to `10.10.0.0/24` (no Tailscale extension on nodes).
 
-> **About `TAILSCALE_AUTH_KEY`**: Create it in the Tailscale admin console under **Settings → Keys → Auth keys**. Enable **Reusable** (same key across workflow runs). On `terraform destroy`, the `scripts/destroy-tailscale-devices.sh` script cleans up devices via the Tailscale API before tearing down VMs — no manual cleanup needed.
+> **Tailscale provider note**: Tailscale is used only as a subnet router (`10.10.0.0/24` advertised from the Proxmox host). CI connects via `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` through `tailscale/github-action`. No `TAILSCALE_AUTH_KEY` is injected as `TF_VAR_tailscale_auth_key` — the node `tailscale` extension is disabled (ADR 001). The legacy `scripts/destroy-tailscale-devices.sh` device cleanup is removed.
 
 ---
 

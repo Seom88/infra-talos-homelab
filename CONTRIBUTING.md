@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| [Terraform](https://www.terraform.io/downloads) | >= 1.5 | Infrastructure provisioning |
+| [Terraform](https://www.terraform.io/downloads) | >= 1.11 | Infrastructure provisioning |
 | [just](https://github.com/casey/just) | latest | Task runner |
 | [Talosctl](https://www.talos.dev/v1.13/introduction/get-started/) | matching `talos_version` | Cluster management |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | latest | Kubernetes CLI |
@@ -24,10 +24,11 @@ Thanks for your interest in contributing! This guide will help you get started.
 git clone https://github.com/Seom88/infra-talos-homelab.git
 cd infra-talos-homelab
 
-# Pick your provider and environment
-just tf_env=dev tf-apply      # Proxmox dev
-just tf-apply                  # Proxmox prod
-just tf-libvirt-apply          # Libvirt
+# Pick your provider and environment (provider=<proxmox|libvirt> env=<prod|dev>, defaults proxmox/prod)
+just provider=proxmox env=dev tf-apply    # Proxmox dev
+just provider=proxmox env=prod tf-apply   # Proxmox prod (same as just tf-apply)
+just provider=libvirt env=dev tf-apply    # Libvirt dev
+just provider=libvirt env=prod tf-apply   # Libvirt prod
 ```
 
 ## Development workflow
@@ -45,14 +46,14 @@ just tf-libvirt-apply          # Libvirt
 
 - Pin provider versions explicitly (exact for critical providers, `~>` for others)
 - Use `for_each` over `count` for node resources (clearer addressing)
-- Name resources descriptively: `talos_machine_configuration_apply.control_machine_config_apply`
-- Keep provider-specific logic in root modules (`proxmox/`, `libvirt/`), not in shared modules
+- Name resources descriptively: `talos_machine.control_plane`, `talos_cluster.cluster`
+- Keep provider-specific logic in reusable modules (`modules/proxmox`, `modules/libvirt`), composed from environment roots (`environments/<provider>/<env>/`), not in shared modules
 
 ### Secrets
 
 - Never commit `secrets/` — it is `.gitignored` by default
 - Never commit `.tfvars` with real credentials
-- CI uses GitHub Secrets for Proxmox tokens and Tailscale auth keys
+- CI uses GitHub Secrets for Proxmox tokens and Tailscale OAuth credentials (`TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` for subnet-route reachability to `10.10.0.0/24`). The Tailscale Talos node extension is disabled (see ADR 001)
 
 ### Commits
 
@@ -63,18 +64,21 @@ just tf-libvirt-apply          # Libvirt
 ## Project structure
 
 ```
-proxmox/                 # Proxmox VE root module
-libvirt/                 # Libvirt root module
-modules/talos-cluster/   # Provider-agnostic Talos module
-schematic-*.yaml         # Talos Image Factory extension bundles
-.github/workflows/       # CI/CD
+environments/proxmox/{dev,prod}/  # Proxmox env roots (backend local dev / S3 prod)
+environments/libvirt/{dev,prod}/  # Libvirt env roots (backend local dev / S3 prod)
+modules/{proxmox,libvirt,talos-cluster,platform}/  # Reusable modules
+modules/talos-cluster/            # Provider-agnostic Talos bootstrap & kubeconfig
+docs/adr/                         # Architecture Decision Records (MADR)
+schematic-*.yaml                  # Talos Image Factory extension bundles
+.github/workflows/                # CI/CD (deploy.yaml, destroy.yaml)
+justfile                          # Unified provider=/env= tasks (tf-apply, tf-apply-upgrade, tf-destroy, ...)
 ```
 
 ## Reporting issues
 
 Open a GitHub issue with:
 
-- Provider and version (`bpg/proxmox 0.109.0`, `dmacvicar/libvirt 0.9.8`, etc.)
+- Provider and version (`bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-alpha.5`, etc.)
 - Terraform version
 - Talos Linux version
 - Steps to reproduce
