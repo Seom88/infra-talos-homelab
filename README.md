@@ -71,6 +71,7 @@ Terraform (environments/libvirt/<env>/)
 │   ├── libvirt/                    # Libvirt: network.tf, image.tf, pool.tf, vms.tf, cluster.tf (health gate)
 │   └── platform/                   # Composable ArgoCD (helm_release) — called from each environment root
 ├── schematic-dev.yaml / schematic-prod.yaml  # Image Factory system extensions (iscsi-tools, qemu-guest-agent, util-linux-tools)
+├── renovate.json                   # Renovate bot: weekly Terraform + talos_version/argocd_version updates (manual-review)
 ├── secrets/<provider>/<env>/       # Generated talosconfig.yaml, kubeconfig.yaml (.gitignored, per env)
 ├── justfile                        # Unified tasks: just provider=<proxmox|libvirt> env=<prod|dev> tf-apply / tf-apply-upgrade / tf-destroy ...
 └── LICENSE, README.md, CHANGELOG.md, CONTRIBUTING.md
@@ -396,6 +397,8 @@ Platform is now composed in each environment root — single state at `environme
 ## CI/CD
 
 This repo includes GitHub Actions workflows (`.github/workflows/deploy.yaml` + `destroy.yaml`) for automated deployment. `validate` now runs on **all 4 envs** (`proxmox/prod`, `proxmox/dev`, `libvirt/prod`, `libvirt/dev`) with `terraform init -backend=false` + `terraform validate`; platform `fmt`/`validate` stays gated to `proxmox/prod`. Prod state is S3 (RustFS `terraform-homelab`); dev stays **local by design** (no S3, no TODO — intentional).
+
+**Renovate** (`renovate.json`) runs weekly (Monday 05:00 `Europe/Madrid`, `config:recommended`): Terraform providers are grouped into one `terraform providers` PR, `siderolabs/talos` provider stays pinned at `0.12.0-alpha.5` (ADR 002, `enabled: false` until `siderolabs/terraform-provider-talos#352` is fixed), and `talos_version` (`github-releases/siderolabs/talos`) + `argocd_version` (`helm/argo-cd` via `https://argoproj.github.io/argo-helm`) are tracked via `customManagers` regex in all `variables.tf` with `manual-review/talos` / `manual-review/argocd` labels and `automerge: false`. `kubernetes_version` is intentionally **not** managed by Renovate — it is owned by `talos_cluster.kubernetes_version` with `ignore_kubernetes_upgrade_drift = true` (see `modules/talos-cluster/main.tf:124,184`). Validate Talos upgrades in `libvirt/dev` before merging to prod.
 
 To use it from a fork:
 

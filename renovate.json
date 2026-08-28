@@ -1,0 +1,62 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 5am on monday"],
+  "timezone": "Europe/Madrid",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Pinned talos provider alpha until #352 fixed — ADR 002",
+      "matchDatasources": ["terraform-provider"],
+      "matchPackageNames": ["siderolabs/talos"],
+      "allowedVersions": "=0.12.0-alpha.5",
+      "enabled": false
+    },
+    {
+      "description": "Talos upgrades need manual validation in libvirt/dev first",
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["siderolabs/talos"],
+      "labels": ["manual-review/talos"],
+      "automerge": false
+    },
+    {
+      "description": "ArgoCD Helm chart upgrades need manual review",
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["argo-cd"],
+      "labels": ["manual-review/argocd"],
+      "automerge": false
+    },
+    {
+      "description": "Group non-critical Terraform providers",
+      "matchManagers": ["terraform"],
+      "matchDatasources": ["terraform-provider"],
+      "excludePackageNames": ["siderolabs/talos"],
+      "groupName": "terraform providers",
+      "groupSlug": "terraform-providers",
+      "labels": ["terraform"]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/variables\\.tf$/", "/^variables\\.tf$/"],
+      "matchStrings": [
+        "variable\\s+\"talos_version\"[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "siderolabs/talos",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/variables\\.tf$/", "/^variables\\.tf$/"],
+      "matchStrings": [
+        "variable\\s+\"argocd_version\"[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "helm",
+      "depNameTemplate": "argo-cd",
+      "registryUrlTemplate": "https://argoproj.github.io/argo-helm",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
