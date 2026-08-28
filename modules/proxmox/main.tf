@@ -99,7 +99,8 @@ resource "proxmox_virtual_environment_vm" "talos" {
     floating  = each.value.memory
   }
   network_device {
-    bridge = var.network_bridge
+    bridge   = var.network_bridge
+    firewall = false
   }
   operating_system {
     type = "l26"
@@ -163,7 +164,8 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     floating  = each.value.memory
   }
   network_device {
-    bridge = var.network_bridge
+    bridge   = var.network_bridge
+    firewall = false
   }
   operating_system {
     type = "l26"

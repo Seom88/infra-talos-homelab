@@ -7,6 +7,7 @@ datastore_iso    = "local"
 network_bridge   = "prod"
 sdn_zone         = "talosvn"
 network_cidr     = "10.10.0.0/24"
+network_snat     = true
 nodes_cp = [
   {
     hostname         = "talos-cp1"

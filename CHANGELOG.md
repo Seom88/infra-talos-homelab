@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.1] - 2026-08-28
+### Fixed
+- **Proxmox SDN egress declaratively pinned (`modules/proxmox/main.tf`, `environments/proxmox/{prod,dev}/terraform.tfvars`)** — `network_snat = true` now explicit in both tfvars (was implicit default) and `network_device { firewall = false }` on `proxmox_virtual_environment_vm.talos` / `talos_worker`. Prevents Proxmox datacenter firewall from overriding the SDN `MASQUERADE` and causing `discovery.talos.dev:443` `DeadlineExceeded` / `network is unreachable` (IPv6) / `connection reset by peer` warnings seen on `talos-cp1` dashboard (Talos v1.13.9, `SIDEROLINK n/a`, `KUBELET/APISERVER Healthy`). Verified via `talosctl -n 10.10.0.11 debug docker.io/library/alpine:latest` — `ping 1.1.1.1`, `nslookup discovery.talos.dev` (18.226.100.232 + 2600:1f16:790:7900::), `wget --spider https://discovery.talos.dev:443` and `registry.k8s.io` now succeed
+
 ## [2.0.0] - 2026-08-27
 ### Added
 - **ADR 001 — Remove Tailscale Talos extension, keep subnet routing (`docs/adr/001-remove-tailscale-extension.md`)** — 322-line MADR documenting why `siderolabs/tailscale` was disabled (Tailscale 1.98.2 CVE pinned to Talos version, ghost devices left in tailnet on `terraform destroy` — prior fix `scripts/destroy-tailscale-devices.sh` in commits `e431723`/`3db09b2`/`a63eeaf`), last active commit `4710f8a`, disabled in `d2aae06`. Decision: keep only subnet routing (`tailscale set --advertise-routes=10.10.0.0/24` on Proxmox host + `tailscale/github-action@v4` in CI for `10.10.0.0/24` reachability). Includes consequences, restore guide (uncomment `tailscale_auth_key` in 7 `variables.tf` + 2 `ExtensionServiceConfig` blocks + 6 passthroughs + `siderolabs/tailscale` in `schematic-*.yaml` + `just get-schematic-id`), and archived README sections

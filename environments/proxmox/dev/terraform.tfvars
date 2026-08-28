@@ -8,6 +8,7 @@ insecure         = true
 network_bridge   = "dev"
 sdn_zone         = "talos"
 network_cidr     = "10.10.1.0/24"
+network_snat     = true
 nodes_cp = [
   {
     hostname         = "talos-cp1"
