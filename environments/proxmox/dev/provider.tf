@@ -15,7 +15,7 @@ terraform {
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 3.0"
+      version = "~> 3.2"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -47,7 +47,7 @@ provider "proxmox" {
 }
 
 provider "helm" {
-  kubernetes  ={
+  kubernetes = {
     config_path = "${path.module}/../../../secrets/proxmox/${var.env_name}/kubeconfig.yaml"
   }
 }

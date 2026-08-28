@@ -40,6 +40,28 @@ label       := provider + "/" + env
 tf-fmt:
     terraform fmt -recursive
 
+# Check formatting like CI (fails with diff if not formatted)
+tf-fmt-check:
+    terraform fmt -check -diff -recursive
+
+# Validate all envs like CI (no backend, no creds)
+tf-validate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for env in proxmox/prod proxmox/dev libvirt/prod libvirt/dev; do
+      echo "── Validate $env ──"
+      terraform -chdir=environments/$env init -backend=false -no-color
+      terraform -chdir=environments/$env validate -no-color
+    done
+    echo "── Validate modules/platform ──"
+    terraform -chdir=modules/platform init -backend=false -no-color
+    terraform -chdir=modules/platform validate -no-color
+
+# Full CI check locally: fmt + validate
+tf-ci:
+    just tf-fmt-check
+    just tf-validate
+
 # Init terraform with local backend for the active provider/env
 tf-init:
     terraform -chdir={{ tf_root }} init -reconfigure
