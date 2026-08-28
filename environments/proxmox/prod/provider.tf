@@ -59,7 +59,7 @@ provider "proxmox" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     config_path = "${path.module}/../../../secrets/proxmox/${var.env_name}/kubeconfig.yaml"
   }
 }

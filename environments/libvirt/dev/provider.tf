@@ -37,7 +37,7 @@ provider "libvirt" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     config_path = "${path.module}/../../../secrets/libvirt/${var.env_name}/kubeconfig.yaml"
   }
 }
