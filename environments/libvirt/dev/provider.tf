@@ -15,11 +15,11 @@ terraform {
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 2.17"
+      version = "~> 3.2"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = "~> 2.38"
+      version = "~> 3.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -37,7 +37,7 @@ provider "libvirt" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     config_path = "${path.module}/../../../secrets/libvirt/${var.env_name}/kubeconfig.yaml"
   }
 }

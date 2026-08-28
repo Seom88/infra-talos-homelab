@@ -17,7 +17,22 @@ env:
   TF_ENV: prod
 
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform format check
+        run: terraform fmt -check -diff -recursive
+
   validate:
+    needs: fmt
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,27 +51,25 @@ jobs:
           persist-credentials: false
 
       - uses: hashicorp/setup-terraform@v4
-
-      - name: Format check (${{ matrix.tf_root }}/${{ matrix.tf_env }})
-        run: terraform fmt -check -recursive
-        working-directory: environments/${{ matrix.tf_root }}/${{ matrix.tf_env }}
+        with:
+          terraform_wrapper: false
 
       - name: Init & validate (${{ matrix.tf_root }}/${{ matrix.tf_env }})
         run: |
           terraform init -backend=false
-          terraform validate
+          terraform validate -no-color
         working-directory: environments/${{ matrix.tf_root }}/${{ matrix.tf_env }}
 
       - name: Platform module format check
         if: matrix.tf_root == 'proxmox' && matrix.tf_env == 'prod'
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -diff -recursive
         working-directory: modules/platform
 
       - name: Platform module init & validate
         if: matrix.tf_root == 'proxmox' && matrix.tf_env == 'prod'
         run: |
           terraform init -backend=false
-          terraform validate
+          terraform validate -no-color
         working-directory: modules/platform
 
   deploy:
@@ -71,6 +84,8 @@ jobs:
           persist-credentials: false
 
       - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
 
       - uses: azure/setup-kubectl@v5
 
