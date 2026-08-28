@@ -5,6 +5,11 @@
 variable "env_name" {
   description = "Environment name for resource naming (e.g. prod, dev). Each env gets its own download + VMs so they coexist on the same PVE node."
   type        = string
+
+  validation {
+    condition     = can(regex("^(dev|prod)$", var.env_name))
+    error_message = "env_name must be 'dev' or 'prod'."
+  }
 }
 
 variable "node_name" {
@@ -15,6 +20,11 @@ variable "node_name" {
 variable "gateway" {
   description = "Default gateway for the VM nodes (usually your router IP)"
   type        = string
+
+  validation {
+    condition     = can(cidrhost("${var.gateway}/32", 0))
+    error_message = "gateway must be a valid IPv4 address."
+  }
 }
 
 variable "datastore_iso" {
@@ -39,6 +49,11 @@ variable "network_cidr" {
   description = "CIDR for the SDN VNet subnet. Must contain the node IPs (e.g. 10.10.0.0/24)"
   type        = string
   default     = "10.10.0.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.network_cidr, 0))
+    error_message = "network_cidr must be a valid CIDR (e.g. 10.10.0.0/24)."
+  }
 }
 
 variable "network_mtu" {
@@ -140,6 +155,11 @@ variable "talos_version" {
   description = "Talos Linux version to install on the nodes (e.g. 1.13.9)"
   type        = string
   default     = "1.13.9"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+  }
 }
 
 # ============================================================

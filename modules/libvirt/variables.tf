@@ -97,12 +97,22 @@ variable "gateway" {
   description = "Default gateway IPv4"
   type        = string
   default     = "10.0.1.1"
+
+  validation {
+    condition     = can(cidrhost("${var.gateway}/32", 0))
+    error_message = "gateway must be a valid IPv4 address."
+  }
 }
 
 variable "network_cidr" {
   description = "Subnet CIDR for the Talos Libvirt network (e.g. 10.0.1.0/24 or 10.10.0.0/24)"
   type        = string
   default     = "10.0.1.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.network_cidr, 0))
+    error_message = "network_cidr must be a valid CIDR (e.g. 10.0.1.0/24)."
+  }
 }
 
 # ============================================================
@@ -150,18 +160,33 @@ variable "cluster_name" {
   description = "Talos / Kubernetes cluster name"
   type        = string
   default     = "talos-cluster"
+
+  validation {
+    condition     = length(trimspace(var.cluster_name)) > 0
+    error_message = "cluster_name must not be empty."
+  }
 }
 
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.13.3)"
   type        = string
   default     = "1.13.9"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+  }
 }
 
 variable "kubernetes_version" {
   description = "Kubernetes version (e.g. 1.36.1)"
   type        = string
   default     = "1.36.2"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
+    error_message = "kubernetes_version must be semver X.Y.Z (e.g. 1.36.2)."
+  }
 }
 
 # Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md

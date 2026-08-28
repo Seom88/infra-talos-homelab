@@ -31,6 +31,11 @@ variable "endpoint" {
 variable "env_name" {
   description = "Environment name (prod, dev) — used for Talos schematic filename"
   type        = string
+
+  validation {
+    condition     = can(regex("^(dev|prod)$", var.env_name))
+    error_message = "env_name must be 'dev' or 'prod'."
+  }
 }
 
 variable "node_name" {
@@ -40,6 +45,11 @@ variable "node_name" {
 
 variable "gateway" {
   type = string
+
+  validation {
+    condition     = can(cidrhost("${var.gateway}/32", 0))
+    error_message = "gateway must be a valid IPv4 address."
+  }
 }
 
 variable "datastore_iso" {
@@ -60,6 +70,11 @@ variable "sdn_zone" {
 variable "network_cidr" {
   type    = string
   default = "10.10.0.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.network_cidr, 0))
+    error_message = "network_cidr must be a valid CIDR (e.g. 10.10.0.0/24)."
+  }
 }
 
 variable "network_mtu" {
@@ -104,6 +119,11 @@ variable "nodes_worker" {
 variable "talos_version" {
   type    = string
   default = "1.13.9"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+  }
 }
 
 # Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
@@ -118,6 +138,11 @@ variable "argocd_version" {
   description = "Exact ArgoCD Helm chart version to install (argo-helm). Bump here, never use ranges."
   type        = string
   default     = "9.5.13"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.argocd_version))
+    error_message = "argocd_version must be semver X.Y.Z (e.g. 9.5.13)."
+  }
 }
 
 variable "enable_health_check" {
