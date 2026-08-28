@@ -137,3 +137,9 @@ variable "extra_config_patches" {
   type        = list(string)
   default     = []
 }
+
+variable "drain_on_upgrade" {
+  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn (controlled drain), true in dev for convenience."
+  type        = bool
+  default     = false
+}

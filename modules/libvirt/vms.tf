@@ -64,7 +64,11 @@ resource "libvirt_volume" "boot" {
 resource "terraform_data" "resize_boot" {
   for_each = local.nodes_all
 
-  triggers_replace = "${each.key}-${each.value.disk_size}-${libvirt_volume.boot[each.key].id}"
+  triggers_replace = {
+    node      = each.key
+    disk_size = each.value.disk_size
+    volume_id = libvirt_volume.boot[each.key].id
+  }
 
   provisioner "local-exec" {
     command = <<-EOT

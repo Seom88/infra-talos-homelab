@@ -20,6 +20,7 @@ module "proxmox" {
   # tailscale disabled - see docs/adr/001-remove-tailscale-extension.md
   # tailscale_auth_key  = var.tailscale_auth_key
   enable_health_check = var.enable_health_check
+  drain_on_upgrade    = var.drain_on_upgrade
 }
 
 # ── Kubeconfig auto-generation (avoids stale file race) ──────────────────

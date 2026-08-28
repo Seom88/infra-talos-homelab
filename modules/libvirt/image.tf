@@ -46,7 +46,12 @@ resource "libvirt_volume" "talos_base_image" {
 # cache (e.g. old schematic with same filename) is correctly invalidated and
 # talos_machine.image does not trigger a spurious upgrade on fresh bootstrap.
 resource "terraform_data" "talos_nocloud_image" {
-  triggers_replace = "${var.secureboot}-${local.image_cache_dir}-${var.talos_version}-${talos_image_factory_schematic.this.id}"
+  triggers_replace = {
+    secureboot   = var.secureboot
+    cache_dir    = local.image_cache_dir
+    talos_version = var.talos_version
+    schematic_id = talos_image_factory_schematic.this.id
+  }
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]

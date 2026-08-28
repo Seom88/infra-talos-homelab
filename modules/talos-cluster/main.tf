@@ -115,7 +115,7 @@ resource "talos_machine" "control_plane" {
   client_configuration  = var.client_configuration
   machine_configuration = data.talos_machine_configuration.control_machine_config[each.key].machine_configuration
   image                 = local.installer_image
-  drain_on_upgrade      = false
+  drain_on_upgrade      = var.drain_on_upgrade
   # When used with talos_cluster, Kubernetes upgrades are driven by
   # talos_cluster.kubernetes_version (via upgrade-k8s). Ignore drift so
   # out-of-band k8s upgrades don't force config re-apply.
@@ -177,7 +177,7 @@ resource "talos_machine" "worker" {
   client_configuration  = var.client_configuration
   machine_configuration = data.talos_machine_configuration.worker_machine_config.machine_configuration
   image                 = local.installer_image
-  drain_on_upgrade      = false
+  drain_on_upgrade      = var.drain_on_upgrade
   # See control_plane comment: Kubernetes version is owned by talos_cluster.
   # https://registry.terraform.io/providers/siderolabs/talos/latest/docs/resources/machine#ignore_kubernetes_upgrade_drift
   ignore_kubernetes_upgrade_drift = true

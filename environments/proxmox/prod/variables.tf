@@ -150,3 +150,9 @@ variable "enable_health_check" {
   type        = bool
   default     = true
 }
+
+variable "drain_on_upgrade" {
+  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn."
+  type        = bool
+  default     = false
+}
