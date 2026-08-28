@@ -76,6 +76,8 @@ Terraform (environments/libvirt/<env>/)
 └── LICENSE, README.md, CHANGELOG.md, CONTRIBUTING.md
 ```
 
+> All 4 envs now ship input validations (semver for `talos_version`/`kubernetes_version`/`argocd_version`, CIDR for `network_cidr`, IP for `gateway`/`cp_ips`, non-empty `cluster_name`/`env_name` + `^(dev|prod)$` — 57 blocks total) and a parameterized `drain_on_upgrade` (bool, default `false`, platform-aware; `false` for Longhorn prod).
+
 ## Highlights
 
 - **Two providers** — choose Proxmox VE (`bpg/proxmox`) or libvirt (`dmacvicar/libvirt`); both share the same provider-agnostic `talos-cluster` module
@@ -89,7 +91,8 @@ Terraform (environments/libvirt/<env>/)
 - **NAT networking (libvirt)** — dedicated `virbr-talos` bridge with DHCP reservations and DNS entries from node MACs
 - **Custom Talos image** — Image Factory schematic bundles `iscsi-tools`, `qemu-guest-agent`, `util-linux-tools` (tailscale extension removed — see ADR 001, subnet routing only)
 - **SDN networking (Proxmox)** — `talosvn` VNet (`proxmox_sdn_zone` + `proxmox_sdn_vnet` + `proxmox_sdn_subnet` with `snat = true`) plus `proxmox_sdn_applier` so the bridge exists before VMs boot; VMs get outbound internet via MASQUERADE
-- **In-place Talos upgrades** — `talos_machine` keeps the OS version in sync via `image`; bumping `talos_version` triggers a sequential rolling upgrade (pull → install → reboot) with `drain_on_upgrade = false` and `-parallelism=1` (`just tf-apply-upgrade`), so etcd quorum is protected without VM recreation. Installer images are platform-aware (`nocloud-installer-secureboot` by default, `nocloud-installer` override for libvirt)
+- **In-place Talos upgrades** — `talos_machine` keeps the OS version in sync via `image`; bumping `talos_version` triggers a sequential rolling upgrade (pull → install → reboot) with parameterized `drain_on_upgrade` (bool, default `false`, platform-aware — `false` for prod with Longhorn, opt-in `true` for dev) and `-parallelism=1` (`just tf-apply-upgrade`), so etcd quorum is protected without VM recreation. Installer images are platform-aware (`nocloud-installer-secureboot` by default, `nocloud-installer` override for libvirt)
+- **Hardened inputs** — 57 validation blocks across `modules/talos-cluster`, `modules/proxmox`, `modules/libvirt` and all 4 envs: semver for `talos_version`/`kubernetes_version`/`argocd_version`, CIDR for `network_cidr`, IP for `gateway`/`cp_ips`, non-empty `cluster_name`/`env_name` (`^(dev|prod)$`), nullable guards for `machine_secrets`/`client_configuration`
 
 ## Requirements
 
@@ -175,7 +178,7 @@ Libvirt uses the same subnet-routing model for remote reachability; no `TF_VAR_t
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `env_name` | Environment name (`dev` / `prod`); selects schematic file | — |
+| `env_name` | Environment name (`dev` / `prod`); selects schematic file — validated `^(dev|prod)$` | — |
 | `endpoint` | Proxmox API URL (e.g. `https://10.10.10.1:8006`) | — |
 | `api_token` | Proxmox API token in format `user@realm!tokenid=secret` | — |
 | `username` | Proxmox API user — legacy, commented out in code | — |
@@ -212,12 +215,12 @@ Libvirt uses the same subnet-routing model for remote reachability; no `TF_VAR_t
 | `secureboot` | Enable UEFI SecureBoot (q35) | `true` |
 | `talos_image_cache_dir` | Local cache for nocloud raw images | `~/.cache/talos-images` |
 | `cluster_name` | Talos / Kubernetes cluster name | `talos-cluster` |
-| `talos_version` | Talos Linux version | `1.13.9` |
-| `kubernetes_version` | Kubernetes version | `1.36.2` |
+| `talos_version` | Talos Linux version — semver validated | `1.13.9` |
+| `kubernetes_version` | Kubernetes version — semver validated | `1.36.2` |
 | `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
 | `extra_config_patches` | Additional Talos machine config patches | `[]` |
-| `env_name` | Selects schematic file (`schematic-<env_name>.yaml`) | `dev` |
-| `argocd_version` | ArgoCD Helm chart version | `9.5.13` |
+| `env_name` | Selects schematic file (`schematic-<env_name>.yaml`) — validated `^(dev|prod)$` (`dev` in `libvirt/dev`, `prod` in `libvirt/prod` + both proxmox envs) | `dev` |
+| `argocd_version` | ArgoCD Helm chart version — semver validated | `9.5.13` |
 | `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
 
 > Tailscale node extension is disabled: extension variables commented out (see ADR 001). API uses direct per-node IPs.
@@ -392,7 +395,7 @@ Platform is now composed in each environment root — single state at `environme
 
 ## CI/CD
 
-This repo includes a GitHub Actions workflow (`.github/workflows/deploy.yaml`) for automated deployment.
+This repo includes GitHub Actions workflows (`.github/workflows/deploy.yaml` + `destroy.yaml`) for automated deployment. `validate` now runs on **all 4 envs** (`proxmox/prod`, `proxmox/dev`, `libvirt/prod`, `libvirt/dev`) with `terraform init -backend=false` + `terraform validate`; platform `fmt`/`validate` stays gated to `proxmox/prod`. Prod state is S3 (RustFS `terraform-homelab`); dev stays **local by design** (no S3, no TODO — intentional).
 
 To use it from a fork:
 
