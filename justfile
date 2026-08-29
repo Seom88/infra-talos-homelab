@@ -1,30 +1,10 @@
-# ──────────────────────────────────────────────
-#  infra-homelab — Talos helper tasks
-# ──────────────────────────────────────────────
-#  All commands run from the repo root.
-#
-#  Providers:  proxmox (envs: prod, dev)  |  libvirt (envs: dev, prod)
-#  Terraform:  ./environments/<provider>/<env>/
-#  Secrets:    ./secrets/<provider>/<env>/   (.gitignored)
-#
-#  Backend: prod uses S3 (RustFS) via environments/<provider>/prod/provider.tf.
-#           Both justfile and CI use `terraform init -reconfigure` with
-#           AWS_* env vars (see .github/workflows/deploy.yaml). No extra
-#           -backend-config needed — bucket/key are in provider.tf.
-#           Dev uses backend \"local\" — no credentials required.
-#
-#  Usage:
-#    just tf-apply                               # proxmox, prod (default)
-#    just provider=proxmox env=dev tf-apply      # proxmox, dev
-#    just provider=libvirt env=dev tf-apply      # libvirt, dev (local only)
-#
-#  Platform (ArgoCD) is now a composable module (modules/platform) called from
-#  each environment root (environments/<provider>/<env>). One `terraform apply`
-#  deploys both infra and platform (single state at
-#  environments/<provider>/<env>/terraform.tfstate). The standalone
-#  platform/ root is deprecated — see platform/DEPRECATED.md.
-#    just provider=proxmox env=prod setup-cli           # point kubectl/talosctl at proxmox/prod
-#    just provider=proxmox env=prod tf-apply            # infra + platform (ArgoCD) in one apply
+# infra-homelab — Talos helper tasks
+# Providers: proxmox (prod, dev) | libvirt (dev, prod)
+# Terraform: ./environments/<provider>/<env>/
+# Secrets: ./secrets/<provider>/<env>/
+# Backend: prod S3 (RustFS), dev local
+# Usage: just tf-apply (default libvirt/dev) or just provider=... env=... tf-apply
+# Platform (ArgoCD) via modules/platform; single apply for infra + platform.
 
 provider := "libvirt"   # proxmox | libvirt
 env      := "dev"      # prod | dev
@@ -34,17 +14,17 @@ secrets_dir := "./secrets/" + provider + "/" + env
 tfvars_path := tf_root + "/terraform.tfvars"
 label       := provider + "/" + env
 
-# ── Terraform (proxmox or libvirt, per `provider=` / `env=`) ──
+# Terraform
 
-# Format all Terraform files recursively
+# Format Terraform files
 tf-fmt:
     terraform fmt -recursive
 
-# Check formatting like CI (fails with diff if not formatted)
+# Check formatting (CI-style)
 tf-fmt-check:
     terraform fmt -check -diff -recursive
 
-# Validate all envs like CI (no backend, no creds)
+# Validate all envs (no backend)
 tf-validate:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -57,45 +37,44 @@ tf-validate:
     terraform -chdir=modules/platform init -backend=false -no-color
     terraform -chdir=modules/platform validate -no-color
 
-# Full CI check locally: fmt + validate
+# Full CI check (fmt + validate)
 tf-ci:
     just tf-fmt-check
     just tf-validate
 
-# Init terraform with local backend for the active provider/env
+# Init
 tf-init:
     terraform -chdir={{ tf_root }} init -reconfigure
 
-# Plan changes (auto-init to ensure the correct backend)
+# Plan
 tf-plan:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure
     terraform -chdir={{ tf_root }} plan
 
-# Apply changes (auto-init to ensure the correct backend).
-# C: parallel 10 for bootstrap, use tf-apply-upgrade for talos_version bumps
+# Apply (parallelism 10)
 tf-apply:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure
     terraform -chdir={{ tf_root }} apply -parallelism=10
 
-# Apply with sequential parallelism for talos_version upgrades (protects etcd quorum)
+# Apply for upgrades (parallelism 1, protects quorum)
 tf-apply-upgrade:
     terraform -chdir={{ tf_root }} fmt
     terraform -chdir={{ tf_root }} init -reconfigure
     terraform -chdir={{ tf_root }} apply -parallelism=1
 
-# Destroy the active provider/env (auto-init for the correct backend)
+# Destroy
 tf-destroy:
     #!/usr/bin/env bash
     set -euo pipefail
     terraform -chdir={{ tf_root }} init -reconfigure
-    # Health gate would otherwise block destroy when cluster is already unhealthy / you want to start from zero
+    # Skip health gate on destroy
     TF_VAR_enable_health_check=false terraform -chdir={{ tf_root }} destroy
 
-# ── Secrets ────────────────────────────────────
+# Secrets
 
-# Generate talosconfig + kubeconfig from terraform state
+# Generate secrets from state
 gen-secrets:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -106,7 +85,7 @@ gen-secrets:
     terraform -chdir={{ tf_root }} output -raw kubeconfig  > "$SECRETS/kubeconfig.yaml"
     echo "✓ secrets regenerated ({{ label }})"
 
-# Merge secrets into local talosctl and kubectl config
+# Merge secrets into local configs
 setup-cli:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -129,9 +108,7 @@ setup-cli:
     mv /tmp/kube-merge ~/.kube/config
     echo "✓ kubectl configured ({{ label }})"
 
-# ── Cluster Status ─────────────────────────────
-
-# Show Talos version, extensions, and nodes (active provider/env)
+# Cluster status
 status:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -148,12 +125,12 @@ status:
     echo "── Nodes ──"
     talosctl --talosconfig "$TC" get members -n "$FIRST"
 
-# Compute schematic ID via Talos Image Factory API (schematic-<name>.yaml)
+# Compute schematic ID via factory API
 get-schematic-id name="prod":
     curl -sf -X POST --data-binary @schematic-{{ name }}.yaml \
       https://factory.talos.dev/schematics | jq -r '.id'
 
-# Read schematic ID from the running cluster (active provider/env)
+# Read schematic ID from cluster
 cluster-schematic-id:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -165,10 +142,7 @@ cluster-schematic-id:
     talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
 
-# ── Host Prerequisites (libvirt) ───────
-# Ensures firewalld NAT for talos-net (virbr-talos) - required for Talos image pulls (factory.talos.dev).
-# libvirt_network with forward nat + bridge.zone=libvirt creates the network, but host firewalld must have masquerade.
-# Run once per hypervisor host (needs sudo/polkit). Idempotent.
+# Host prerequisites (libvirt): ensure firewalld NAT for talos-net
 setup-host:
     #!/usr/bin/env bash
     set -euo pipefail

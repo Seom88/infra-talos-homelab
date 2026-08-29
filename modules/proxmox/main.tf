@@ -1,11 +1,6 @@
 locals {
   has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if try(n.data_disk_size, null) != null]) > 0
-  # UserVolumeConfig intentionally named "data" -> /var/mnt/data (generic, not workload-specific).
-  # Sidero official Longhorn example uses name="longhorn" -> /var/mnt/longhorn with grow:false and
-  # diskSelector `disk.transport == 'nvme' && !system_disk`. We use name="data" for flexibility
-  # (other workloads can reuse it) — set Helm `defaultSettings.defaultDataPath=/var/mnt/data`
-  # accordingly (would be /var/mnt/longhorn if you follow Sidero's name verbatim).
-  # virtio disks: "!system_disk" alone is sufficient; nvme filter only applies to bare-metal NVMe.
+  # UserVolumeConfig "data" -> /var/mnt/data (generic); "!system_disk" suffices for virtio.
   data_volume_patch = local.has_data_disk ? yamlencode({
     apiVersion = "v1alpha1"
     kind       = "UserVolumeConfig"
@@ -18,18 +13,13 @@ locals {
   }) : ""
 }
 
-# ── Talos Schematic ──────────────────────────────
+# Talos schematic
 resource "talos_image_factory_schematic" "this" {
   schematic = file(var.schematic_path)
 }
 
-# ── Proxmox Image ────────────────────────────────
-# Bootstrap image only: pins the disk the VMs are FIRST created from.
-# Bumping var.talos_version does NOT recreate this file (see lifecycle below) —
-# that would wipe etcd per README "Changes that destroy your cluster". In-place
-# upgrades are handled by talos_machine.image (installer), not by recreating
-# disks. Only a fresh `terraform destroy` + `apply`, or manually tainting
-# this resource, pulls a new bootstrap image.
+# Bootstrap image only; version bumps use talos_machine.image, not disk recreate.
+# DANGER: recreating this wipes etcd.
 resource "proxmox_download_file" "talos_image" {
   content_type            = "iso"
   datastore_id            = var.datastore_iso
@@ -175,11 +165,11 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   ]
 }
 
-# ── Talos Machine Secrets ────────────────────────
+# Talos machine secrets (bootstrap-only)
 resource "talos_machine_secrets" "this" {
   talos_version = "v${var.talos_version}"
 
-  # Secrets are bootstrap-only: version bumps must not rotate the CA. In-place upgrades are handled by talos_machine.image (installer) in talos-cluster module.
+  # Bootstrap-only: version bumps must not rotate CA.
   lifecycle {
     ignore_changes = [talos_version]
   }
@@ -196,7 +186,7 @@ module "talos" {
   worker_hostnames     = [for node in var.nodes_worker : node.hostname]
   talos_version        = var.talos_version
   talos_image_id       = talos_image_factory_schematic.this.id
-  # tailscale disabled - see docs/adr/001-remove-tailscale-extension.md
+  # Tailscale disabled - see ADR 001
   # tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
@@ -209,17 +199,13 @@ module "talos" {
   ]
 }
 
-# ── Bootstrap settle wait ───────────────────────
+# Settle after bootstrap
 resource "time_sleep" "post_bootstrap" {
   depends_on      = [module.talos]
-  create_duration = "10s" # C: was 45s, reduced - health retry handles etcd Preparing; if flakes persist, restore 30s
+  create_duration = "10s"
 }
 
-# ── Cluster Health Gate (data + check: validates but does NOT block destroy) ─
-# `enable_health_check` lets `just tf-destroy` skip the gate (TF_VAR_enable_health_check=false).
-# On apply (default true) the data source waits 10m for K8s Ready (B+C: talos_cluster is
-# single-node fast, health now handles full HA wait); on destroy it has count=0
-# so `terraform destroy` doesn't hang even when you want to start from zero.
+# Health gate: validates on apply, skipped on destroy via enable_health_check=false.
 data "talos_cluster_health" "this" {
   count                = var.enable_health_check ? 1 : 0
   depends_on           = [module.talos, time_sleep.post_bootstrap]

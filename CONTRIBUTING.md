@@ -14,7 +14,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ### Provider-specific requirements
 
-- **Proxmox**: Proxmox VE 8.x with API token access. See [bpg/proxmox docs](https://registry.terraform.io/providers/bpg/proxmox/latest/docs) for auth setup.
+- **Proxmox**: Proxmox VE 9.x with API token access. See [bpg/proxmox docs](https://registry.terraform.io/providers/bpg/proxmox/latest/docs) for auth setup.
 - **Libvirt**: Linux host with libvirt + KVM. The `qemu:///system` connection must be accessible without password.
 
 ## Getting started

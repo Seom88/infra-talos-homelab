@@ -1,6 +1,4 @@
-# ============================================================
-# Dedicated Storage Pool for Talos VMs & Images
-# ============================================================
+# Dedicated storage pool
 
 resource "libvirt_pool" "talos" {
   name = var.pool_name

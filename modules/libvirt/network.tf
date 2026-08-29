@@ -1,6 +1,4 @@
-# ============================================================
-# Libvirt Network — NAT with DHCP reservations for Talos nodes
-# ============================================================
+# Libvirt network (NAT + DHCP reservations)
 
 resource "libvirt_network" "talos" {
   name      = "talos-net"

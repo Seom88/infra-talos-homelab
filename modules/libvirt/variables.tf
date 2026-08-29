@@ -1,13 +1,7 @@
-# ============================================================
-# Node definitions
-# ============================================================
+# Nodes
 
 variable "nodes_cp" {
-  description = <<-EOF
-    Control plane nodes. Required: hostname, ip, cores, memory (MiB), disk_size (GiB), allow_scheduling. Optional: mac, pool.
-    Optional second disk for Longhorn: data_disk_size (GiB) creates vdb (data_pool defaults to pool; omit for single-disk).
-    Auto UserVolumeConfig with diskSelector "!system_disk" -> /var/mnt/data when any node has data_disk_size.
-  EOF
+  description = "Control plane nodes; optional data_disk_size creates vdb -> /var/mnt/data."
   type = list(object({
     hostname         = string
     ip               = string
@@ -39,11 +33,7 @@ variable "nodes_cp" {
 }
 
 variable "nodes_worker" {
-  description = <<-EOF
-    Worker nodes. Required: hostname, ip, cores, memory (MiB), disk_size (GiB). Optional: mac, pool.
-    Optional second disk for Longhorn: data_disk_size (GiB) creates vdb (data_pool defaults to pool; omit for single-disk).
-    Auto UserVolumeConfig with diskSelector "!system_disk" -> /var/mnt/data when any node has data_disk_size.
-  EOF
+  description = "Worker nodes; optional data_disk_size creates vdb -> /var/mnt/data."
   type = list(object({
     hostname       = string
     ip             = string
@@ -73,9 +63,7 @@ variable "nodes_worker" {
   }
 }
 
-# ============================================================
-# Storage Pool
-# ============================================================
+# Storage pool
 
 variable "pool_name" {
   description = "Name of the dedicated storage pool for Talos"
@@ -84,14 +72,12 @@ variable "pool_name" {
 }
 
 variable "pool_path" {
-  description = "Target filesystem directory for the dedicated Talos storage pool"
+  description = "Target directory for the Talos storage pool"
   type        = string
   default     = "/var/lib/libvirt/images/talos"
 }
 
-# ============================================================
 # Network
-# ============================================================
 
 variable "gateway" {
   description = "Default gateway IPv4"
@@ -105,7 +91,7 @@ variable "gateway" {
 }
 
 variable "network_cidr" {
-  description = "Subnet CIDR for the Talos Libvirt network (e.g. 10.0.1.0/24 or 10.10.0.0/24)"
+  description = "Subnet CIDR for the Talos network (e.g. 10.0.1.0/24)"
   type        = string
   default     = "10.0.1.0/24"
 
@@ -115,17 +101,14 @@ variable "network_cidr" {
   }
 }
 
-# ============================================================
-# Environment & Features
-# ============================================================
-
+# Environment
 variable "schematic_path" {
-  description = "Absolute or root-relative path to the Talos Image Factory schematic YAML. Resolved with file()."
+  description = "Path to Talos Image Factory schematic YAML."
   type        = string
 }
 
 variable "secureboot" {
-  description = "Enable UEFI SecureBoot and download secureboot-signed Talos nocloud images"
+  description = "Enable UEFI SecureBoot"
   type        = bool
   default     = true
 }
@@ -142,19 +125,14 @@ variable "ovmf_vars_secboot" {
   default     = "/usr/share/edk2/ovmf/OVMF_VARS.fd"
 }
 
-# ============================================================
-# Talos image cache (libvirt-specific)
-# ============================================================
-
+# Image cache (libvirt-specific)
 variable "talos_image_cache_dir" {
-  description = "Directory for cached Talos raw images. Must be writable by current user and readable by libvirtd/qemu."
+  description = "Cache dir for Talos raw images."
   type        = string
   default     = "~/.cache/talos-images"
 }
 
-# ============================================================
-# Pass-through — forwarded to talos-cluster module
-# ============================================================
+# Pass-through to talos-cluster
 
 variable "cluster_name" {
   description = "Talos / Kubernetes cluster name"
@@ -189,10 +167,9 @@ variable "kubernetes_version" {
   }
 }
 
-# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
-# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# Tailscale disabled - see ADR 001
 # variable "tailscale_auth_key" {
-#   description = "Tailscale pre-authentication key. Omit or empty to skip."
+#   description = "Tailscale key; omit to skip."
 #   type        = string
 #   default     = ""
 #   sensitive   = true
@@ -205,19 +182,19 @@ variable "longhorn_enabled" {
 }
 
 variable "extra_config_patches" {
-  description = "Extra Talos patches (YAML strings) for all nodes. UserVolumeConfig auto-appended when any node has data_disk_size."
+  description = "Extra Talos patches (YAML) for all nodes; UserVolumeConfig auto-appended."
   type        = list(string)
   default     = []
 }
 
 variable "enable_health_check" {
-  description = "Enable post-bootstrap health gate (talos_cluster_health). Set false to skip health during destroy."
+  description = "Enable health gate; set false to skip on destroy."
   type        = bool
   default     = true
 }
 
 variable "drain_on_upgrade" {
-  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn."
+  description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
   default     = false
 }

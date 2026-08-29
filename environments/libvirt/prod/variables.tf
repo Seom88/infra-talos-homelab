@@ -107,8 +107,7 @@ variable "kubernetes_version" {
   }
 }
 
-# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
-# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# Tailscale disabled - see ADR 001
 # variable "tailscale_auth_key" {
 #   type      = string
 #   default   = ""
@@ -125,10 +124,10 @@ variable "extra_config_patches" {
   default = []
 }
 
-# Schematic env selector (e.g. "dev", "prod")
-# TODO(DRY): 4 envs duplicate variables.tf — extract shared validations to a common module or Terragrunt. See ADR for tradeoffs.
+# Schematic selector
+# TODO: DRY duplicate across 4 envs (see ADR).
 variable "env_name" {
-  description = "Selects which schematic-<env_name>.yaml is used (e.g. dev → schematic-dev.yaml)"
+  description = "Selects schematic-<env_name>.yaml (e.g. prod)"
   type        = string
   default     = "prod"
 
@@ -139,7 +138,7 @@ variable "env_name" {
 }
 
 variable "argocd_version" {
-  description = "Exact ArgoCD Helm chart version to install (argo-helm). Bump here, never use ranges."
+  description = "ArgoCD Helm chart version (exact, no ranges)."
   type        = string
   default     = "9.7.1"
 
@@ -150,13 +149,13 @@ variable "argocd_version" {
 }
 
 variable "enable_health_check" {
-  description = "Enable post-bootstrap health gate. Set false for destroy."
+  description = "Enable health gate; set false to skip on destroy."
   type        = bool
   default     = true
 }
 
 variable "drain_on_upgrade" {
-  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn."
+  description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
   default     = false
 }

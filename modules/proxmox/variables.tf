@@ -1,9 +1,7 @@
-# ============================================================
-# Proxmox Resources — networking, storage, node settings
-# ============================================================
+# Proxmox resources
 
 variable "env_name" {
-  description = "Environment name for resource naming (e.g. prod, dev). Each env gets its own download + VMs so they coexist on the same PVE node."
+  description = "Env name (prod/dev); each env gets own download + VMs."
   type        = string
 
   validation {
@@ -46,19 +44,19 @@ variable "datastore_iso" {
 }
 
 variable "network_bridge" {
-  description = "Proxmox network bridge to attach VMs to. When using SDN, this must match the SDN VNet id — max 8 chars (e.g. talosvn)"
+  description = "Bridge for VMs; with SDN must match VNet id (max 8 chars, e.g. talosvn)"
   type        = string
   default     = "vmbr0"
 }
 
 variable "sdn_zone" {
-  description = "SDN zone id for the Talos network. Each environment gets its own zone + VNet"
+  description = "SDN zone id (each env gets own zone + VNet)"
   type        = string
   default     = "talos"
 }
 
 variable "network_cidr" {
-  description = "CIDR for the SDN VNet subnet. Must contain the node IPs (e.g. 10.10.0.0/24)"
+  description = "CIDR for SDN subnet (must contain node IPs, e.g. 10.10.0.0/24)"
   type        = string
   default     = "10.10.0.0/24"
 
@@ -75,17 +73,13 @@ variable "network_mtu" {
 }
 
 variable "network_snat" {
-  description = "Enable SNAT on the SDN subnet so VMs reach the internet via the node. Disable only if an external router handles routing/NAT for the subnet"
+  description = "Enable SNAT so VMs reach internet via node."
   type        = bool
   default     = true
 }
 
 variable "nodes_cp" {
-  description = <<-EOF
-    Control plane nodes. Required: hostname, ip, cores, memory, proxmox_node, disk_size (GB), datastore, allow_scheduling.
-    Optional second disk for Longhorn: data_disk_size (GB) creates virtio1 (data_datastore defaults to datastore; omit for single-disk).
-    Auto UserVolumeConfig with diskSelector "!system_disk" -> /var/mnt/data when any node has data_disk_size.
-  EOF
+  description = "Control plane nodes; optional data_disk_size creates virtio1 -> /var/mnt/data."
   type = list(object({
     hostname         = string
     ip               = string
@@ -117,11 +111,7 @@ variable "nodes_cp" {
 }
 
 variable "nodes_worker" {
-  description = <<-EOF
-    Worker nodes. Required: hostname, ip, cores, memory, proxmox_node, disk_size (GB), datastore.
-    Optional second disk for Longhorn: data_disk_size (GB) creates virtio1 (data_datastore defaults to datastore; omit for single-disk).
-    Auto UserVolumeConfig with diskSelector "!system_disk" -> /var/mnt/data when any node has data_disk_size.
-  EOF
+  description = "Worker nodes; optional data_disk_size creates virtio1 -> /var/mnt/data."
   type = list(object({
     hostname       = string
     ip             = string
@@ -152,17 +142,13 @@ variable "nodes_worker" {
 }
 
 variable "extra_config_patches" {
-  description = "Extra Talos patches (YAML strings) for all nodes. UserVolumeConfig auto-appended when any node has data_disk_size."
+  description = "Extra Talos patches (YAML) for all nodes; UserVolumeConfig auto-appended."
   type        = list(string)
   default     = []
 }
 
-# ============================================================
-# Talos — shared between Proxmox image download and talos-cluster module
-# ============================================================
-
-# Bootstrap-only pin: bumping this replaces the node disks (etcd wipe) and
-# recreates the VMs. Run 'just upgrade' to roll Talos in-place via talos_machine.image.
+# Talos version (bootstrap pin)
+# DANGER: bumping replaces disks (etcd wipe); use 'just upgrade' for in-place.
 variable "talos_version" {
   description = "Talos Linux version to install on the nodes (e.g. 1.13.9)"
   type        = string
@@ -174,42 +160,33 @@ variable "talos_version" {
   }
 }
 
-# ============================================================
-# Module pass-through — forwarded to talos-cluster module
-# ============================================================
-
-# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
-# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# Tailscale disabled - see ADR 001
 # variable "tailscale_auth_key" {
-#   description = "Tailscale pre-authentication key. Pass-through to talos-cluster module. Omit or set empty to skip Tailscale."
+#   description = "Tailscale key (pass-through to talos-cluster)."
 #   type        = string
 #   default     = ""
 #   sensitive   = true
 # }
 
 variable "longhorn_enabled" {
-  description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data_disk_size."
+  description = "Enable Longhorn extraMounts via /var/mnt/data."
   type        = bool
   default     = true
 }
 
-# ============================================================
-# Schematic
-# ============================================================
-
 variable "schematic_path" {
-  description = "Absolute or root-relative path to the Talos Image Factory schematic YAML (e.g. schematic-prod.yaml). Resolved with file()."
+  description = "Path to Talos Image Factory schematic YAML."
   type        = string
 }
 
 variable "enable_health_check" {
-  description = "Enable post-bootstrap health gate (talos_cluster_health). Set false to skip health during destroy."
+  description = "Enable health gate; set false to skip on destroy."
   type        = bool
   default     = true
 }
 
 variable "drain_on_upgrade" {
-  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn."
+  description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
   default     = false
 }

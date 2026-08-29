@@ -22,7 +22,7 @@ produced an invalid new value for <attribute>.
 
 The bug surfaces with `talos_machine` / `talos_cluster` resources introduced in
 provider `0.12` (replacing `talos_machine_configuration_apply` +
-`talos_machine_bootstrap`). Our `modules/talos-cluster/main.tf` migrated to:
+`talos_machine_bootstrap`). `modules/talos-cluster/main.tf` migrated to:
 
 ```hcl
 resource "talos_machine" "control_plane" { ... }

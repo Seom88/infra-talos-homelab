@@ -1,4 +1,4 @@
-# ── Provider credentials ────────────────────────
+# Provider credentials
 variable "api_token" {
   description = "Proxmox API token in format 'user@realm!tokenid=secret'"
   type        = string
@@ -27,7 +27,7 @@ variable "endpoint" {
   type        = string
 }
 
-# ── Infrastructure variables (forwarded to module) ─────────
+# Infrastructure (forwarded to module)
 variable "env_name" {
   description = "Environment name (prod, dev) — used for Talos schematic filename"
   type        = string
@@ -126,8 +126,7 @@ variable "talos_version" {
   }
 }
 
-# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
-# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# Tailscale disabled - see ADR 001
 # variable "tailscale_auth_key" {
 #   type      = string
 #   default   = ""
@@ -135,7 +134,7 @@ variable "talos_version" {
 # }
 
 variable "argocd_version" {
-  description = "Exact ArgoCD Helm chart version to install (argo-helm). Bump here, never use ranges."
+  description = "ArgoCD Helm chart version (exact, no ranges)."
   type        = string
   default     = "9.7.1"
 
@@ -146,13 +145,13 @@ variable "argocd_version" {
 }
 
 variable "enable_health_check" {
-  description = "Enable post-bootstrap health gate. Set false for destroy."
+  description = "Enable health gate; set false to skip on destroy."
   type        = bool
   default     = true
 }
 
 variable "drain_on_upgrade" {
-  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn."
+  description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
   default     = false
 }

@@ -1,12 +1,5 @@
-# ── SDN Network (Talos) ───────────────────────────
-# Creates the SDN zone + VNet (bridge) + subnet that the VMs attach to.
-# The VNet id is the Linux bridge name on the node (e.g. talosvn; PVE caps VNet ids at 8 chars),
-# so it must match var.network_bridge used by the VMs.
-#
-# Order matters: the applier resource performs the actual SDN "Apply"
-# (PUT /cluster/sdn) — without it the bridge does not exist on the node
-# and VM creation fails. The applier depends on all SDN resources, and
-# the VMs depend on the applier.
+# SDN network: zone + VNet + subnet; VNet id == bridge name (max 8 chars).
+# Applier does PUT /cluster/sdn; VMs depend on it.
 
 resource "proxmox_sdn_zone_simple" "this" {
   id    = var.sdn_zone
@@ -42,17 +35,8 @@ resource "proxmox_sdn_applier" "this" {
   ]
 }
 
-# ── SDN runtime drift fix (PVE reboot) ──────────────────────────────────────
-# PVE reboot loses SDN runtime (bridge "prod" + MASQUERADE for 10.10.0.0/24)
-# while config remains — causes DNS/NTP/etcd "Waiting for time sync" deadlock
-# blocking data.talos_cluster_health. bpg/proxmox sdn_applier only on diff, so
-# runtime drift is never healed.
-# Fix: Terraform installs pve-sdn-ensure.service on pve01 (After=
-# network.target pve-cluster.service, ExecStart=pvesh set /cluster/sdn ||
-# ifreload -a on boot); create enables, destroy removes.
-# LIMITATION: single-node only — zone.nodes=[var.node_name] and service targets
-# only ${var.ssh_username}@${coalesce(var.ssh_node_address, var.node_name)}. Multi-node
-# needs zone.nodes=distinct([...proxmox_node]) and for_each on this resource.
+# SDN drift fix: PVE reboot loses runtime (bridge + MASQUERADE); healed via
+# pve-sdn-ensure.service. Single-node only; multi-node needs for_each.
 
 resource "terraform_data" "sdn_ensure_applied" {
   input            = "${var.ssh_username}@${coalesce(var.ssh_node_address, var.node_name)}"

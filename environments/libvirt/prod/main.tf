@@ -9,7 +9,6 @@ module "libvirt" {
   gateway      = var.gateway
   network_cidr = var.network_cidr
 
-  # Schematic path resolved relative to the repo root (3 levels up from this environment)
   schematic_path = "${path.module}/../../../schematic-${var.env_name}.yaml"
 
   secureboot            = var.secureboot
@@ -20,7 +19,7 @@ module "libvirt" {
   cluster_name       = var.cluster_name
   talos_version      = var.talos_version
   kubernetes_version = var.kubernetes_version
-  # tailscale disabled - see docs/adr/001-remove-tailscale-extension.md
+  # Tailscale disabled - see ADR 001
   # tailscale_auth_key   = var.tailscale_auth_key
   longhorn_enabled     = var.longhorn_enabled
   extra_config_patches = var.extra_config_patches
@@ -28,12 +27,7 @@ module "libvirt" {
   drain_on_upgrade     = var.drain_on_upgrade
 }
 
-# ── Kubeconfig auto-generation (avoids stale file race) ──────────────────
-# Writes the fresh kubeconfig from the infra module to the canonical secrets
-# path BEFORE the platform layer runs. Without this, the helm provider and
-# platform wait_nodes gate read a stale on-disk kubeconfig from a previous
-# cluster (stale CA → x509: certificate signed by unknown authority).
-# `just gen-secrets` remains as a manual fallback / setup-cli helper.
+# Kubeconfig: fresh output before platform (avoids stale CA).
 resource "local_file" "kubeconfig" {
   content         = module.libvirt.kubeconfig
   filename        = abspath("${path.root}/../../../secrets/libvirt/${var.env_name}/kubeconfig.yaml")
@@ -42,7 +36,7 @@ resource "local_file" "kubeconfig" {
   depends_on = [module.libvirt]
 }
 
-# ── Platform layer (ArgoCD) — composable module ──────────────────────────
+# Platform (ArgoCD)
 module "platform" {
   source = "../../../modules/platform"
 

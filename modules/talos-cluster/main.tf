@@ -3,8 +3,7 @@ terraform {
   required_providers {
     talos = {
       source = "siderolabs/talos"
-      # Pre-release 0.12.0-alpha.5: latest pre-release fixing "inconsistent final plan" bug (siderolabs/terraform-provider-talos#352).
-      # Successor is stable 0.12.0 (not yet released) — switch to "0.12.0" when available.
+      # Pre-release: fixes inconsistent final plan (issue #352); switch to 0.12.0 when stable.
       version = "0.12.0-alpha.5"
     }
   }
@@ -17,16 +16,8 @@ locals {
   cluster_endpoint   = "https://${var.cp_ips[0]}:6443"
   base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"
   installer_image    = var.installer_image != "" ? var.installer_image : local.base_install_image
-  # SideroLabs multi-disk wiring (active) — https://docs.siderolabs.com/kubernetes-guides/csi/longhorn#1-2-create-the-uservolumeconfig
-  # Disk1 = system (EFI/META/STATE/EPHEMERAL), Disk2 = user volumes via UserVolumeConfig
-  # diskSelector "!system_disk" mounted at /var/mnt/<name>.
-  # We use UserVolumeConfig name="data" -> /var/mnt/data (generic, reusable) instead of
-  # Sidero's example name="longhorn" -> /var/mnt/longhorn (grow:false,
-  # diskSelector `disk.transport == 'nvme' && !system_disk`). Prod is already provisioned as
-  # u-data on /dev/vdb1 at /var/mnt/data; renaming would orphan the volume.
-  # Longhorn Helm: defaultSettings.defaultDataPath=/var/mnt/data (platform/longhorn/values.yaml)
-  # Kubelet extraMount is dual-disk active: source=/var/mnt/data -> destination=/var/lib/longhorn
-  # (bind,rshared,rw) — Sidero privileged requirement: kubelet needs rshared bind at /var/lib/longhorn.
+  # Multi-disk: UserVolumeConfig "data" -> /var/mnt/data; kubelet bind to /var/lib/longhorn.
+  # See https://docs.siderolabs.com/kubernetes-guides/csi/longhorn
   has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
@@ -44,11 +35,7 @@ locals {
   }) : ""
 
   cp_allow_scheduling_map = { for i, hostname in var.cp_hostnames : hostname => var.cp_allow_scheduling[i] }
-  # Durable per Sidero docs (Talos v1.13): cluster.allowSchedulingOnControlPlanes makes
-  # the kubelet itself skip the control-plane taint. Applied PER NODE: each control plane
-  # node gets its own machine config, so only nodes with allow_scheduling=true lose the
-  # taint. Replaces the fragile post-bootstrap `kubectl taint` removal, which the kubelet
-  # re-applies on restart.
+  # Per-node scheduling: allowSchedulingOnControlPlanes removes taint per node.
   scheduling_patch = yamlencode({
     cluster = {
       allowSchedulingOnControlPlanes = true
@@ -56,11 +43,7 @@ locals {
   })
 }
 
-# Talos client configuration derived from machine secrets — used for talosctl.
-# Note: Terraform >=1.11 best practice is to avoid persisting secrets in state via
-# ephemeral resources + write-only arguments (client_configuration_wo / machine_configuration_wo).
-# See commented ephemeral "talos_cluster_kubeconfig" example below and
-# https://registry.terraform.io/providers/siderolabs/talos/latest/docs#write-only-arguments
+# Talos client config for talosctl; TF >=1.11 prefers ephemeral write-only (see below).
 data "talos_client_configuration" "client_config" {
   cluster_name         = var.cluster_name
   client_configuration = var.client_configuration
@@ -68,8 +51,7 @@ data "talos_client_configuration" "client_config" {
   nodes                = local.all_nodes_names
 }
 
-# --- Control Plane Configuration (per node: scheduling patch is node-specific) ---
-
+# Control plane config (per-node scheduling patch)
 data "talos_machine_configuration" "control_machine_config" {
   for_each         = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
   cluster_name     = var.cluster_name
@@ -87,7 +69,7 @@ data "talos_machine_configuration" "control_machine_config" {
         }
       }
     }),
-    # Tailscale ExtensionServiceConfig disabled - uncomment together with variable and schematic
+    # Tailscale disabled - see ADR 001
     # var.tailscale_auth_key != "" ? yamlencode({
     #   apiVersion = "v1alpha1"
     #   kind       = "ExtensionServiceConfig"
@@ -102,11 +84,7 @@ data "talos_machine_configuration" "control_machine_config" {
   ], var.extra_config_patches))
 }
 
-# IaC version management: talos_machine applies config AND keeps the OS
-# version in sync via `image`. Bumping var.talos_version triggers an
-# in-place upgrade (pull → install → reboot) without recreating VMs — the
-# download_file has `ignore_changes = [url]` so the bootstrap disk stays.
-# Drain is off (workloads on CPs, no workers yet); revisit when workers exist.
+# In-place upgrades via talos_machine.image; bootstrap disk pinned.
 resource "talos_machine" "control_plane" {
   for_each              = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
   node                  = each.value
@@ -114,14 +92,11 @@ resource "talos_machine" "control_plane" {
   machine_configuration = data.talos_machine_configuration.control_machine_config[each.key].machine_configuration
   image                 = local.installer_image
   drain_on_upgrade      = var.drain_on_upgrade
-  # When used with talos_cluster, Kubernetes upgrades are driven by
-  # talos_cluster.kubernetes_version (via upgrade-k8s). Ignore drift so
-  # out-of-band k8s upgrades don't force config re-apply.
-  # https://registry.terraform.io/providers/siderolabs/talos/latest/docs/resources/machine#ignore_kubernetes_upgrade_drift
+  # K8s version owned by talos_cluster; ignore drift for out-of-band upgrades.
   ignore_kubernetes_upgrade_drift = true
 }
 
-# --- Bootstrap (replaces talos_machine_bootstrap) ---
+# Bootstrap
 
 resource "talos_cluster" "cluster" {
   depends_on           = [talos_machine.control_plane]
@@ -133,8 +108,7 @@ resource "talos_cluster" "cluster" {
   timeouts = { create = "15m", update = "30m" }
 }
 
-# --- Worker Configuration ---
-
+# Worker config
 data "talos_machine_configuration" "worker_machine_config" {
   cluster_name     = var.cluster_name
   cluster_endpoint = local.cluster_endpoint
@@ -151,7 +125,7 @@ data "talos_machine_configuration" "worker_machine_config" {
         }
       }
     }),
-    # Tailscale ExtensionServiceConfig disabled - uncomment together with variable and schematic
+    # Tailscale disabled - see ADR 001
     # var.tailscale_auth_key != "" ? yamlencode({
     #   apiVersion = "v1alpha1"
     #   kind       = "ExtensionServiceConfig"
@@ -166,9 +140,7 @@ data "talos_machine_configuration" "worker_machine_config" {
 }
 
 resource "talos_machine" "worker" {
-  # Workers must wait for the control plane to be bootstrapped before applying
-  # their config. Without this, workers attempt to reach the API server before
-  # etcd is up, resulting in connection refused errors.
+  # Workers wait for control plane bootstrap.
   depends_on            = [talos_cluster.cluster]
   for_each              = { for i, hostname in var.worker_hostnames : hostname => var.worker_ips[i] }
   node                  = each.value
@@ -176,17 +148,12 @@ resource "talos_machine" "worker" {
   machine_configuration = data.talos_machine_configuration.worker_machine_config.machine_configuration
   image                 = local.installer_image
   drain_on_upgrade      = var.drain_on_upgrade
-  # See control_plane comment: Kubernetes version is owned by talos_cluster.
-  # https://registry.terraform.io/providers/siderolabs/talos/latest/docs/resources/machine#ignore_kubernetes_upgrade_drift
+  # K8s version owned by talos_cluster.
   ignore_kubernetes_upgrade_drift = true
 }
 
-# Live retrieval (provider-recommended replacement for deprecated data source).
-# Stores kubeconfig in state (sensitive) but validates against live API.
-# Ephemeral offline generation (from machine_secrets) is the secret-free ideal on TF >= 1.11,
-# but local_file/local_sensitive_file don't yet support write-only (hashicorp/local#373),
-# so the ephemeral value can't be written to disk without hitting "Ephemeral value not allowed".
-# Keep this resource until local provider supports write-only; then switch to:
+# Live kubeconfig (sensitive, in state); ephemeral is secret-free but local_file
+# lacks write-only support (hashicorp/local#373). Switch when available:
 # ephemeral "talos_cluster_kubeconfig" "kubeconfig" {
 #   cluster_name    = var.cluster_name
 #   endpoint        = local.cluster_endpoint

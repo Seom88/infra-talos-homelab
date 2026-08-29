@@ -72,7 +72,7 @@ variable "talos_version" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version to install (e.g. 1.36.1). Must stay in sync with talos_cluster.kubernetes_version; only used at bootstrap when ignore_kubernetes_upgrade_drift=true (subsequent upgrades via talos_cluster with upgrade-k8s)."
+  description = "Kubernetes version (e.g. 1.36.2); only at bootstrap, upgrades via talos_cluster."
   type        = string
   default     = "1.36.2"
 
@@ -94,35 +94,28 @@ variable "talos_image_id" {
 }
 
 variable "installer_image" {
-  description = <<-EOF
-    Installer container image used by talos_machine to keep the node OS version
-    in sync (e.g. factory.talos.dev/nocloud-installer/<schematic-id>:v1.13.9).
-    Must match the platform flavor of the nodes: roots booting secureboot images
-    can omit it (defaults to the nocloud-installer-secureboot built from
-    talos_image_id + talos_version); non-secureboot roots (e.g. libvirt) must
-    override it or set secureboot=false.
-  EOF
+  description = "Installer image for talos_machine (e.g. factory.talos.dev/nocloud-installer/<id>:vX.Y.Z). Defaults to secureboot flavor."
   type        = string
   default     = ""
 }
 
 variable "secureboot" {
-  description = "Whether to use the secureboot installer flavor (factory.talos.dev/nocloud-installer-secureboot). Libvirt (q35 without secureboot) should set false; Proxmox (ovmf) should keep true."
+  description = "Use secureboot installer flavor; false for libvirt, true for Proxmox."
   type        = bool
   default     = true
 }
 
-# Tailscale extension disabled - see docs/adr/001-remove-tailscale-extension.md
-# To enable: uncomment this variable AND uncomment siderolabs/tailscale in schematic-*.yaml
+# Tailscale disabled - see ADR 001
+# To enable: uncomment here and in schematic-*.yaml
 # variable "tailscale_auth_key" {
-#   description = "Tailscale pre-authentication key for node registration. Omit or leave empty to skip Tailscale."
+#   description = "Tailscale key; omit to skip."
 #   type        = string
 #   default     = ""
 #   sensitive   = true
 # }
 
 variable "cp_allow_scheduling" {
-  description = "Per control plane node: allow workloads on that node. Index-aligned with cp_hostnames / cp_ips. Each node's machine config gets cluster.allowSchedulingOnControlPlanes: true when its value is true (Talos v1.13 supports per-node machine config)."
+  description = "Per-CP allow scheduling; index-aligned with cp_hostnames/cp_ips."
   type        = list(bool)
 }
 
@@ -133,13 +126,13 @@ variable "longhorn_enabled" {
 }
 
 variable "extra_config_patches" {
-  description = "Additional Talos machine configuration patches (raw YAML strings) applied to all nodes (control plane + workers). UserVolumeConfig patches (e.g. data disk with diskSelector \"!system_disk\" mounted at /var/mnt/<name>) should be passed here; proxmox/libvirt modules auto-append it when any node has data_disk_size."
+  description = "Additional Talos patches (YAML) for all nodes; UserVolumeConfig auto-appended."
   type        = list(string)
   default     = []
 }
 
 variable "drain_on_upgrade" {
-  description = "Drain node before Talos upgrade. Keep false in prod with Longhorn (controlled drain), true in dev for convenience."
+  description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
   default     = false
 }

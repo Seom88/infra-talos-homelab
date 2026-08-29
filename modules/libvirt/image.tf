@@ -1,6 +1,4 @@
-# ============================================================
-# Talos Schematic & Base Template Volume (Bootstrap Only)
-# ============================================================
+# Talos schematic and base volume (bootstrap only)
 
 resource "talos_image_factory_schematic" "this" {
   schematic = file(var.schematic_path)
@@ -8,12 +6,12 @@ resource "talos_image_factory_schematic" "this" {
 
 locals {
   image_cache_dir = replace(var.talos_image_cache_dir, "/^~/", pathexpand("~"))
-  # Stable fixed name for bootstrap image so version bumps don't wipe disks
+  # Fixed name so version bumps don't wipe disks
   image_filename  = var.secureboot ? "talos-nocloud-amd64-secureboot.raw" : "talos-nocloud-amd64.raw"
   cached_raw_path = "${local.image_cache_dir}/${local.image_filename}"
 }
 
-# Base volume in the dedicated Talos pool
+# Base volume
 resource "libvirt_volume" "talos_base_image" {
   name = var.secureboot ? "talos-base-secureboot.raw" : "talos-base.raw"
   pool = libvirt_pool.talos.name
@@ -40,11 +38,7 @@ resource "libvirt_volume" "talos_base_image" {
   ]
 }
 
-# Image downloader: version/schematic-aware cache
-# Re-downloads only when talos_version or schematic changes (via triggers_replace).
-# Uses a sidecar file to track which schematic produced the cached raw, so stale
-# cache (e.g. old schematic with same filename) is correctly invalidated and
-# talos_machine.image does not trigger a spurious upgrade on fresh bootstrap.
+# Image cache: re-downloads on version/schematic change; sidecar invalidates stale cache.
 resource "terraform_data" "talos_nocloud_image" {
   triggers_replace = {
     secureboot    = var.secureboot
@@ -76,7 +70,7 @@ resource "terraform_data" "talos_nocloud_image" {
 
       chmod 644 "$${RAW_PATH}.tmp" || true
       mv "$${RAW_PATH}.tmp" "$${RAW_PATH}"
-      # Mark this schematic/version as cached (clean old markers)
+      # Mark as cached
       rm -f "$${CACHE_DIR}/.schematic-"* 2>/dev/null || true
       touch "$${MARKER_FILE}"
       echo "Cached: $${RAW_PATH} ($${SCHEMATIC_ID} v${var.talos_version})"

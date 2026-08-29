@@ -1,6 +1,4 @@
-# ============================================================
-# Locals & Node Mapping with Deterministic MAC Generation
-# ============================================================
+# Node mapping with deterministic MACs
 
 locals {
   nodes_all = merge(
@@ -29,9 +27,7 @@ locals {
   )
 }
 
-# ============================================================
-# Boot Volumes (Bootstrap Only)
-# ============================================================
+# Boot volumes (bootstrap only)
 
 resource "libvirt_volume" "boot" {
   for_each = local.nodes_all
@@ -60,7 +56,7 @@ resource "libvirt_volume" "boot" {
   ]
 }
 
-# Workaround for dmacvicar/libvirt capacity with raw images
+# Resize boot volumes for raw images (dmacvicar/libvirt workaround)
 resource "terraform_data" "resize_boot" {
   for_each = local.nodes_all
 
@@ -94,9 +90,7 @@ resource "terraform_data" "resize_boot" {
   depends_on = [libvirt_volume.boot]
 }
 
-# ============================================================
-# Data Volumes (optional second disk for user volumes)
-# ============================================================
+# Data volumes (optional second disk)
 
 resource "libvirt_volume" "data" {
   for_each = { for k, v in local.nodes_all : k => v if try(v.data_disk_size, null) != null }
@@ -111,9 +105,7 @@ resource "libvirt_volume" "data" {
   }
 }
 
-# ============================================================
-# VM Domains (UEFI OVMF with SecureBoot)
-# ============================================================
+# VM domains (UEFI OVMF)
 
 resource "libvirt_domain" "node" {
   for_each = local.nodes_all

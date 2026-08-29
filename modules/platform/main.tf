@@ -1,21 +1,9 @@
-# ── Platform module: ArgoCD (GitOps) ─────────────────────────────────────
-# Composable module called from each environment root (environments/<provider>/<env>).
-# The calling root must configure the `helm` provider (kubernetes.config_path).
-#
-# Flow (mirrors repo's infra/init-infra.sh):
-#   1. Wait for all nodes to be Ready (Layer 2; Layer 1 is the
-#      talos_cluster_health gate in the infra module)
-#   2. Install ArgoCD via Helm
-# Longhorn is not installed here: it is deployed by the secured GitOps repo
-# as a wave-0 ArgoCD app with a CSI readiness gate.
-# --------------------------------------------------------------------------
+# Platform: ArgoCD via Helm; env root configures helm provider.
+# Flow: wait for nodes Ready -> install ArgoCD.
 
-# ── 1. Node readiness gate (Layer 2) ──────────────────────────────────────
+# Node readiness gate
 resource "terraform_data" "wait_nodes" {
-  # Re-run when the kubeconfig changes (e.g. after a cluster rebuild).
-  # Use var.kubeconfig_hash (content_base64sha256 from local_file.kubeconfig)
-  # instead of filesha256 on disk — filesha256 races with local_file which
-  # mutates the same path between plan and apply ("inconsistent result").
+  # Re-run on kubeconfig change; use content hash to avoid filesha256 race.
   triggers_replace = {
     kubeconfig_hash = var.kubeconfig_hash != null ? var.kubeconfig_hash : (fileexists(var.kubeconfig_path) ? "exists" : "missing")
   }
@@ -30,7 +18,7 @@ resource "terraform_data" "wait_nodes" {
   }
 }
 
-# ── 2. ArgoCD Helm release ────────────────────────────────────────────────
+# ArgoCD
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
