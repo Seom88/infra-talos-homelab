@@ -26,8 +26,8 @@
 #    just provider=proxmox env=prod setup-cli           # point kubectl/talosctl at proxmox/prod
 #    just provider=proxmox env=prod tf-apply            # infra + platform (ArgoCD) in one apply
 
-provider := "proxmox"   # proxmox | libvirt
-env      := "prod"      # prod | dev
+provider := "libvirt"   # proxmox | libvirt
+env      := "dev"      # prod | dev
 
 tf_root     := "./environments/" + provider + "/" + env
 secrets_dir := "./secrets/" + provider + "/" + env
