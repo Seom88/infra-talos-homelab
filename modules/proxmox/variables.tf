@@ -17,6 +17,18 @@ variable "node_name" {
   type        = string
 }
 
+variable "ssh_username" {
+  description = "SSH user for PVE node (e.g. root)"
+  type        = string
+  default     = "root"
+}
+
+variable "ssh_node_address" {
+  description = "SSH address for PVE node (e.g. pve01.lonk-mirfak.ts.net or Tailscale hostname)"
+  type        = string
+  default     = null
+}
+
 variable "gateway" {
   description = "Default gateway for the VM nodes (usually your router IP)"
   type        = string

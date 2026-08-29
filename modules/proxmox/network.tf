@@ -41,3 +41,50 @@ resource "proxmox_sdn_applier" "this" {
     proxmox_sdn_subnet.this,
   ]
 }
+
+# ── SDN runtime drift fix (PVE reboot) ──────────────────────────────────────
+# PVE reboot loses SDN runtime (bridge "prod" + MASQUERADE for 10.10.0.0/24)
+# while config remains — causes DNS/NTP/etcd "Waiting for time sync" deadlock
+# blocking data.talos_cluster_health. bpg/proxmox sdn_applier only on diff, so
+# runtime drift is never healed.
+# Fix: Terraform installs pve-sdn-ensure.service on pve01 (After=
+# network.target pve-cluster.service, ExecStart=pvesh set /cluster/sdn ||
+# ifreload -a on boot); create enables, destroy removes.
+# LIMITATION: single-node only — zone.nodes=[var.node_name] and service targets
+# only ${var.ssh_username}@${coalesce(var.ssh_node_address, var.node_name)}. Multi-node
+# needs zone.nodes=distinct([...proxmox_node]) and for_each on this resource.
+
+resource "terraform_data" "sdn_ensure_applied" {
+  input            = "${var.ssh_username}@${coalesce(var.ssh_node_address, var.node_name)}"
+  triggers_replace = [proxmox_sdn_subnet.this.id]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes ${var.ssh_username}@${coalesce(var.ssh_node_address, var.node_name)} 'cat > /etc/systemd/system/pve-sdn-ensure.service <<'"'"'EOF'"'"'
+[Unit]
+Description=Ensure Proxmox SDN is applied (heal runtime drift after reboot)
+After=network.target pve-cluster.service
+Wants=network.target pve-cluster.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "pvesh set /cluster/sdn 2>/dev/null || ifreload -a"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now pve-sdn-ensure.service
+pvesh set /cluster/sdn 2>/dev/null || ifreload -a
+'
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes ${self.input} 'systemctl disable --now pve-sdn-ensure.service 2>/dev/null; rm -f /etc/systemd/system/pve-sdn-ensure.service; systemctl daemon-reload 2>/dev/null; echo \"pve-sdn-ensure.service removed\"'"
+  }
+
+  depends_on = [proxmox_sdn_applier.this]
+}
