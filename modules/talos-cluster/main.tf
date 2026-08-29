@@ -17,19 +17,16 @@ locals {
   cluster_endpoint   = "https://${var.cp_ips[0]}:6443"
   base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"
   installer_image    = var.installer_image != "" ? var.installer_image : local.base_install_image
-  # SideroLabs multi-disk recommendation: Disk1 = system (EFI/META/STATE/EPHEMERAL),
-  # Disk2 = user volumes via UserVolumeConfig diskSelector "!system_disk" mounted at /var/mnt/<name>.
-  # We intentionally use UserVolumeConfig name="data" -> /var/mnt/data (generic, reusable) instead of
-  # Sidero's official Longhorn example name="longhorn" -> /var/mnt/longhorn (grow:false,
+  # SideroLabs multi-disk wiring (active) — https://docs.siderolabs.com/kubernetes-guides/csi/longhorn#1-2-create-the-uservolumeconfig
+  # Disk1 = system (EFI/META/STATE/EPHEMERAL), Disk2 = user volumes via UserVolumeConfig
+  # diskSelector "!system_disk" mounted at /var/mnt/<name>.
+  # We use UserVolumeConfig name="data" -> /var/mnt/data (generic, reusable) instead of
+  # Sidero's example name="longhorn" -> /var/mnt/longhorn (grow:false,
   # diskSelector `disk.transport == 'nvme' && !system_disk`). Prod is already provisioned as
-  # u-data on /dev/vdb1 at /var/mnt/data (verified via talosctl); renaming to "longhorn" would
-  # orphan the volume, so the name stays "data".
-  # Longhorn Helm must be: --set defaultSettings.defaultDataPath=/var/mnt/data
-  # (would be /var/mnt/longhorn if you follow Sidero's name verbatim — see modules/*/ UserVolumeConfig).
-  # The kubelet extraMount below keeps /var/lib/longhorn bind-mounted (Sidero privileged requirement:
-  # kubelet needs rshared bind at /var/lib/longhorn) for both single-disk (backward compat) and
-  # dual-disk setups — Longhorn is pointed at /var/mnt/data via Helm without changing this mount.
-  # Direct-mount variant if desired: source = "/var/mnt/data" + update Helm defaultDataPath.
+  # u-data on /dev/vdb1 at /var/mnt/data; renaming would orphan the volume.
+  # Longhorn Helm: defaultSettings.defaultDataPath=/var/mnt/data (platform/longhorn/values.yaml)
+  # Kubelet extraMount is dual-disk active: source=/var/mnt/data -> destination=/var/lib/longhorn
+  # (bind,rshared,rw) — Sidero privileged requirement: kubelet needs rshared bind at /var/lib/longhorn.
   has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
   longhorn_patch = var.longhorn_enabled ? yamlencode({
     machine = {
@@ -38,7 +35,7 @@ locals {
           {
             destination = "/var/lib/longhorn"
             type        = "bind"
-            source      = "/var/lib/longhorn"
+            source      = "/var/mnt/data"
             options     = ["bind", "rshared", "rw"]
           }
         ]

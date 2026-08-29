@@ -18,6 +18,7 @@ nodes_cp = [
     disk_size        = 40
     datastore        = "ssd01"
     allow_scheduling = true
+    data_disk_size   = 100
   },
   {
     hostname         = "talos-cp2"

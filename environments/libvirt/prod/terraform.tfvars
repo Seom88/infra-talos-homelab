@@ -16,6 +16,7 @@ nodes_cp = [
     disk_size        = 30
     allow_scheduling = true
     pool             = "talos-pool"
+    data_disk_size   = 100
   },
   {
     hostname         = "talos-cp2"
