@@ -19,6 +19,55 @@ configs:
   cm:
     # Custom health checks
     resource.customizations: |
+      argoproj.io/Application:
+        health.lua: |
+          hs = {}
+          hs.status = "Progressing"
+          hs.message = ""
+          if obj.status == nil then
+            return hs
+          end
+          local syncStatus = obj.status.sync and obj.status.sync.status or "OutOfSync"
+          local healthStatus = obj.status.health and obj.status.health.status or "Progressing"
+          local healthMessage = obj.status.health and obj.status.health.message or ""
+          -- wave-policy controls wave gating:
+          --  "healthy" (default): wave needs Synced + Healthy
+          --  "sync-only": wave needs only Synced (ignores Healthy/Degraded)
+          -- Set via label wave-policy or annotation argocd.argoproj.io/wave-policy
+          local policy = "healthy"
+          if obj.metadata ~= nil then
+            if obj.metadata.labels ~= nil and obj.metadata.labels["wave-policy"] ~= nil then
+              policy = obj.metadata.labels["wave-policy"]
+            elseif obj.metadata.annotations ~= nil and obj.metadata.annotations["argocd.argoproj.io/wave-policy"] ~= nil then
+              policy = obj.metadata.annotations["argocd.argoproj.io/wave-policy"]
+            end
+          end
+          if policy == "sync-only" then
+            if syncStatus == "Synced" then
+              hs.status = "Healthy"
+              hs.message = "Sync-only policy: Synced is sufficient"
+            else
+              hs.status = "Progressing"
+              hs.message = "Waiting for sync (" .. syncStatus .. ")"
+            end
+            return hs
+          end
+          -- default: healthy policy — need both Synced and Healthy
+          if healthStatus == "Degraded" then
+            hs.status = "Degraded"
+            hs.message = healthMessage ~= "" and healthMessage or "Application degraded"
+          elseif healthStatus == "Healthy" and syncStatus == "Synced" then
+            hs.status = "Healthy"
+            hs.message = "Application healthy and synced"
+          else
+            hs.status = "Progressing"
+            if syncStatus ~= "Synced" then
+              hs.message = "Waiting for sync (" .. syncStatus .. ")"
+            else
+              hs.message = healthMessage ~= "" and healthMessage or "Application progressing"
+            end
+          end
+          return hs
       external-secrets.io/ClusterSecretStore:
         health.lua: |
           hs = {}
