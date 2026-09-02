@@ -40,7 +40,7 @@ module "platform" {
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `kubeconfig_path` | string | — (required) | Path to kubeconfig file. Re-triggers `wait_nodes` via `filesha256` when it changes. If file missing, trigger is `kubeconfig-missing`. |
-| `argocd_version` | string | `9.5.13` | Exact ArgoCD chart version. |
+| `argocd_version` | string | `10.6.0` | Exact ArgoCD chart version. |
 | `argocd_namespace` | string | `argocd` | Namespace for ArgoCD. |
 | `argocd_values_file` | string | `""` → `values/argocd/values.yaml` | Custom Helm values file path. |
 

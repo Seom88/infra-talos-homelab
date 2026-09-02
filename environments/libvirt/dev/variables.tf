@@ -34,7 +34,7 @@ variable "pool_name" {
 
 variable "pool_path" {
   type    = string
-  default = "/var/lib/libvirt/images/talos"
+  default = "/mnt/data/libvirt/talos"
 }
 
 variable "gateway" {

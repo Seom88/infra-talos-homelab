@@ -31,19 +31,19 @@ locals {
 
 resource "libvirt_volume" "boot" {
   for_each = local.nodes_all
-  name     = "${each.key}.raw"
+  name     = "${each.key}.qcow2"
   pool     = each.value.pool
   capacity = each.value.disk_size * 1024 * 1024 * 1024
 
   target = {
     format = {
-      type = "raw"
+      type = "qcow2"
     }
   }
 
   create = {
     content = {
-      url = "file://${local.cached_raw_path}"
+      url = "file://${local.cached_qcow2_path}"
     }
   }
 
@@ -56,7 +56,6 @@ resource "libvirt_volume" "boot" {
   ]
 }
 
-# Resize boot volumes for raw images (dmacvicar/libvirt workaround)
 resource "terraform_data" "resize_boot" {
   for_each = local.nodes_all
 
@@ -69,7 +68,7 @@ resource "terraform_data" "resize_boot" {
   provisioner "local-exec" {
     command = <<-EOT
       set -e
-      VOL="${each.key}.raw"
+      VOL="${each.key}.qcow2"
       POOL="${each.value.pool}"
       WANT_GB="${each.value.disk_size}"
       CUR_BYTES=$(virsh --connect qemu:///system vol-dumpxml --pool "$POOL" "$VOL" 2>/dev/null | sed -n "s/.*<capacity unit='bytes'>\([0-9]*\)<\/capacity>.*/\1/p")
@@ -94,15 +93,17 @@ resource "terraform_data" "resize_boot" {
 
 resource "libvirt_volume" "data" {
   for_each = { for k, v in local.nodes_all : k => v if try(v.data_disk_size, null) != null }
-  name     = "${each.key}-data.raw"
+  name     = "${each.key}-data.qcow2"
   pool     = each.value.data_pool
   capacity = each.value.data_disk_size * 1024 * 1024 * 1024
 
   target = {
     format = {
-      type = "raw"
+      type = "qcow2"
     }
   }
+
+  depends_on = [libvirt_pool.talos]
 }
 
 # VM domains (UEFI OVMF)
@@ -173,6 +174,10 @@ resource "libvirt_domain" "node" {
             dev = "vda"
             bus = "virtio"
           }
+          driver = {
+            name = "qemu"
+            type = "qcow2"
+          }
         },
       ],
       try(local.nodes_all[each.key].data_disk_size, null) != null ? [
@@ -186,6 +191,10 @@ resource "libvirt_domain" "node" {
           target = {
             dev = "vdb"
             bus = "virtio"
+          }
+          driver = {
+            name = "qemu"
+            type = "qcow2"
           }
         },
       ] : []

@@ -29,7 +29,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 | `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required) | — |
 | `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required) | — |
 | `talos_version` | Talos Linux version | `1.13.9` |
-| `argocd_version` | ArgoCD Helm chart version | `9.5.13` |
+| `argocd_version` | ArgoCD Helm chart version | `10.6.0` |
 | `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
 
 > Tailscale node extension is disabled ([ADR 001](./adr/001-remove-tailscale-extension.md)): node extension variables are commented out in `variables.tf` as `Tailscale extension disabled`. Subnet routing only (`10.10.0.0/24`). API uses direct per-node IPs (health-gated, removed in 2.0.0). See [Networking](./networking.md).
@@ -52,7 +52,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 | `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
 | `extra_config_patches` | Additional Talos machine config patches | `[]` |
 | `env_name` | Selects schematic file (`schematic-<env_name>.yaml`) — validated `^(dev\|prod)$` (`dev` in `libvirt/dev`, `prod` in `libvirt/prod` + both proxmox envs) | `dev` |
-| `argocd_version` | ArgoCD Helm chart version — semver validated | `9.5.13` |
+| `argocd_version` | ArgoCD Helm chart version — semver validated | `10.6.0` |
 | `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
 
 > See above — same Tailscale note as Proxmox above.

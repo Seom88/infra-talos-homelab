@@ -74,7 +74,7 @@ variable "pool_name" {
 variable "pool_path" {
   description = "Target directory for the Talos storage pool"
   type        = string
-  default     = "/var/lib/libvirt/images/talos"
+  default     = "/mnt/data/libvirt/talos"
 }
 
 # Network
