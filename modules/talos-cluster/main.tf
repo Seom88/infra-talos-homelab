@@ -4,7 +4,7 @@ terraform {
     talos = {
       source = "siderolabs/talos"
       # Pre-release: fixes inconsistent final plan (issue #352); switch to 0.12.0 when stable.
-      version = "0.12.0-alpha.5"
+      version = "0.12.0-beta.0"
     }
   }
 }

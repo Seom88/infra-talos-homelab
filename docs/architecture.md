@@ -69,10 +69,10 @@ Both providers share the same provider-agnostic `modules/talos-cluster` module f
 │   └── demo.png
 ├── environments/                   # Composed roots — one state per env (infra + platform)
 │   ├── proxmox/
-│   │   ├── dev/                    # backend local — bpg/proxmox 0.111.1, helm ~>2.17, talos 0.12.0-alpha.5
+│   │   ├── dev/                    # backend local — bpg/proxmox 0.111.1, helm ~>2.17, talos 0.12.0-beta.0
 │   │   └── prod/                   # backend s3 (RustFS bucket terraform-homelab, key proxmox/prod/terraform.tfstate)
 │   └── libvirt/
-│       ├── dev/                    # backend local — dmacvicar/libvirt ~>0.9.8, talos 0.12.0-alpha.5
+│       ├── dev/                    # backend local — dmacvicar/libvirt ~>0.9.8, talos 0.12.0-beta.0
 │       └── prod/                   # backend s3 (RustFS bucket terraform-homelab, key libvirt/prod/terraform.tfstate)
 │       # each env: main.tf, provider.tf, variables.tf, outputs.tf, terraform.tfvars
 ├── modules/

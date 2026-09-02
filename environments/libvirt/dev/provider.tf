@@ -10,7 +10,7 @@ terraform {
     talos = {
       source = "siderolabs/talos"
       # TODO: alpha fixes inconsistent final plan (issue #352); revert to 0.12.0 when stable.
-      version = "0.12.0-alpha.5"
+      version = "0.12.0-beta.0"
     }
     helm = {
       source  = "hashicorp/helm"

@@ -78,7 +78,7 @@ justfile                          # Unified provider=/env= tasks (tf-apply, tf-a
 
 Open a GitHub issue with:
 
-- Provider and version (`bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-alpha.5`, etc.)
+- Provider and version (`bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-beta.0`, etc.)
 - Terraform version
 - Talos Linux version
 - Steps to reproduce

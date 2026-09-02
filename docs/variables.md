@@ -71,7 +71,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 
 - 57 validation blocks across `modules/talos-cluster`, `modules/proxmox`, `modules/libvirt` and all 4 envs (`environments/proxmox/{dev,prod}`, `environments/libvirt/{dev,prod}`).
 - `drain_on_upgrade` — `bool`, default `false`, parameterized and platform-aware (`false` for Longhorn prod, opt-in `true` for dev). Controls whether nodes are drained during `talos_machine` rolling upgrades.
-- Provider versions are pinned: `bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-alpha.5` ([ADR 002](./adr/002-pinned-talos-provider-alpha.md)), `helm ~>2.17`, `kubernetes ~>2.38`, `time ~>0.14`.
+- Provider versions are pinned: `bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-beta.0` ([ADR 002](./adr/002-pinned-talos-provider-alpha.md)), `helm ~>2.17`, `kubernetes ~>2.38`, `time ~>0.14`.
 - `kubernetes_version` is intentionally **not** managed by Renovate — owned by `talos_cluster.kubernetes_version` with `ignore_kubernetes_upgrade_drift = true`. See [CI/CD](./ci-cd.md).
 
 ---

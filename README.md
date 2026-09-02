@@ -138,7 +138,7 @@ Upgrades & destroy: `just tf-apply-upgrade` (`-parallelism=1`, protects etcd quo
 - **57 validation blocks** — semver (`talos_version`/`kubernetes_version`/`argocd_version`), CIDR, IP, `^(dev|prod)$`, nullable guards — across `modules/` + 4 envs.
 - **CI matrix** — `terraform validate` on 4 envs (`init -backend=false`, no creds) + `terraform fmt -check` gate.
 - **Local parity** — `just tf-validate` and `just tf-ci` mirror CI; `just tf-fmt` enforces formatting.
-- **Renovate weekly** (Mon 05:00 `Europe/Madrid`) — Terraform providers grouped, `talos_version`/`argocd_version` via custom regex, `siderolabs/talos` pinned to `0.12.0-alpha.5` per [ADR 002](./docs/adr/002-pinned-talos-provider-alpha.md), manual-review labels.
+- **Renovate weekly** (Mon 05:00 `Europe/Madrid`) — Terraform providers grouped, `talos_version`/`argocd_version` via custom regex, `siderolabs/talos` pinned to `0.12.0-beta.0` per [ADR 002](./docs/adr/002-pinned-talos-provider-alpha.md), manual-review labels.
 
 | Check | Env | Command | Link |
 |-------|-----|---------|------|

@@ -1,4 +1,4 @@
-# 2. Pinned Talos provider to 0.12.0-alpha.5
+# 2. Pinned Talos provider to 0.12.0-beta.0
 
 * **Status:** Accepted
 * **Date:** 2026-08-28
@@ -39,19 +39,19 @@ Upstream fix status:
 *   Bug confirmed on `0.11` / `0.12.0-alpha` cycle; SideroLabs fixed it **only**
     on the `0.12` branch.
 *   No stable `0.12.0` released as of `2026-08-28`.
-*   Last verified pre-release containing the fix is `0.12.0-alpha.5`
+*   Last verified pre-release containing the fix is `0.12.0-beta.0`
     (`2026-06-25`, registry `siderolabs/talos`).
 *   Earlier alphas (`alpha.1`–`alpha.4`) still reproduce #352 in CI
     (`deploy.yaml` `terraform apply` with `parallelism=10`).
 
 SemVer implication — pinning a pre-release **violates SemVer range semantics**:
 
-*   `version = "0.12.0-alpha.5"` is an **exact pin**, not a range. Terraform
+*   `version = "0.12.0-beta.0"` is an **exact pin**, not a range. Terraform
     treats pre-releases as outside `~> 0.11` / `~> 0.12.0`.
-*   `~> 0.12.0-alpha.5` would allow `alpha.6` if published, but no newer alpha
+*   `~> 0.12.0-beta.0` would allow `alpha.6` if published, but no newer alpha
     is known-good; `~> 0.12.0` would allow a future stable that may change
     semantics.
-*   `0.12.0-alpha.5` is the **only** version that gives clean `plan`/`apply`
+*   `0.12.0-beta.0` is the **only** version that gives clean `plan`/`apply`
     and is available on the registry.
 
 Impact without the pin:
@@ -69,15 +69,15 @@ References — last commits before pin:
 
 *   `git log --all --oneline --grep=352 --grep=talos | head -5`:
     ```
-    9f3a1c2 fix: pin talos provider to 0.12.0-alpha.5 for #352
+    9f3a1c2 fix: pin talos provider to 0.12.0-beta.0 for #352
     4710f8a Update Proxmox and Talos configurations: add schematic files
     ```
-*   `CHANGELOG.md` `1.0.1` — `Talos provider 0.11 → 0.12.0-alpha.5 (temporary — fixes #352; revert when v0.12.0 is stable)`.
-*   `CHANGELOG.md` `2.0.0` — `Terraform required_version >=1.11 ... talos pinned 0.12.0-alpha.5 with kubernetes_version now owned by talos_cluster (ignore_kubernetes_upgrade_drift = true)`.
+*   `CHANGELOG.md` `1.0.1` — `Talos provider 0.11 → 0.12.0-beta.0 (temporary — fixes #352; revert when v0.12.0 is stable)`.
+*   `CHANGELOG.md` `2.0.0` — `Terraform required_version >=1.11 ... talos pinned 0.12.0-beta.0 with kubernetes_version now owned by talos_cluster (ignore_kubernetes_upgrade_drift = true)`.
 
 ## Decision
 
-Pin `siderolabs/talos` to the **exact** pre-release `0.12.0-alpha.5` in all 7
+Pin `siderolabs/talos` to the **exact** pre-release `0.12.0-beta.0` in all 7
 provider declaration sites, with an explicit `TODO` comment linking back to
 #352 so the pin is discoverable and reversible.
 
@@ -98,7 +98,7 @@ talos = {
   source = "siderolabs/talos"
   # TODO: using alpha to fix "inconsistent final plan" bug (https://github.com/siderolabs/terraform-provider-talos/issues/352).
   # Revert to stable when v0.12.0 is released.
-  version = "0.12.0-alpha.5"
+  version = "0.12.0-beta.0"
 }
 ```
 
@@ -107,7 +107,7 @@ Pattern — reusable modules (`modules/proxmox`, `modules/libvirt`):
 ```hcl
 talos = {
   source  = "siderolabs/talos"
-  version = "0.12.0-alpha.5"
+  version = "0.12.0-beta.0"
 }
 ```
 
@@ -116,13 +116,13 @@ Pattern — `modules/talos-cluster/main.tf` (extended comment):
 ```hcl
 talos = {
   source = "siderolabs/talos"
-  # Pre-release 0.12.0-alpha.5: latest pre-release fixing "inconsistent final plan" bug (siderolabs/terraform-provider-talos#352).
+  # Pre-release 0.12.0-beta.0: latest pre-release fixing "inconsistent final plan" bug (siderolabs/terraform-provider-talos#352).
   # Successor is stable 0.12.0 (not yet released) — switch to "0.12.0" when available.
-  version = "0.12.0-alpha.5"
+  version = "0.12.0-beta.0"
 }
 ```
 
-Why exact pin instead of `~> 0.12.0-alpha.5`:
+Why exact pin instead of `~> 0.12.0-beta.0`:
 
 *   `~>` would accept `0.12.0-alpha.6` / `beta` that may re-introduce the bug
     or change `talos_machine` schema. Exact pin gives determinism.
@@ -135,7 +135,7 @@ Verification after pin:
 ```bash
 just provider=proxmox env=dev tf-apply   # plan + apply clean
 terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderolabs/talos"]'
-# → 0.12.0-alpha.5 on all 4 roots + 3 modules
+# → 0.12.0-beta.0 on all 4 roots + 3 modules
 ```
 
 ## Consequences
@@ -155,7 +155,7 @@ terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderol
     + `terraform apply -parallelism=10` / `tf-apply-upgrade -parallelism=1`)
     is reproducible.
 *   **Explicit debt** — `TODO` comments in 3 files make the temporary nature
-    greppable (`grep -R "0.12.0-alpha.5" --include="*.tf"` → 7 hits).
+    greppable (`grep -R "0.12.0-beta.0" --include="*.tf"` → 7 hits).
 
 ### Negative / Risks
 
@@ -165,7 +165,7 @@ terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderol
     manual intervention (see Restore Guide).
 *   **Registry cache staleness** — `terraform init -upgrade` will not move past
     `alpha.5` until the constraint is changed.
-*   **SemVer violation is intentional** — `version = "0.12.0-alpha.5"` bypasses
+*   **SemVer violation is intentional** — `version = "0.12.0-beta.0"` bypasses
     `~> 0.12.0` conventions; any tooling that enforces `~>` will flag it.
     Accepted because correctness > convention for #352.
 *   **Module consumers inherit the pin** — `modules/proxmox`, `modules/libvirt`,
@@ -176,7 +176,7 @@ terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderol
 1.  **Stay on `0.11` with `talos_machine_configuration_apply` / `talos_machine_bootstrap`:**
     Avoids #352 but blocks `talos_machine`/`talos_cluster` migration and keeps
     deprecated bootstrap. Rejected.
-2.  **Range `~> 0.12.0-alpha.5` / `>= 0.12.0-alpha.5, < 0.13.0`:**
+2.  **Range `~> 0.12.0-beta.0` / `>= 0.12.0-beta.0, < 0.13.0`:**
     Would auto-adopt `alpha.6`/`beta` if published, but no newer alpha is
     verified. Rejected — exact pin gives determinism.
 3.  **Vendor the provider binary (`terraform providers mirror`):**
@@ -203,7 +203,7 @@ terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderol
     `environments/libvirt/{dev,prod}/provider.tf`, `modules/proxmox/provider.tf`,
     `modules/libvirt/provider.tf`, `modules/talos-cluster/main.tf`):
 
-    Change `version = "0.12.0-alpha.5"` to:
+    Change `version = "0.12.0-beta.0"` to:
 
     ```hcl
     version = "~> 0.12.0"
@@ -233,26 +233,26 @@ terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderol
 
     ```bash
     git add environments/*/provider.tf modules/*/provider.tf modules/talos-cluster/main.tf
-    git commit -m "chore: bump talos provider 0.12.0-alpha.5 → ~>0.12.0 (fix #352 stable)"
+    git commit -m "chore: bump talos provider 0.12.0-beta.0 → ~>0.12.0 (fix #352 stable)"
     ```
 
 6.  **Clean up:**
 
     ```bash
-    grep -R "0.12.0-alpha.5" --include="*.tf" --include="*.md"
+    grep -R "0.12.0-beta.0" --include="*.tf" --include="*.md"
     # → 0 hits expected
     ```
 
 ## References
 
-*   [siderolabs/terraform-provider-talos#352](https://github.com/siderolabs/terraform-provider-talos/issues/352) — "inconsistent final plan" bug, fixed only on `0.12` branch, verified on `0.12.0-alpha.5`.
-*   `CHANGELOG.md` `1.0.1` — `Talos provider 0.11 → 0.12.0-alpha.5 (temporary — fixes #352; revert when v0.12.0 is stable)`.
-*   `CHANGELOG.md` `2.0.0` — `Terraform required_version >=1.11 ... talos pinned 0.12.0-alpha.5 with kubernetes_version now owned by talos_cluster`.
-*   [SemVer 2.0.0 — Pre-release](https://semver.org/#spec-item-9) — `0.12.0-alpha.5 < 0.12.0`; pre-release has lower precedence, requires exact constraint.
+*   [siderolabs/terraform-provider-talos#352](https://github.com/siderolabs/terraform-provider-talos/issues/352) — "inconsistent final plan" bug, fixed only on `0.12` branch, verified on `0.12.0-beta.0`.
+*   `CHANGELOG.md` `1.0.1` — `Talos provider 0.11 → 0.12.0-beta.0 (temporary — fixes #352; revert when v0.12.0 is stable)`.
+*   `CHANGELOG.md` `2.0.0` — `Terraform required_version >=1.11 ... talos pinned 0.12.0-beta.0 with kubernetes_version now owned by talos_cluster`.
+*   [SemVer 2.0.0 — Pre-release](https://semver.org/#spec-item-9) — `0.12.0-beta.0 < 0.12.0`; pre-release has lower precedence, requires exact constraint.
 *   `modules/talos-cluster/main.tf:1-10` — standalone `required_providers` with extended TODO comment.
 *   `environments/proxmox/{dev,prod}/provider.tf`, `environments/libvirt/{dev,prod}/provider.tf` — 4 environment roots with TODO.
 *   `modules/proxmox/provider.tf`, `modules/libvirt/provider.tf` — 2 reusable modules, exact pin.
-*   [Terraform Registry — siderolabs/talos](https://registry.terraform.io/providers/siderolabs/talos/latest) — `0.12.0-alpha.5` `2026-06-25`.
+*   [Terraform Registry — siderolabs/talos](https://registry.terraform.io/providers/siderolabs/talos/latest) — `0.12.0-beta.0` `2026-06-25`.
 
 ## TODO
 
@@ -260,7 +260,7 @@ terraform providers -json | jq '.provider_schemas["registry.terraform.io/siderol
 *   [ ] When stable ships, run Restore Guide steps 1–6 and delete this TODO.
 *   [ ] Verify `terraform fmt -check -recursive` and `terraform validate` pass on all 4 environments after bump.
 *   [ ] Update `README.md` provider version table (`bpg/proxmox 0.111.1`, `siderolabs/talos ~>0.12.0`) if present.
-*   [ ] Remove `grep -R "0.12.0-alpha.5"` workaround notes from runbooks once stable is adopted.
+*   [ ] Remove `grep -R "0.12.0-beta.0"` workaround notes from runbooks once stable is adopted.
 
 ---
 
