@@ -16,6 +16,9 @@ applicationSet:
 
 # ArgoCD Helm chart values
 configs:
+  params:
+    # Gateway strip mode — ArgoCD served at /argocd via my-cluster gateway, keep insecure for http proxy
+    server.insecure: "true"
   cm:
     # Custom health checks
     resource.customizations: |
