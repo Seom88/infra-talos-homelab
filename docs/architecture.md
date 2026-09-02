@@ -4,7 +4,7 @@
 
 [← Back to README](../README.md) · [Networking →](./networking.md) · [Variables →](./variables.md) · [Operations →](./operations.md)
 
-> **Two-repo contract:** This repo is the **substrate** (VMs, Talos bootstrap, SDN/NAT, kubeconfig, ArgoCD). The companion repo [secured-gitops-tailscale-homelab](https://github.com/Seom88/secured-gitops-tailscale-homelab) runs **everything on top** — Longhorn (wave-0, CSI-gated), Vault, SeaweedFS, monitoring, Tailscale ingress — via App-of-Apps sync-waves (`00-longhorn` → `04-tailscale`). Longhorn node prerequisites (kubelet `extraMounts` + `iscsi-tools`/`util-linux-tools`) stay here; volumes are claimed there. For _why_ see [Why This Exists](../README.md#why-this-exists) and [Decisions](./decisions.md) ([Talos vs kubeadm](./decisions.md#1-talos-linux-vs-kubeadm), [composable ArgoCD](./decisions.md#6-argocd-vs-fluxcd), [Cilium InlineManifest](./decisions.md#7-cilium-inlinemanifest-vs-helm-application)).
+> **Two-repo contract:** This repo is the **substrate** (VMs, Talos bootstrap, SDN/NAT, kubeconfig, Cilium + Gateway API + ArgoCD). The companion repo [secured-gitops-tailscale-homelab](https://github.com/Seom88/secured-gitops-tailscale-homelab) runs **everything on top** — Longhorn (wave-0, CSI-gated), Vault, SeaweedFS, monitoring, Tailscale ingress — via App-of-Apps sync-waves (`00-longhorn` → `04-tailscale`). Longhorn node prerequisites (kubelet `extraMounts` + `iscsi-tools`/`util-linux-tools`) stay here; volumes are claimed there. For _why_ see [Why This Exists](../README.md#why-this-exists) and [Decisions](./decisions.md) ([Talos vs kubeadm](./decisions.md#1-talos-linux-vs-kubeadm), [composable ArgoCD](./decisions.md#6-argocd-vs-fluxcd), [Cilium Helm + Gateway API](./decisions.md#7-cilium-inlinemanifest-vs-helm-application)).
 
 ## Provider topologies
 
@@ -104,16 +104,18 @@ flowchart TD
     F --> G
 
     G --> H[talos_cluster bootstrap]
-    H --> I[talos_cluster_health gate — kube-apiserver/etcd/Ready]
+    H --> I[talos_cluster_health gate — kube-apiserver/etcd bootstrapped]
     I --> J[Generate kubeconfig single context via subnet route 10.10.0.0/24]
-    J --> K[module.platform terraform_data.wait_nodes — kubectl wait Ready]
-    K --> L[helm_release.argocd]
-    L --> M[kubectl / talosctl ready]
+    J --> K[helm_release.gateway_api — CRDs 1.2.3 standard]
+    K --> L[helm_release.cilium — 1.20.1 Without kube-proxy + Gateway API, KubePrism 7445]
+    L --> M[terraform_data.wait_nodes — kubectl wait Ready — CNI present]
+    M --> N[helm_release.argocd]
+    N --> O[kubectl / talosctl ready]
 ```
 
 ### Proxmox path
 
-Terraform creates the SDN stack (`proxmox_sdn_zone` + VNet `talosvn` + subnet `snat = true` + `proxmox_sdn_applier`), downloads the Talos image and creates VMs with cloud-init. Talos boots, `talos_cluster` bootstraps the first control plane node, `talos_cluster_health` blocks until kube-apiserver, etcd and all nodes are Ready (direct per-node IPs, health-gated), `local_file.kubeconfig` materializes a single-context kubeconfig via the subnet route `10.10.0.0/24`, and `module.platform` installs ArgoCD in the same apply.
+Terraform creates the SDN stack (`proxmox_sdn_zone` + VNet `talosvn` + subnet `snat = true` + `proxmox_sdn_applier`), downloads the Talos image and creates VMs with cloud-init. Talos boots, `talos_cluster` bootstraps the first control plane node, `talos_cluster_health` blocks until kube-apiserver, etcd and all nodes are bootstrapped (direct per-node IPs, health-gated), `local_file.kubeconfig` materializes a single-context kubeconfig via the subnet route `10.10.0.0/24`, and `module.platform` installs Gateway API CRDs → Cilium → `wait_nodes` (CNI-gated `Ready`) → ArgoCD in the same apply (DAG `gateway_api→cilium→wait_nodes→argocd`).
 
 ### Libvirt path
 

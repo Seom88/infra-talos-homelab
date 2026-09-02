@@ -89,21 +89,28 @@ Steps: `checkout` → `setup-terraform` → placeholder `kubeconfig.yaml` → `t
 
 ## Renovate
 
-`renovate.json` runs weekly **Monday 05:00 `Europe/Madrid`**, `config:recommended`, labels `dependencies`:
+`renovate.json` runs weekly **Monday 05:00 `Europe/Madrid`** (`schedule: ["before 5am on monday"]`, `timezone: Europe/Madrid`), `config:recommended`, `baseBranchPatterns: ["dev"]`, labels `dependencies` — **8 `packageRules` + 5 `customManagers`**:
 
-| Rule | Datasource | Group / Label | Automerge |
-|------|------------|---------------|-----------|
+| Rule | Datasource / Manager | Group / Label | Automerge |
+|------|----------------------|---------------|-----------|
 | Pinned talos provider alpha until #352 fixed — ADR 002 | `terraform-provider` `siderolabs/talos` | `allowedVersions: =0.12.0-beta.0`, `enabled: false` | — |
 | Talos upgrades need manual validation in `libvirt/dev` first | `github-releases` `siderolabs/talos` | `manual-review/talos` | `false` |
-| ArgoCD Helm chart upgrades need manual review | `helm` `argo-cd` | `manual-review/argocd` | `false` |
+| ArgoCD major needs manual review — minor/patch automerge | `helm` `argo-cd` `matchUpdateTypes: ["major"]` | `manual-review/argocd` | `false` (major only) |
 | Group non-critical Terraform providers | `terraform` `terraform-provider` excl. `siderolabs/talos` | `terraform providers` (`terraform-providers`), `terraform` | grouped PR |
+| Automerge patch/minor for Helm charts (ArgoCD, Cilium, Gateway API) — safe for homelab | `helm` `argo-cd`/`cilium`/`gateway-api-crds` `matchUpdateTypes: ["patch","minor"]` | `automerge/minor` | `true` |
+| Automerge patch for Terraform providers — minor/major needs review | `terraform` `terraform-provider` excl. `siderolabs/talos` `matchUpdateTypes: ["patch"]` | `automerge/patch` | `true` |
+| K8s patch automerge only — minor needs Talos support check (1.13 max 1.36) | `github-releases` `kubernetes/kubernetes` `matchUpdateTypes: ["patch"]` | `automerge/patch` | `true` |
+| Major updates still need manual review | `*` `matchUpdateTypes: ["major"]` | `manual-review/major` | `false` |
 
-**Custom managers** (regex on `variables.tf`):
+**Custom managers** (regex on `variables.tf`, semver):
 
-- `talos_version` (`variable "talos_version" ... default = "x.y.z"`) → `github-releases/siderolabs/talos`, semver
-- `argocd_version` (`variable "argocd_version" ... default = "x.y.z"`) → `helm/argo-cd` via `https://argoproj.github.io/argo-helm`, semver
+- `talos_version` (`variable "talos_version" ... default = "x.y.z"`) → `github-releases/siderolabs/talos`
+- `argocd_version` (`variable "argocd_version" ... default = "x.y.z"`) → `helm/argo-cd` via `https://argoproj.github.io/argo-helm`
+- `cilium_version` (`variable "cilium_version" ... default = "x.y.z"`) → `helm/cilium` via `https://helm.cilium.io`
+- `gateway_api_crds_version` (`variable "gateway_api_crds_version" ... default = "x.y.z"`) → `helm/gateway-api-crds` via `https://christianhuth.github.io/helm-charts`
+- `kubernetes_version` (`variable "kubernetes_version" ... default = "x.y.z"`) → `github-releases/kubernetes/kubernetes`
 
-`kubernetes_version` is intentionally **not** managed by Renovate — owned by `talos_cluster.kubernetes_version` with `ignore_kubernetes_upgrade_drift = true` (see `modules/talos-cluster/main.tf:124,184`). Validate Talos upgrades in `libvirt/dev` before merging to prod.
+> `kubernetes_version` is now managed (patch automerge, minor manual due to Talos support-matrix). `ignore_kubernetes_upgrade_drift = true` on `talos_machine` keeps upgrades driven by `talos_cluster.kubernetes_version` (`modules/talos-cluster/main.tf:112,170` + `talos_machine_configuration` `kubernetes_version = "v${var.kubernetes_version}"`). Validate Talos upgrades in `libvirt/dev` before merging to prod.
 
 ---
 

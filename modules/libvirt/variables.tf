@@ -159,11 +159,11 @@ variable "talos_version" {
 variable "kubernetes_version" {
   description = "Kubernetes version (e.g. 1.36.1)"
   type        = string
-  default     = "1.36.2"
+  default     = "1.36.3"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
-    error_message = "kubernetes_version must be semver X.Y.Z (e.g. 1.36.2)."
+    error_message = "kubernetes_version must be semver X.Y.Z (e.g. 1.36.3)."
   }
 }
 

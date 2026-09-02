@@ -34,6 +34,21 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 
 > Tailscale node extension is disabled ([ADR 001](./adr/001-remove-tailscale-extension.md)): node extension variables are commented out in `variables.tf` as `Tailscale extension disabled`. Subnet routing only (`10.10.0.0/24`). API uses direct per-node IPs (health-gated, removed in 2.0.0). See [Networking](./networking.md).
 
+## Platform (`modules/platform`)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `cilium_version` | Cilium Helm chart version (`cilium/cilium`) — semver validated | `1.20.1` |
+| `cilium_namespace` | Namespace for Cilium | `kube-system` |
+| `cilium_values_file` | Custom Cilium Helm values path (defaults to `values/cilium/values.yaml`) | `""` |
+| `cilium_operator_replicas` | Cilium operator replicas (`1..3`, leader election; `1` dev, `2` HA) — sets `operator.replicas` | `1` |
+| `gateway_api_crds_version` | Gateway API CRDs chart version (`christianhuth/gateway-api-crds` → app `v1.6.1`) | `1.2.3` |
+| `gateway_api_version` | Alias for `gateway_api_crds_version` (same chart) | `1.2.3` |
+| `gateway_api_crds_namespace` | Namespace for Gateway API CRDs release (CRDs cluster-scoped) | `kube-system` |
+| `gateway_api_channel` | Gateway API channel `standard` / `experimental` → `standard.enabled` / `experimental.enabled` | `standard` |
+
+> Cilium values: `modules/platform/values/cilium/values.yaml` (Sidero Without kube-proxy + Gateway API: `ipam=kubernetes`, `kubeProxyReplacement=true`, `k8sServiceHost=localhost:7445` KubePrism, `cgroup.autoMount=false`, `gatewayAPI.enabled=true`). DAG: `gateway_api` → `cilium` → `wait_nodes` → `argocd`.
+
 ## Libvirt
 
 | Variable | Description | Default |
@@ -48,7 +63,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 | `talos_image_cache_dir` | Local cache for nocloud raw images | `~/.cache/talos-images` |
 | `cluster_name` | Talos / Kubernetes cluster name | `talos-cluster` |
 | `talos_version` | Talos Linux version — semver validated | `1.13.9` |
-| `kubernetes_version` | Kubernetes version — semver validated | `1.36.2` |
+| `kubernetes_version` | Kubernetes version — semver validated | `1.36.3` |
 | `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
 | `extra_config_patches` | Additional Talos machine config patches | `[]` |
 | `env_name` | Selects schematic file (`schematic-<env_name>.yaml`) — validated `^(dev\|prod)$` (`dev` in `libvirt/dev`, `prod` in `libvirt/prod` + both proxmox envs) | `dev` |
@@ -69,10 +84,10 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 
 ## Validation notes
 
-- 57 validation blocks across `modules/talos-cluster`, `modules/proxmox`, `modules/libvirt` and all 4 envs (`environments/proxmox/{dev,prod}`, `environments/libvirt/{dev,prod}`).
+- 57+ validation blocks across `modules/talos-cluster`, `modules/proxmox`, `modules/libvirt`, `modules/platform` and all 4 envs (`environments/proxmox/{dev,prod}`, `environments/libvirt/{dev,prod}`).
 - `drain_on_upgrade` — `bool`, default `false`, parameterized and platform-aware (`false` for Longhorn prod, opt-in `true` for dev). Controls whether nodes are drained during `talos_machine` rolling upgrades.
 - Provider versions are pinned: `bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-beta.0` ([ADR 002](./adr/002-pinned-talos-provider-alpha.md)), `helm ~>2.17`, `kubernetes ~>2.38`, `time ~>0.14`.
-- `kubernetes_version` is intentionally **not** managed by Renovate — owned by `talos_cluster.kubernetes_version` with `ignore_kubernetes_upgrade_drift = true`. See [CI/CD](./ci-cd.md).
+- `kubernetes_version` (`1.36.3` default in `modules/talos-cluster` + `environments/libvirt/*`) is now **managed by Renovate** via `customManagers` regex (`github-releases/kubernetes/kubernetes`, semver) — patch automerges, minor stays manual (Talos 1.13 max 1.36). `talos_cluster.kubernetes_version` is pinned per-machine (`v${var.kubernetes_version}`) with `ignore_kubernetes_upgrade_drift = true` to keep upgrades driven by `talos_cluster`. See [CI/CD](./ci-cd.md).
 
 ---
 

@@ -34,6 +34,20 @@ locals {
     }
   }) : ""
 
+  # Cilium: update this for talos v14 https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium
+  cilium_patch = yamlencode({
+    cluster = {
+      network = {
+        cni = {
+          name = "none"
+        }
+      }
+      proxy = {
+        disabled = true
+      }
+    }
+  })
+
   cp_allow_scheduling_map = { for i, hostname in var.cp_hostnames : hostname => var.cp_allow_scheduling[i] }
   # Per-node scheduling: allowSchedulingOnControlPlanes removes taint per node.
   scheduling_patch = yamlencode({
@@ -53,12 +67,13 @@ data "talos_client_configuration" "client_config" {
 
 # Control plane config (per-node scheduling patch)
 data "talos_machine_configuration" "control_machine_config" {
-  for_each         = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
-  cluster_name     = var.cluster_name
-  cluster_endpoint = local.cluster_endpoint
-  machine_type     = "controlplane"
-  machine_secrets  = var.machine_secrets
-  talos_version    = "v${var.talos_version}"
+  for_each           = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = local.cluster_endpoint
+  machine_type       = "controlplane"
+  machine_secrets    = var.machine_secrets
+  talos_version      = "v${var.talos_version}"
+  kubernetes_version = "v${var.kubernetes_version}"
   config_patches = compact(concat([
     yamlencode({
       machine = {
@@ -81,6 +96,7 @@ data "talos_machine_configuration" "control_machine_config" {
     # }) : "",
     local.cp_allow_scheduling_map[each.key] ? local.scheduling_patch : "",
     local.longhorn_patch,
+    local.cilium_patch,
   ], var.extra_config_patches))
 }
 
@@ -110,11 +126,12 @@ resource "talos_cluster" "cluster" {
 
 # Worker config
 data "talos_machine_configuration" "worker_machine_config" {
-  cluster_name     = var.cluster_name
-  cluster_endpoint = local.cluster_endpoint
-  machine_type     = "worker"
-  machine_secrets  = var.machine_secrets
-  talos_version    = "v${var.talos_version}"
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = local.cluster_endpoint
+  machine_type       = "worker"
+  machine_secrets    = var.machine_secrets
+  talos_version      = "v${var.talos_version}"
+  kubernetes_version = "v${var.kubernetes_version}"
   config_patches = compact(concat([
     yamlencode({
       machine = {
@@ -136,6 +153,7 @@ data "talos_machine_configuration" "worker_machine_config" {
     #   ]
     # }) : "",
     local.longhorn_patch,
+    local.cilium_patch,
   ], var.extra_config_patches))
 }
 

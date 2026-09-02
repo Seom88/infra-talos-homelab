@@ -41,7 +41,7 @@ Infrastructure alone isn't enough: without a distributed storage layer, Kubernet
 
 **Companion repo ([secured-gitops-tailscale-homelab](https://github.com/Seom88/secured-gitops-tailscale-homelab)):** declares everything that *runs* on it — [Longhorn](./docs/decisions.md#5-longhorn-vs-ceph-rook) (wave-0, CSI-gated so PVCs bind before Vault), cert-manager, Vault (HA Raft), SeaweedFS, monitoring (kube-prometheus-stack + Loki), and Tailscale ingress — via App-of-Apps sync-waves. See its [`platform/`](https://github.com/Seom88/secured-gitops-tailscale-homelab/tree/main/platform) and [`gitops/templates/apps/`](https://github.com/Seom88/secured-gitops-tailscale-homelab/tree/main/gitops/templates/apps) (`00-longhorn` → `01-vault` → `02-seaweedfs` → `03-monitoring` → `04-tailscale`).
 
-**[Cilium is the exception that stays here.](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application)** CNI must be patched at Talos machine-config before the first node boots (Sidero: `KubeFlannelCNIConfig $patch: delete` + InlineManifest, KubePrism `localhost:7445`). It can't be an ArgoCD Application (ArgoCD needs networking to become Healthy — circular dependency (CNI must exist before ArgoCD can become Healthy — chicken-and-egg)). Future work tracks it in [Roadmap](#roadmap--changelog).
+**[Cilium is the exception that stays here.](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application)** Talos disables kube-router (`cluster.network.cni.name: none` + `cluster.proxy.disabled: true` in `modules/talos-cluster/main.tf:38-49`), but Cilium itself is **Cilium 1.20.1 via Helm + Gateway API CRDs 1.2.3 (standard v1.6.1) with KubePrism `localhost:7445`** in `modules/platform` — not `inlineManifests` — to avoid manifest/secrets bloat in `tfstate` and keep the Helm provider flow (`gateway_api` → `cilium` → `wait_nodes` → `argocd`, values `modules/platform/values/cilium/values.yaml` Sidero Without kube-proxy + Gateway API). It can't be an ArgoCD Application (ArgoCD needs networking to become Healthy — circular dependency). See [Roadmap](#roadmap--changelog).
 
 > Why these choices? See the [Decision Log](./docs/decisions.md) for the `why X over Y` trade-offs ([Talos vs kubeadm](./docs/decisions.md#1-talos-linux-vs-kubeadm), [Proxmox vs ESXi](./docs/decisions.md#2-proxmox-ve-vs-esxi-bare-metal), [libvirt vs Proxmox-only](./docs/decisions.md#3-libvirt-kvm-vs-proxmox-only), [Tailscale subnet vs extension/WireGuard](./docs/decisions.md#4-tailscale-subnet-routing-vs-per-node-extension), [Longhorn vs Ceph/Rook](./docs/decisions.md#5-longhorn-vs-ceph-rook), [ArgoCD vs FluxCD](./docs/decisions.md#6-argocd-vs-fluxcd), [Cilium InlineManifest vs Helm](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application)). Full MADRs live in [`docs/adr/`](./docs/adr/).
 
@@ -82,11 +82,12 @@ flowchart TD
     G --> H[talos_cluster bootstrap]
     H --> I[talos_cluster_health gate]
     I --> J[kubeconfig single context 10.10.0.0/24]
-    J --> K[module.platform wait Ready → helm_release.argocd]
-    K --> L[kubectl / talosctl ready]
+    J --> K[helm_release.gateway_api 1.2.3 → helm_release.cilium 1.20.1 KubePrism 7445]
+    K --> L[wait Ready CNI-gated → helm_release.argocd]
+    L --> M[kubectl / talosctl ready]
 ```
 
-> **Proxmox:** `proxmox_sdn_zone` + VNet `talosvn` + subnet `snat=true` + `proxmox_sdn_applier` → VMs → `talos_cluster_health` (direct per-node IPs, 10 m) → kubeconfig via subnet route → ArgoCD.
+> **Proxmox:** `proxmox_sdn_zone` + VNet `talosvn` + subnet `snat=true` + `proxmox_sdn_applier` → VMs → `talos_cluster_health` → kubeconfig via subnet route → `gateway_api` → `cilium` (KubePrism 7445) → `wait_nodes` → `argocd`.
 > **Libvirt:** `virbr-talos` NAT + DHCP + pool `talos-pool` + cached nocloud image → same bootstrap. Both share `modules/talos-cluster`.
 > Full detail → [docs/architecture.md](./docs/architecture.md) · Networking → [docs/networking.md](./docs/networking.md) · Variables → [docs/variables.md](./docs/variables.md)
 
@@ -138,7 +139,7 @@ Upgrades & destroy: `just tf-apply-upgrade` (`-parallelism=1`, protects etcd quo
 - **57 validation blocks** — semver (`talos_version`/`kubernetes_version`/`argocd_version`), CIDR, IP, `^(dev|prod)$`, nullable guards — across `modules/` + 4 envs.
 - **CI matrix** — `terraform validate` on 4 envs (`init -backend=false`, no creds) + `terraform fmt -check` gate.
 - **Local parity** — `just tf-validate` and `just tf-ci` mirror CI; `just tf-fmt` enforces formatting.
-- **Renovate weekly** (Mon 05:00 `Europe/Madrid`) — Terraform providers grouped, `talos_version`/`argocd_version` via custom regex, `siderolabs/talos` pinned to `0.12.0-beta.0` per [ADR 002](./docs/adr/002-pinned-talos-provider-alpha.md), manual-review labels.
+- **Renovate weekly** (Mon 05:00 `Europe/Madrid`, `baseBranch: dev`) — 5 `customManagers` (`talos_version`, `argocd_version`, `cilium_version`, `gateway_api_crds_version`, `kubernetes_version`) + 8 `packageRules`: Helm `argo-cd`/`cilium`/`gateway-api-crds` patch+minor automerge, Terraform providers patch automerge, k8s patch automerge / minor manual (Talos 1.13 max 1.36), `siderolabs/talos` pinned to `0.12.0-beta.0` per [ADR 002](./docs/adr/002-pinned-talos-provider-alpha.md), manual-review labels.
 
 | Check | Env | Command | Link |
 |-------|-----|---------|------|
@@ -154,12 +155,12 @@ Details: [docs/ci-cd.md](./docs/ci-cd.md) · [docs/variables.md](./docs/variable
 
 | Version | Highlights | Link |
 |---------|------------|------|
-| `[Unreleased]` | Deterministic App-of-Apps sync-wave Lua, SDN SNAT reboot fix (`pve-sdn-ensure.service`), [Longhorn](./docs/decisions.md#5-longhorn-vs-ceph-rook) dual-disk HA | [CHANGELOG#unreleased](./CHANGELOG.md#unreleased) |
+| `[Unreleased]` | **Cilium 1.20.1 via Helm + Gateway API CRDs 1.2.3 (standard v1.6.1) with KubePrism 7445** (Helm not InlineManifest — no manifest/secrets in state, Sidero Without kube-proxy + Gateway API, DAG `gateway_api→cilium→wait_nodes→argocd`), deterministic App-of-Apps sync-wave Lua, SDN SNAT reboot fix (`pve-sdn-ensure.service`), [Longhorn](./docs/decisions.md#5-longhorn-vs-ceph-rook) dual-disk HA | [CHANGELOG#unreleased](./CHANGELOG.md#unreleased) |
 | `2.0.0` | Composed platform (single state), S3 backend (RustFS), `talos_machine` rolling upgrades, 57 validations | [CHANGELOG#2.0.0](./CHANGELOG.md#200---2026-08-28) |
 
 **Next (infra scope only):**
 
-- **Cilium CNI via Talos InlineManifest** (replace kube-router, add Hubble & NetworkPolicies) — infra, not GitOps: Sidero requires `cluster.network.cni.name: none` (`KubeFlannelCNIConfig $patch: delete`) + `cluster.inlineManifests` before bootstrap and KubePrism on `localhost:7445`; ArgoCD needs CNI to become Healthy (chicken-and-egg). See [Decisions: Cilium InlineManifest vs Helm](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application) → [Roadmap detail in Decisions](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application).
+- **Cilium hardened** — `1.20.1` Without kube-proxy + Gateway API now shipped via Helm (`modules/platform`); remaining: Hubble observability, NetworkPolicies/microsegmentation tuning, and Gateway API Gateway/HTTPRoute rollout. Talos still `cni.name: none` + `proxy.disabled: true` (`modules/talos-cluster/main.tf:38-49`); platform DAG `gateway_api→cilium→wait_nodes→argocd` replaces the old `InlineManifest` deadlock. See [Decisions: Cilium](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application).
 - **Multi-node Proxmox SDN** (remove single-node `pve-sdn-ensure` limitation — see [ADR 003](./docs/adr/003-sdn-snat-runtime-drift.md) and [Decisions: Proxmox SDN](./docs/decisions.md#2-proxmox-ve-vs-esxi-bare-metal))
 - **Talos/Kubernetes version stream validation** ([libvirt/dev → prod promotion](./docs/decisions.md#3-libvirt-kvm-vs-proxmox-only)) — cheap validation in ephemeral [libvirt](./docs/decisions.md#3-libvirt-kvm-vs-proxmox-only) before rolling prod.
 

@@ -21,9 +21,10 @@
       "automerge": false
     },
     {
-      "description": "ArgoCD Helm chart upgrades need manual review",
+      "description": "ArgoCD major needs manual review - minor/patch automerge",
       "matchDatasources": ["helm"],
       "matchPackageNames": ["argo-cd"],
+      "matchUpdateTypes": ["major"],
       "labels": ["manual-review/argocd"],
       "automerge": false
     },
@@ -35,6 +36,37 @@
       "groupName": "terraform providers",
       "groupSlug": "terraform-providers",
       "labels": ["terraform"]
+    },
+    {
+      "description": "Automerge patch/minor for Helm charts (ArgoCD, Cilium, Gateway API) - safe for homelab",
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["argo-cd", "cilium", "gateway-api-crds"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "labels": ["automerge/minor"]
+    },
+    {
+      "description": "Automerge patch for Terraform providers - minor/major needs review",
+      "matchManagers": ["terraform"],
+      "matchDatasources": ["terraform-provider"],
+      "excludePackageNames": ["siderolabs/talos"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "labels": ["automerge/patch"]
+    },
+    {
+      "description": "K8s patch automerge only - minor needs Talos support check (1.13 max 1.36)",
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["kubernetes/kubernetes"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "labels": ["automerge/patch"]
+    },
+    {
+      "description": "Major updates still need manual review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["manual-review/major"],
+      "automerge": false
     }
   ],
   "customManagers": [
@@ -57,6 +89,38 @@
       "datasourceTemplate": "helm",
       "depNameTemplate": "argo-cd",
       "registryUrlTemplate": "https://argoproj.github.io/argo-helm",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/variables\\.tf$/", "/^variables\\.tf$/"],
+      "matchStrings": [
+        "variable\\s+\"cilium_version\"[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "helm",
+      "depNameTemplate": "cilium",
+      "registryUrlTemplate": "https://helm.cilium.io",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/variables\\.tf$/", "/^variables\\.tf$/"],
+      "matchStrings": [
+        "variable\\s+\"gateway_api_crds_version\"[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "helm",
+      "depNameTemplate": "gateway-api-crds",
+      "registryUrlTemplate": "https://christianhuth.github.io/helm-charts",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/variables\\.tf$/", "/^variables\\.tf$/"],
+      "matchStrings": [
+        "variable\\s+\"kubernetes_version\"[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "kubernetes/kubernetes",
       "versioningTemplate": "semver"
     }
   ]
