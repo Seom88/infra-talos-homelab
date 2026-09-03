@@ -1,3 +1,11 @@
+# ArgoCD — keep NetworkPolicy ENABLED (Cilium enforces; Flannel ignored)
+# Do NOT set global.networkPolicy.create to false — Cilium strict enforcement requires explicit allows
+# for kube-apiserver/host (port-forward) and tailscale gateway (ts-ingress).
+global:
+  networkPolicy:
+    create: true
+    defaultDenyIngress: false
+
 controller:
   replicas: 1
 
@@ -148,3 +156,94 @@ configs:
             hs.message = "Waiting for replicas"
           end
           return hs
+
+# Cilium-aware complements to the chart's default K8s NetworkPolicies.
+# Flannel ignored NetworkPolicy; Cilium enforces. The chart's 6 default
+# NetworkPolicies remain (global.networkPolicy.create=true, allow-all on
+# argocd-server but restrictive on repo-server/dex/redis/etc). These
+# CiliumNetworkPolicies inject explicit allows for:
+#  1) kubectl port-forward / exec / logs (kube-apiserver + host/remote-node)
+#  2) Tailscale gateway ts-ingress (cluster-gateway in tailscale ns) -> argocd-server
+# Injected via extraObjects so fix lives in infra (correct ownership), not gitops.
+# Vault's CiliumNetworkPolicy pattern (vault-allow-ingress-cilium) is the reference.
+extraObjects:
+  # 1) Port-forward / exec / logs — allow kube-apiserver/host/remote-node to all argocd pods
+  # Mirrors vault-allow-ingress-cilium's fromEntities host/remote-node/kube-apiserver.
+  # Ports: 8080 (server), 8083 (server metrics), 8082 (controller metrics), 443/80 (service ports -> 8080)
+  # No egress — ingress only. endpointSelector {} = all pods in namespace argocd.
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: argocd-allow-ingress-portforward
+      namespace: argocd
+    spec:
+      endpointSelector: {}
+      ingress:
+        - fromEntities:
+            - kube-apiserver
+            - host
+            - remote-node
+          toPorts:
+            - ports:
+                - port: "8080"
+                  protocol: TCP
+                - port: "8083"
+                  protocol: TCP
+                - port: "8082"
+                  protocol: TCP
+                - port: "443"
+                  protocol: TCP
+                - port: "80"
+                  protocol: TCP
+  # 2) Tailscale gateway -> argocd-server — allow ts-ingress cluster-gateway in tailscale ns
+  # Gateway: cluster-gateway (app.kubernetes.io/name=cluster-gateway) in namespace tailscale
+  # Chart: platform/ts-ingress (hybrid gateway my-cluster) proxies
+  #   https://my-cluster.lonk-mirfak.ts.net/argocd/ -> http://argocd-server.argocd.svc.cluster.local:80/ (port 80 -> target 8080)
+  # Cilium strict: narrow label selectors break on drift — provide precise label match + namespace-only fallback + fromEntities cluster.
+  # endpointSelector narrowed to argocd-server only (not all pods) — principle of least privilege.
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: argocd-allow-ingress-tailscale
+      namespace: argocd
+    spec:
+      endpointSelector:
+        matchLabels:
+          app.kubernetes.io/name: argocd-server
+      ingress:
+        # Precise gateway pod — match both namespace and app label (ts-ingress gateway-deployment.yaml)
+        - fromEndpoints:
+            - matchLabels:
+                k8s:io.kubernetes.pod.namespace: tailscale
+                k8s:app.kubernetes.io/name: cluster-gateway
+          toPorts:
+            - ports:
+                - port: "8080"
+                  protocol: TCP
+                - port: "80"
+                  protocol: TCP
+                - port: "443"
+                  protocol: TCP
+        # Fallback namespace-only (label drift resilient, mirrors ts-ingress allow-egress pattern)
+        - fromEndpoints:
+            - matchLabels:
+                k8s:io.kubernetes.pod.namespace: tailscale
+          toPorts:
+            - ports:
+                - port: "8080"
+                  protocol: TCP
+                - port: "80"
+                  protocol: TCP
+                - port: "443"
+                  protocol: TCP
+        # Fallback cluster entity (covers Cilium kubeProxyReplacement=strict, Tailscale encap, hostNetwork proxied)
+        - fromEntities:
+            - cluster
+          toPorts:
+            - ports:
+                - port: "8080"
+                  protocol: TCP
+                - port: "80"
+                  protocol: TCP
+                - port: "443"
+                  protocol: TCP
