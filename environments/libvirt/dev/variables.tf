@@ -140,7 +140,7 @@ variable "env_name" {
 variable "argocd_version" {
   description = "ArgoCD Helm chart version (exact, no ranges)."
   type        = string
-  default     = "10.6.0"
+  default     = "10.7.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.argocd_version))
