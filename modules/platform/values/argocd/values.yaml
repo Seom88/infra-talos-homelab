@@ -169,7 +169,8 @@ configs:
 extraObjects:
   # 1) Port-forward / exec / logs — allow kube-apiserver/host/remote-node to all argocd pods
   # Mirrors vault-allow-ingress-cilium's fromEntities host/remote-node/kube-apiserver.
-  # Ports: 8080 (server), 8083 (server metrics), 8082 (controller metrics), 443/80 (service ports -> 8080)
+  # Ports: 8080 (server containerPort), 8083 (server metrics containerPort), 8082 (controller metrics)
+  # Service ports 80/443 map to targetPort 8080 post-DNAT — do NOT allow 80/443 on pod ports.
   # No egress — ingress only. endpointSelector {} = all pods in namespace argocd.
   - apiVersion: cilium.io/v2
     kind: CiliumNetworkPolicy
@@ -190,10 +191,6 @@ extraObjects:
                 - port: "8083"
                   protocol: TCP
                 - port: "8082"
-                  protocol: TCP
-                - port: "443"
-                  protocol: TCP
-                - port: "80"
                   protocol: TCP
   # 2) Tailscale gateway -> argocd-server — allow ts-ingress cluster-gateway in tailscale ns
   # Gateway: cluster-gateway (app.kubernetes.io/name=cluster-gateway) in namespace tailscale
@@ -220,10 +217,6 @@ extraObjects:
             - ports:
                 - port: "8080"
                   protocol: TCP
-                - port: "80"
-                  protocol: TCP
-                - port: "443"
-                  protocol: TCP
         # Fallback namespace-only (label drift resilient, mirrors ts-ingress allow-egress pattern)
         - fromEndpoints:
             - matchLabels:
@@ -232,18 +225,10 @@ extraObjects:
             - ports:
                 - port: "8080"
                   protocol: TCP
-                - port: "80"
-                  protocol: TCP
-                - port: "443"
-                  protocol: TCP
         # Fallback cluster entity (covers Cilium kubeProxyReplacement=strict, Tailscale encap, hostNetwork proxied)
         - fromEntities:
             - cluster
           toPorts:
             - ports:
                 - port: "8080"
-                  protocol: TCP
-                - port: "80"
-                  protocol: TCP
-                - port: "443"
                   protocol: TCP

@@ -76,6 +76,7 @@ resource "terraform_data" "wait_nodes" {
 }
 
 # ArgoCD — depends on nodes Ready (which now implies cilium + gateway-api-crds)
+# Merge pattern mirrors secured-gitops valueFiles: base values.yaml + overlay values-dev.yaml when set
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -83,9 +84,12 @@ resource "helm_release" "argocd" {
   version          = var.argocd_version
   namespace        = var.argocd_namespace
   create_namespace = true
-  values           = [file(var.argocd_values_file != "" ? var.argocd_values_file : "${path.module}/values/argocd/values.yaml")]
-  wait             = true
-  timeout          = 1800
+  values = var.argocd_values_file != "" ? [
+    file("${path.module}/values/argocd/values.yaml"),
+    file(var.argocd_values_file)
+  ] : [file("${path.module}/values/argocd/values.yaml")]
+  wait    = true
+  timeout = 1800
 
   depends_on = [terraform_data.wait_nodes]
 }

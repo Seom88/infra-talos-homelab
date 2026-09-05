@@ -36,13 +36,16 @@ resource "local_file" "kubeconfig" {
   depends_on = [module.libvirt]
 }
 
-# Platform (ArgoCD)
+# Platform (ArgoCD + Cilium)
 module "platform" {
   source = "../../../modules/platform"
 
   kubeconfig_path = abspath("${path.root}/../../../secrets/libvirt/${var.env_name}/kubeconfig.yaml")
   kubeconfig_hash = local_file.kubeconfig.content_base64sha256
   argocd_version  = var.argocd_version
+
+  # Cilium operator: 2 replicas for prod HA (3 CPs) — leader election active/standby
+  cilium_operator_replicas = 2
 
   depends_on = [local_file.kubeconfig]
 }
