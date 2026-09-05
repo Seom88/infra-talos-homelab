@@ -13,7 +13,7 @@ nodes_cp = [
   {
     hostname         = "talos-cp1"
     ip               = "10.10.1.11"
-    cores            = 2
+    cores            = 4
     memory           = 6 * 1024
     proxmox_node     = "pve01"
     disk_size        = 25
@@ -24,7 +24,7 @@ nodes_cp = [
   # {
   #   hostname         = "talos-cp2"
   #   ip               = "10.10.1.12"
-  #   cores            = 2
+  #   cores            = 4
   #   memory           = 6 * 1024
   #   proxmox_node     = "pve01"
   #   disk_size        = 30
@@ -35,7 +35,7 @@ nodes_cp = [
   # {
   #   hostname         = "talos-cp3"
   #   ip               = "10.10.1.13"
-  #   cores            = 2
+  #   cores            = 4
   #   memory           = 6 * 1024
   #   proxmox_node     = "pve01"
   #   disk_size        = 30

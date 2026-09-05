@@ -11,7 +11,7 @@ nodes_cp = [
   {
     hostname         = "talos-cp1"
     ip               = "10.10.10.11"
-    cores            = 2
+    cores            = 4
     memory           = 6 * 1024
     disk_size        = 30
     allow_scheduling = true
@@ -21,7 +21,7 @@ nodes_cp = [
   {
     hostname         = "talos-cp2"
     ip               = "10.10.10.12"
-    cores            = 2
+    cores            = 4
     memory           = 6 * 1024
     disk_size        = 30
     allow_scheduling = true
@@ -31,7 +31,7 @@ nodes_cp = [
   {
     hostname         = "talos-cp3"
     ip               = "10.10.10.13"
-    cores            = 2
+    cores            = 4
     memory           = 6 * 1024
     disk_size        = 30
     allow_scheduling = true
