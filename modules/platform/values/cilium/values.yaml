@@ -22,6 +22,12 @@ kubeProxyReplacement: true
 k8sServiceHost: localhost
 k8sServicePort: 7445
 
+resources:
+  requests:
+    cpu: 150m
+    memory: 512Mi
+
+
 # Fix kubectl port-forward/exec/log: bypass socket LB in pod netns (Cilium socket LB intercepts 127.0.0.1 connect, RSTs) — per docs.cilium.io kubeproxy-free
 # Cilium 1.20.1 defaults socketLB.enabled=false -> hostNamespaceOnly alone is no-op (bpf-lb-sock:false). Must enable.
 socketLB:
@@ -61,6 +67,10 @@ gatewayAPI:
 # Default 1 for single-node/dev, use 2 for HA (3+ nodes). Leader election handles failover.
 operator:
   replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
   prometheus:
     enabled: true
     port: 9963
@@ -86,6 +96,10 @@ prometheus:
     interval: 30s
 
 envoy:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
   prometheus:
     port: "9964"
     serviceMonitor:
