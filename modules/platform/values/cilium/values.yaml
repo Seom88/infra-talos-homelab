@@ -61,3 +61,77 @@ gatewayAPI:
 # Default 1 for single-node/dev, use 2 for HA (3+ nodes). Leader election handles failover.
 operator:
   replicas: 1
+  prometheus:
+    enabled: true
+    port: 9963
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: monitoring
+      interval: 30s
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    annotations: {}
+
+# Observability — Prometheus + Grafana per https://docs.cilium.io/en/stable/observability/grafana/ + /metrics/
+prometheus:
+  enabled: true
+  port: 9962
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: monitoring
+    interval: 30s
+
+envoy:
+  prometheus:
+    port: "9964"
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: monitoring
+      interval: 30s
+
+hubble:
+  enabled: true
+  metrics:
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+      - port-distribution
+      - icmp
+      - "httpV2:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction"
+    enableOpenMetrics: true
+    port: 9965
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: monitoring
+      interval: 30s
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      annotations: {}
+  relay:
+    enabled: true
+    prometheus:
+      enabled: true
+      port: 9966
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: monitoring
+        interval: 30s
+  ui:
+    enabled: true
+
+dashboards:
+  enabled: true
+  label: grafana_dashboard
+  labelValue: "1"
+  annotations: {}
