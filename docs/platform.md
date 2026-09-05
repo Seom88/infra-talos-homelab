@@ -20,7 +20,7 @@ See `modules/platform/README.md` for the module's own README.
 
 ## Setup flow (composed)
 
-1. `just provider=proxmox env=prod tf-apply` — provisions the cluster (VMs, Talos bootstrap) and then the platform in DAG order `gateway_api` → `cilium` → `wait_nodes` → `argocd`. The infra health gate (`talos_cluster_health`) blocks until kube-apiserver, etcd, and all nodes are bootstrapped; `helm_release.gateway_api` installs Gateway API CRDs (`1.2.3`, standard), `helm_release.cilium` installs Cilium `1.20.1` (Without kube-proxy + Gateway API, KubePrism `localhost:7445`), then `module.platform.terraform_data.wait_nodes` waits for `Ready` nodes (CNI must be present), finally `helm_release.argocd`. This fixes the old deadlock where `cilium -> wait_nodes` blocked CNI.
+1. `just provider=proxmox env=prod tf-apply` — provisions the cluster (VMs, Talos bootstrap) and then the platform in DAG order `gateway_api` → `cilium` → `wait_nodes` → `argocd`. The infra health gate (`talos_cluster_health`) blocks until kube-apiserver, etcd, and all nodes are bootstrapped; `helm_release.gateway_api` installs Gateway API CRDs (`1.2.3`, standard), `helm_release.cilium` installs Cilium `1.20.1` (Without kube-proxy + Gateway API, KubePrism `localhost:7445`), then `module.platform.terraform_data.wait_nodes` waits for `Ready` nodes (CNI must be present), finally `helm_release.argocd`. The DAG `gateway_api → cilium → wait_nodes → argocd` ensures CRDs exist before Cilium and nodes become `Ready` only after the CNI is present.
 2. `just provider=proxmox env=prod setup-cli` — regenerates `secrets/proxmox/prod/kubeconfig.yaml` and merges it into the local CLI configs (still useful for out-of-band debugging).
 3. GitOps repo bootstrap — ArgoCD syncs the applications from the GitOps repository; Longhorn is deployed as a wave-0 app (with CSI readiness gate) during this step.
 
@@ -38,7 +38,7 @@ terraform -chdir=environments/proxmox/prod destroy -target=module.platform.helm_
 
 1. **Gateway API CRDs** (`helm_release.gateway_api`) — installs `christianhuth/gateway-api-crds` `1.2.3` (app `v1.6.1`, `standard` channel, `experimental` disabled) from `https://christianhuth.github.io/helm-charts` into `kube-system`. Helm-managed CRDs; must be present before Cilium (`gatewayAPI.enabled=true`).
 2. **Cilium** (`helm_release.cilium`) — installs `cilium/cilium` `1.20.1` from `https://helm.cilium.io/` into `kube-system` via Helm (not `inlineManifests`) to avoid manifest/secrets bloat in `tfstate` and keep the Helm provider flow. Values from `modules/platform/values/cilium/values.yaml` — Sidero [Deploying Cilium](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium#cli-install) "Without kube-proxy + Gateway API": `ipam.mode=kubernetes`, `kubeProxyReplacement=true`, `k8sServiceHost=localhost` `k8sServicePort=7445` (KubePrism), `cgroup.autoMount.enabled=false` `hostRoot=/sys/fs/cgroup`, `securityContext` Talos capabilities, `gatewayAPI.enabled/enableAlpn/enableAppProtocol=true`; `operator.replicas` via `var.cilium_operator_replicas`. `depends_on = [helm_release.gateway_api]`.
-3. **Node readiness gate** (`terraform_data.wait_nodes`) — waits for all nodes to be `Ready` via `kubectl wait`. Layer 2; Layer 1 is the `talos_cluster_health` gate in the infra module (`modules/proxmox` / `modules/libvirt`). Now `depends_on = [helm_release.cilium]` — CNI must be present for nodes to become `Ready` (fixes deadlock).
+3. **Node readiness gate** (`terraform_data.wait_nodes`) — waits for all nodes to be `Ready` via `kubectl wait`. Layer 2; Layer 1 is the `talos_cluster_health` gate in the infra module (`modules/proxmox` / `modules/libvirt`). `depends_on = [helm_release.cilium]` — CNI must be present for nodes to become `Ready`; this ordering ensures the readiness gate runs only after Cilium is installed.
 4. **ArgoCD** (`helm_release.argocd`) — installs the `argo-cd` chart from `https://argoproj.github.io/argo-helm`. `depends_on = [terraform_data.wait_nodes]` which transitively implies `gateway_api` + `cilium`.
 
 ### Inputs
@@ -54,7 +54,7 @@ terraform -chdir=environments/proxmox/prod destroy -target=module.platform.helm_
 | `gateway_api_version` | string | `1.2.3` | Alias for `gateway_api_crds_version` (same chart version). |
 | `gateway_api_crds_namespace` | string | `kube-system` | Namespace for Gateway API CRDs release (CRDs are cluster-scoped; Helm still needs a namespace). |
 | `gateway_api_channel` | string | `standard` | Gateway API channel: `standard` (stable) or `experimental`. Maps to `standard.enabled` / `experimental.enabled`. |
-| `argocd_version` | string | `10.6.0` | Exact ArgoCD chart version. |
+| `argocd_version` | string | `10.7.0` | Exact ArgoCD chart version. |
 | `argocd_namespace` | string | `argocd` | Namespace for ArgoCD. |
 | `argocd_values_file` | string | `""` → `values/argocd/values.yaml` | Custom Helm values file path. |
 

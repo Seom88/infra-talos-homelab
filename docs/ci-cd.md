@@ -93,7 +93,7 @@ Steps: `checkout` → `setup-terraform` → placeholder `kubeconfig.yaml` → `t
 
 | Rule | Datasource / Manager | Group / Label | Automerge |
 |------|----------------------|---------------|-----------|
-| Pinned talos provider alpha until #352 fixed — ADR 002 | `terraform-provider` `siderolabs/talos` | `allowedVersions: =0.12.0-beta.0`, `enabled: false` | — |
+| Pinned talos provider alpha — ADR 002 (upstream issue #352, `enabled: false` until resolved) | `terraform-provider` `siderolabs/talos` | `allowedVersions: =0.12.0-beta.0`, `enabled: false` | — |
 | Talos upgrades need manual validation in `libvirt/dev` first | `github-releases` `siderolabs/talos` | `manual-review/talos` | `false` |
 | ArgoCD major needs manual review — minor/patch automerge | `helm` `argo-cd` `matchUpdateTypes: ["major"]` | `manual-review/argocd` | `false` (major only) |
 | Group non-critical Terraform providers | `terraform` `terraform-provider` excl. `siderolabs/talos` | `terraform providers` (`terraform-providers`), `terraform` | grouped PR |

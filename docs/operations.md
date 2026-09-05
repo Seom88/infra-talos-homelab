@@ -28,7 +28,7 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 | `gateway` | Machine config re-pushed; cluster endpoint (direct per-node IPs) changes |
 | `kubernetes_version` | Machine config re-pushed (rolling kubelet update) |
 
-> **Note**: `proxmox_download_file.talos_image` now uses a shared `file_name` (`talos-nocloud-amd64-secureboot.img`, no `env`/`version` suffix) and `lifecycle { ignore_changes = [url] }` — bumping `talos_version` or editing the schematic no longer recreates the download file/disks. Upgrades are handled by `talos_machine.image`. `justfile`'s `tf-apply` runs with `-parallelism=10` for fast bootstrap; use `tf-apply-upgrade` (`-parallelism=1`) for sequential Talos rolling upgrades.
+> **Note**: `proxmox_download_file.talos_image` uses a shared `file_name` (`talos-nocloud-amd64-secureboot.img`) without `env`/`version` suffix and `lifecycle { ignore_changes = [url] }`; Talos upgrades are handled via `talos_machine.image` with sequential rolling reboots. `justfile`'s `tf-apply` runs with `-parallelism=10` for fast bootstrap; use `tf-apply-upgrade` (`-parallelism=1`) for sequential upgrades.
 
 ## 🟢 Safe to change
 
@@ -53,6 +53,98 @@ just provider=libvirt env=dev tf-apply-upgrade
 - `drain_on_upgrade` is parameterized (`bool`, default `false`, platform-aware — `false` for prod with Longhorn, opt-in `true` for dev).
 - `time_sleep.post_bootstrap` is `10s`; `talos_cluster_health` has `read = "10m"` and blocks until kube-apiserver, etcd, and all nodes are Ready.
 - Cold bootstrap (`terraform destroy` + `apply`) uses `-parallelism=10` (fast ~8 min); upgrades use `-parallelism=1` (safe quorum).
+
+### Cilium Operations & Troubleshooting
+
+#### Health checks
+
+```bash
+# Cilium agents and operator
+kubectl -n kube-system get pods -l k8s-app=cilium
+kubectl -n kube-system get pods -l io.cilium/app=operator-generic  # or name=cilium-operator
+
+# Cilium status (per-node agent health, KubePrism, kube-proxy replacement)
+kubectl -n kube-system exec ds/cilium -- cilium status --verbose
+# or via cilium CLI if installed
+cilium status --wait
+
+# Hubble flows (requires hubble relay)
+kubectl -n kube-system get pods -l k8s-app=hubble-relay
+hubble observe --follow --namespace default
+hubble observe --verdict DROPPED  # dropped flows only
+
+# Full connectivity suite (deploy then clean up)
+cilium connectivity test
+```
+
+Expected: `cilium status` shows `Kubernetes: Ok`, `KubeProxyReplacement: Strict`, `Cilium: Ok`, Hubble `Ok`. All `cilium-*` pods `Running` and `Ready`.
+
+#### NotReady diagnosis (CNI not Ready)
+
+Nodes stay `NotReady` until a CNI is present — `terraform_data.wait_nodes` (`kubectl wait --for=condition=Ready`) intentionally runs **after** `helm_release.cilium` for this reason.
+
+If nodes remain `NotReady`:
+
+```bash
+kubectl get nodes
+kubectl -n kube-system get pods -l k8s-app=cilium -o wide
+kubectl -n kube-system logs ds/cilium --tail=100
+kubectl -n kube-system logs deploy/cilium-operator --tail=100
+kubectl get events --sort-by=.lastTimestamp | tail -n 30
+```
+
+Common causes: Cilium Helm release still progressing (`wait=true` timeout `1800s` — check `helm -n kube-system status cilium`), CRDs missing (gateway_api must precede cilium), or Talos `cni: none` / `proxy.disabled: true` patch not applied (see `modules/talos-cluster/main.tf:38-49` and [Networking: Cilium](./networking.md#cilium-cni-ebpf-data-plane)).
+
+#### Operator HA (prod 2 replicas)
+
+`var.cilium_operator_replicas` maps to `operator.replicas` via Helm `set`. Leader election ensures a single active operator.
+
+- **Dev / single-node**: `1` (default, RAM-constrained).
+- **Prod HA (3 control planes)**: `2` — tolerates one operator pod loss without cold start. No need for `3`; two with leader election is sufficient.
+
+```bash
+kubectl -n kube-system get deploy cilium-operator -o jsonpath='{.spec.replicas}{"\n"}'
+kubectl -n kube-system get pods -l io.cilium/app=operator-generic
+```
+
+Renovate tracks `cilium_version` (`1.20.1`) weekly (Mon 05:00 Europe/Madrid, `baseBranch: dev`, automerge patch/minor).
+
+#### Hubble relay / UI and silent drops
+
+| Port | Component | Purpose |
+|------|-----------|---------|
+| `9962` | `prometheus` (cilium-agent) | Agent metrics |
+| `9963` | `operator.prometheus` | Operator metrics |
+| `9964` | `envoy.prometheus` | Envoy/Gateway API metrics |
+| `9965` | `hubble.metrics` | Hubble metrics (`enableOpenMetrics`) |
+| `9966` | `hubble.relay.prometheus` | Hubble relay metrics |
+| (relay) | `hubble-relay` | `hubble observe` backend (port-forward `4245` if needed) |
+| (UI) | `hubble-ui` | Visual flow browser (port-forward `12000` if needed) |
+
+```bash
+# Port-forward Hubble UI / relay for local debugging
+kubectl -n kube-system port-forward svc/hubble-ui 12000:80
+kubectl -n kube-system port-forward svc/hubble-relay 4245:80
+# then open http://localhost:12000 and run `hubble observe --server localhost:4245`
+```
+
+**Silent drops (policy verdict):**
+
+```bash
+# Flows dropped by policy — look at policy verdict and labels
+hubble observe --verdict DROPPED --output json | jq
+hubble observe --verdict DROPPED --pod default/<pod> --output table
+
+# Check which CiliumNetworkPolicy is in effect (infra-owned, via ArgoCD)
+kubectl get ciliumnetworkpolicies.cilium.io -A
+kubectl -n argocd get ciliumnetworkpolicies.cilium.io
+kubectl describe ciliumnetworkpolicy -n <ns> <name>
+
+# Agent policy state
+kubectl -n kube-system exec ds/cilium -- cilium policy get
+```
+
+If `kubectl port-forward` / `exec` / `logs` fails with `RST` or hangs, verify `socketLB.enabled=true` with `hostNamespaceOnly=true` in `modules/platform/values/cilium/values.yaml` — Cilium is configured this way so socket LB is restricted to the host netns and does not intercept `127.0.0.1` connect in pod netns (required because Cilium 1.20 defaults `socketLB.enabled=false`; see [Networking: Cilium](./networking.md#cilium-cni-ebpf-data-plane)).
 
 ## Notes
 

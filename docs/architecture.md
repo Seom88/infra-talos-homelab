@@ -113,6 +113,8 @@ flowchart TD
     N --> O[kubectl / talosctl ready]
 ```
 
+> **Cilium data plane:** eBPF replaces kube-proxy (`kubeProxyReplacement=true`, Talos `cni: none` + `proxy.disabled: true`, KubePrism `localhost:7445`). Gateway API CRDs (`christianhuth/gateway-api-crds` 1.2.3 → app v1.6.1) install before Cilium 1.20.1. The DAG is `gateway_api → cilium → wait_nodes → argocd`; this ordering ensures CRDs exist before Cilium and nodes become `Ready` only after the CNI is present. Values, socketLB configuration for `kubectl port-forward`/`exec`, and Hubble observability are detailed in [Networking: Cilium CNI](./networking.md#cilium-cni-ebpf-data-plane).
+
 ### Proxmox path
 
 Terraform creates the SDN stack (`proxmox_sdn_zone` + VNet `talosvn` + subnet `snat = true` + `proxmox_sdn_applier`), downloads the Talos image and creates VMs with cloud-init. Talos boots, `talos_cluster` bootstraps the first control plane node, `talos_cluster_health` blocks until kube-apiserver, etcd and all nodes are bootstrapped (direct per-node IPs, health-gated), `local_file.kubeconfig` materializes a single-context kubeconfig via the subnet route `10.10.0.0/24`, and `module.platform` installs Gateway API CRDs → Cilium → `wait_nodes` (CNI-gated `Ready`) → ArgoCD in the same apply (DAG `gateway_api→cilium→wait_nodes→argocd`).

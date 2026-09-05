@@ -12,7 +12,7 @@ Back to [Why This Exists](../README.md#why-this-exists) · [Architecture](./arch
 | OS | [Talos Linux](https://www.talos.dev/) | Immutable and declarative — versioned, reproducible Kubernetes in a VM via Image Factory schematic |
 | Remote access | [Tailscale](https://tailscale.com/kb/1214/subnet-routers) | Subnet routing `10.10.0.0/24` for VM access, tailnet service exposure via GitOps, and CI without exposing the server |
 | Storage | [Longhorn](https://longhorn.io/) | Popular, lighter than Ceph, flexible and reliable PVC replication across nodes |
-| CNI (future) | [Cilium](https://docs.cilium.io/) | Pod-to-pod security via NetworkPolicies and microsegmentation |
+| CNI | [Cilium](https://docs.cilium.io/) 1.20.1 | Pod-to-pod security via NetworkPolicies and microsegmentation |
 | GitOps | [ArgoCD](https://argo-cd.readthedocs.io/) | Popular enterprise GitOps with App-of-Apps |
 
 > Each choice below includes the reasoning and a pointer to the relevant files.
@@ -98,7 +98,7 @@ I chose Cilium to improve security between pods. It replaces kube-router with
 eBPF, enabling NetworkPolicies and microsegmentation, plus Hubble observability,
 from day one.
 
-Talos still disables the built-in CNI (`cluster.network.cni.name: none` + `cluster.proxy.disabled: true` in `modules/talos-cluster/main.tf:38-49`), but Cilium itself is now installed via Helm in `modules/platform` — not via Talos `cluster.inlineManifests` — to avoid state bloat and secrets in `tfstate` and keep the Helm provider flow consistent. Values follow the Sidero [Deploying Cilium](https://docs.siderolabs.com/talos/v1.13/kubernetes-guides/network/deploying-cilium) "Without kube-proxy + Gateway API" pattern (`ipam=kubernetes`, `kubeProxyReplacement=true`, `k8sServiceHost=localhost:7445` KubePrism, `cgroup.autoMount=false`, `gatewayAPI.enabled=true` in `modules/platform/values/cilium/values.yaml`). Gateway API CRDs (`christianhuth/gateway-api-crds` `1.2.3` → `v1.6.1` standard) are Helm-installed **before** Cilium (`gateway_api` → `cilium` → `wait_nodes` → `argocd`), because `gatewayAPI.enabled=true` requires CRDs first.
+Talos disables the built-in CNI (`cluster.network.cni.name: none` + `cluster.proxy.disabled: true` in `modules/talos-cluster/main.tf:38-49`). Cilium is installed via Helm in `modules/platform` (not via Talos `cluster.inlineManifests`) to avoid state bloat and secrets in `tfstate` and keep the Helm provider flow consistent. Values follow the Sidero [Deploying Cilium](https://docs.siderolabs.com/talos/v1.13/kubernetes-guides/network/deploying-cilium) "Without kube-proxy + Gateway API" pattern (`ipam=kubernetes`, `kubeProxyReplacement=true`, `k8sServiceHost=localhost:7445` KubePrism, `cgroup.autoMount=false`, `gatewayAPI.enabled=true` in `modules/platform/values/cilium/values.yaml`). Gateway API CRDs (`christianhuth/gateway-api-crds` `1.2.3` → `v1.6.1` standard) are Helm-installed **before** Cilium (`gateway_api → cilium → wait_nodes → argocd`); this ordering is required because `gatewayAPI.enabled=true` needs CRDs to exist first.
 
 **Evidence:** `modules/talos-cluster/main.tf:38-49` (`cni.name: none`, `proxy.disabled: true`) + `modules/platform/main.tf` (`helm_release.gateway_api` `1.2.3` → `helm_release.cilium` `1.20.1` → `terraform_data.wait_nodes` → `helm_release.argocd`) + `modules/platform/values/cilium/values.yaml` (Sidero Without kube-proxy + Gateway API) · Sidero [Deploying Cilium](https://docs.siderolabs.com/talos/v1.13/kubernetes-guides/network/deploying-cilium).
 

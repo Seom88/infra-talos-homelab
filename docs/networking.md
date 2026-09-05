@@ -26,7 +26,7 @@ proxmox_sdn_zone_simple (talosvn) → proxmox_sdn_vnet (prod) → proxmox_sdn_su
 - **VNet** — `talosvn` (the bridge). VMs attach via `network_device { bridge = var.network_bridge }`.
 - **Subnet** — `10.10.0.0/24` with `snat = true`. Proxmox renders this as `post-up iptables -t nat -A POSTROUTING -s '10.10.0.0/24' -o vmbr0 -j SNAT --to-source <node-ip>` in `/etc/network/interfaces.d/sdn`. VMs get outbound internet via MASQUERADE; nothing from outside reaches them directly.
 - **Applier** — `proxmox_sdn_applier` performs `PUT /cluster/sdn`. Without it the bridge does not exist on the node and VM creation fails. VMs `depends_on` the applier.
-- **Reboot safety** — `terraform_data.sdn_ensure_applied` installs `pve-sdn-ensure.service` on the PVE node (`pvesh set /cluster/sdn || ifreload -a` on boot, `After=network.target pve-cluster.service`). See [ADR 003](./adr/003-sdn-snat-runtime-drift.md). Fixes lost `MASQUERADE` after PVE reboot that caused `10.10.0.12 -> 1.1.1.1:53 i/o timeout` and `Waiting for time sync` deadlock in `talos_cluster_health`.
+- **Reboot safety** — `terraform_data.sdn_ensure_applied` installs `pve-sdn-ensure.service` on the PVE node (`pvesh set /cluster/sdn || ifreload -a` on boot, `After=network.target pve-cluster.service`). See [ADR 003](./adr/003-sdn-snat-runtime-drift.md). The service ensures the bridge `prod` and `MASQUERADE` rule for `10.10.0.0/24` persist across reboots; without it a reboot can drop MASQUERADE and cause `10.10.0.12 -> 1.1.1.1:53 i/o timeout` and `Waiting for time sync` blocking `talos_cluster_health`.
 
 ```hcl
 # modules/proxmox/network.tf — key knobs
@@ -59,6 +59,85 @@ Terraform creates in `modules/libvirt/network.tf` / `pool.tf` / `image.tf` / `vm
   sudo firewall-cmd --zone=libvirt --add-forward --permanent && sudo firewall-cmd --reload
   ```
 
+## Cilium CNI (eBPF Data Plane)
+
+Cilium provides the pod network, service load-balancing, network policy, and Gateway API data plane via eBPF — replacing kube-proxy and kube-router.
+
+### Why Cilium
+
+- **eBPF data plane** — kernel-level forwarding, observability, and policy enforcement without iptables churn.
+- **kubeProxyReplacement** — `kubeProxyReplacement=true`; kube-proxy is disabled at the Talos level and Cilium handles ClusterIP/NodePort.
+- **Gateway API** — `gatewayAPI.enabled=true` with ALPN and AppProtocol support for Gateway/HTTPRoute.
+
+### Talos prerequisites
+
+Talos is configured with no built-in CNI or kube-proxy so Cilium can own the data plane:
+
+```yaml
+# modules/talos-cluster/main.tf:38-49 (machine config patch)
+cluster:
+  network:
+    cni:
+      name: none
+  proxy:
+    disabled: true
+```
+
+KubePrism provides the in-cluster API endpoint for Cilium:
+
+- `k8sServiceHost=localhost`, `k8sServicePort=7445` (KubePrism load-balanced API on each node).
+
+Reference: Sidero Labs [Deploying Cilium — Without kube-proxy + Gateway API](https://docs.siderolabs.com/talos/v1.13/kubernetes-guides/network/deploying-cilium) (also mirrored at `https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium#cli-install`).
+
+### Deployment DAG
+
+```
+helm_release.gateway_api (christianhuth/gateway-api-crds 1.2.3 → app v1.6.1, standard)
+  → helm_release.cilium (cilium/cilium 1.20.1, wait=true timeout 1800, values modules/platform/values/cilium/values.yaml)
+    → terraform_data.wait_nodes (kubectl wait --for=condition=Ready nodes)
+      → helm_release.argocd
+```
+
+Why this order:
+
+| Step | Reason |
+|------|--------|
+| Gateway API CRDs first | `gatewayAPI.enabled=true` requires CRDs to exist; otherwise Cilium fails to install. CRDs are Helm-managed via `christianhuth/gateway-api-crds` (`standard` channel). |
+| Cilium before wait_nodes | Nodes become `Ready` only when a CNI is present. The DAG is `gateway_api → cilium → wait_nodes → argocd`. This ordering ensures Gateway API CRDs exist before Cilium (`gatewayAPI.enabled=true` requires them) and that `wait_nodes` runs only after the CNI is present. The gate re-triggers when the `kubeconfig` hash changes. |
+| wait_nodes before ArgoCD | ArgoCD needs a Ready cluster with networking; the gate guarantees CNI + API are healthy before the GitOps engine starts. |
+
+Helm settings: `wait=true` with `timeout=1800` on the Cilium release; `operator.replicas` is parameterized (`var.cilium_operator_replicas`, `1` for dev/single-node, `2` for HA with 3 control planes, leader election).
+
+### Key values summary
+
+Source: `modules/platform/values/cilium/values.yaml` (Sidero Without kube-proxy + Gateway API pattern).
+
+| Key | Value | Purpose |
+|-----|-------|---------|
+| `ipam.mode` | `kubernetes` | Pod CIDR allocation via Kubernetes. |
+| `kubeProxyReplacement` | `true` | eBPF-based service handling; kube-proxy disabled. |
+| `k8sServiceHost` / `k8sServicePort` | `localhost` / `7445` | KubePrism localhost API. |
+| `socketLB.enabled` / `hostNamespaceOnly` | `true` / `true` | Enables `kubectl port-forward` / `exec` / `logs` — Cilium is configured with `socketLB.enabled=true` and `hostNamespaceOnly=true` so socket LB is restricted to the host netns and does not intercept `127.0.0.1` connect in pod netns (RST). Cilium 1.20 defaults `socketLB.enabled=false` (`bpf-lb-sock:false` when disabled), so `enabled=true` is required. |
+| `cgroup.autoMount.enabled` / `hostRoot` | `false` / `/sys/fs/cgroup` | Talos cgroup layout — do not auto-mount, use host root. |
+| `securityContext.capabilities` | 12 caps (ciliumAgent + cleanCiliumState) | Talos-required capabilities (`NET_ADMIN`, `SYS_ADMIN`, etc.). |
+| `gatewayAPI.enabled` / `enableAlpn` / `enableAppProtocol` | `true` | Gateway API + ALPN + AppProtocol. |
+
+### Observability
+
+| Component | Detail |
+|-----------|--------|
+| Hubble | `hubble.enabled=true`, `relay.enabled=true`, `ui.enabled=true` — flow observability. |
+| Metrics | `hubble.metrics.enabled` includes `dns`, `drop`, `tcp`, `flow`, `port-distribution`, `icmp`, `httpV2` with `enableOpenMetrics=true` on port `9965`. |
+| Prometheus | `prometheus` (agent, `9962`), `operator.prometheus` (`9963`), `envoy.prometheus` (`9964`), `hubble.metrics` (`9965`), `hubble.relay.prometheus` (`9966`) — all with `ServiceMonitor` (`release: monitoring`, `interval: 30s`). |
+| Dashboards | `dashboards.enabled=true` and `hubble.metrics.dashboards.enabled=true` + `operator.dashboards.enabled=true` with label `grafana_dashboard: "1"` for Grafana discovery. |
+
+### Interaction with Tailscale
+
+- **Cilium owns pod networking** — pod-to-pod, pod-to-service, and NetworkPolicy are handled by Cilium/eBPF regardless of how the node is reached.
+- **Tailscale owns node reachability** — subnet routing (`10.10.0.0/24` via the Proxmox host, `10.0.1.0/24` for libvirt) exposes the KubePrism API and VM subnet to operators/CI. The Talos Tailscale extension is disabled (see ADR 001).
+- **Tailscale Ingress** is deployed as a GitOps app in the companion repo (`04-tailscale`); it programs Tailscale tailnet exposure on top of Cilium networking — the two layers do not conflict.
+- `CiliumNetworkPolicy` resources are managed by ArgoCD (2 infra-owned policies in `argocd` namespace) — see [Platform](./platform.md).
+
 ## Tailscale subnet routing (both providers)
 
 The Tailscale **Talos extension** (`siderolabs/tailscale`) is disabled. Reachability to `10.10.0.0/24` (Proxmox) and `10.0.1.0/24` (Libvirt) is **subnet routing only** — see [ADR 001](./adr/001-remove-tailscale-extension.md).
@@ -87,8 +166,8 @@ Libvirt uses the same subnet-routing model for remote reachability; no `TF_VAR_t
 
 ## Reachability troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
+| Symptom | Cause | Remediation |
+|---------|-------|-------------|
 | `talos_cluster_health` hangs 15 m, `Still reading...` | No route to `10.10.0.0/24` | Check `tailscale status`, `tailscale set --accept-routes`, approve subnet in admin console |
 | `read udp 10.10.0.12:xxxxx->1.1.1.1:53: i/o timeout` after PVE reboot | SDN SNAT runtime drift (bridge `prod` / MASQUERADE lost) | `ssh root@pve01 'systemctl status pve-sdn-ensure.service; iptables -t nat -L POSTROUTING -n \| grep MASQUERADE'` — service should be `enabled` and rule present; manual heal: `pvesh set /cluster/sdn` |
 | `lookup time.cloudflare.com ... server misbehaving` | DNS cannot egress (SNAT missing) | Same as above |
