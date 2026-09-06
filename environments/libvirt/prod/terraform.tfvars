@@ -12,53 +12,53 @@ nodes_cp = [
     hostname         = "talos-cp1"
     ip               = "10.10.10.11"
     cores            = 4
-    memory           = 6 * 1024
+    memory           = 10 * 1024
     disk_size        = 30
     allow_scheduling = true
     pool             = "talos-pool"
     data_disk_size   = 100
   },
-  {
-    hostname         = "talos-cp2"
-    ip               = "10.10.10.12"
-    cores            = 4
-    memory           = 6 * 1024
-    disk_size        = 30
-    allow_scheduling = true
-    pool             = "talos-pool"
-    data_disk_size   = 100
-  },
-  {
-    hostname         = "talos-cp3"
-    ip               = "10.10.10.13"
-    cores            = 4
-    memory           = 6 * 1024
-    disk_size        = 30
-    allow_scheduling = true
-    pool             = "talos-pool"
-    data_disk_size   = 100
-  },
+  # {
+  #   hostname         = "talos-cp2"
+  #   ip               = "10.10.10.12"
+  #   cores            = 4
+  #   memory           = 6 * 1024
+  #   disk_size        = 30
+  #   allow_scheduling = true
+  #   pool             = "talos-pool"
+  #   data_disk_size   = 100
+  # },
+  # {
+  #   hostname         = "talos-cp3"
+  #   ip               = "10.10.10.13"
+  #   cores            = 4
+  #   memory           = 6 * 1024
+  #   disk_size        = 30
+  #   allow_scheduling = true
+  #   pool             = "talos-pool"
+  #   data_disk_size   = 100
+  # },
 ]
 
 nodes_worker = [
-  # {
-  #   hostname       = "talos-w1"
-  #   ip             = "10.10.10.101"
-  #   cores          = 8
-  #   memory         = 4 * 1024
-  #   disk_size      = 25
-  #   pool           = "talos-pool"
-  #   data_disk_size = 100
-  # },
-  # {
-  #   hostname       = "talos-w2"
-  #   ip             = "10.10.10.102"
-  #   cores          = 8
-  #   memory         = 4 * 1024
-  #   disk_size      = 25
-  #   pool           = "talos-pool"
-  #   data_disk_size = 100
-  # },
+  {
+    hostname       = "talos-w1"
+    ip             = "10.10.10.101"
+    cores          = 8
+    memory         = 4 * 1024
+    disk_size      = 25
+    pool           = "talos-pool"
+    data_disk_size = 100
+  },
+  {
+    hostname       = "talos-w2"
+    ip             = "10.10.10.102"
+    cores          = 8
+    memory         = 4 * 1024
+    disk_size      = 25
+    pool           = "talos-pool"
+    data_disk_size = 100
+  },
   # {
   #   hostname       = "talos-w3"
   #   ip             = "10.10.10.103"
