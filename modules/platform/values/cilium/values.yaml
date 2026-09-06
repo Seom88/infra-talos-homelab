@@ -75,7 +75,7 @@ operator:
     enabled: true
     port: 9963
     serviceMonitor:
-      enabled: true
+      enabled: false
       labels:
         release: monitoring
       interval: 30s
@@ -90,7 +90,7 @@ prometheus:
   enabled: true
   port: 9962
   serviceMonitor:
-    enabled: true
+    enabled: false
     labels:
       release: monitoring
     interval: 30s
@@ -103,7 +103,7 @@ envoy:
   prometheus:
     port: "9964"
     serviceMonitor:
-      enabled: true
+      enabled: false
       labels:
         release: monitoring
       interval: 30s
@@ -122,7 +122,7 @@ hubble:
     enableOpenMetrics: true
     port: 9965
     serviceMonitor:
-      enabled: true
+      enabled: false
       labels:
         release: monitoring
       interval: 30s
@@ -137,7 +137,7 @@ hubble:
       enabled: true
       port: 9966
       serviceMonitor:
-        enabled: true
+        enabled: false
         labels:
           release: monitoring
         interval: 30s
