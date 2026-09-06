@@ -13,7 +13,11 @@ resource "helm_release" "gateway_api" {
   namespace        = var.gateway_api_crds_namespace
   create_namespace = true
   wait             = true
+  wait_for_jobs    = true
+  atomic           = true
+  cleanup_on_fail  = true
   timeout          = 300
+  max_history      = 10
 
   # Standard channel enabled, experimental disabled.
   # Chart values: standard.enabled / experimental.enabled (see chart values.yaml)
@@ -44,7 +48,11 @@ resource "helm_release" "cilium" {
   create_namespace = true
   values           = [file(var.cilium_values_file != "" ? var.cilium_values_file : "${path.module}/values/cilium/values.yaml")]
   wait             = true
-  timeout          = 1800
+  wait_for_jobs    = true
+  atomic           = true
+  cleanup_on_fail  = true
+  timeout          = 600
+  max_history      = 10
 
   depends_on = [helm_release.gateway_api]
 
@@ -88,8 +96,12 @@ resource "helm_release" "argocd" {
     file("${path.module}/values/argocd/values.yaml"),
     file(var.argocd_values_file)
   ] : [file("${path.module}/values/argocd/values.yaml")]
-  wait    = true
-  timeout = 1800
+  wait            = true
+  wait_for_jobs   = true
+  atomic          = true
+  cleanup_on_fail = true
+  timeout         = 600
+  max_history     = 10
 
   depends_on = [terraform_data.wait_nodes]
 }
