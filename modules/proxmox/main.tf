@@ -199,20 +199,19 @@ module "talos" {
   ]
 }
 
-# Settle after bootstrap
-resource "time_sleep" "post_bootstrap" {
-  depends_on      = [module.talos]
-  create_duration = "10s"
-}
-
-# Health gate: validates on apply, skipped on destroy via enable_health_check=false.
+# API-ready gate before K8s consumers (kubeconfig -> platform).
+# Talos-layer only (no K8s Ready checks), safe before Cilium CNI is installed.
+# Post-CNI node readiness stays in platform wait_nodes (kubectl wait Ready).
 data "talos_cluster_health" "this" {
   count                = var.enable_health_check ? 1 : 0
-  depends_on           = [module.talos, time_sleep.post_bootstrap]
+  depends_on           = [module.talos]
   client_configuration = talos_machine_secrets.this.client_configuration
   control_plane_nodes  = [for node in var.nodes_cp : node.ip]
   worker_nodes         = [for node in var.nodes_worker : node.ip]
   endpoints            = [for node in var.nodes_cp : node.ip]
+
+  skip_kubernetes_checks = true
+
   timeouts = {
     read = "10m"
   }

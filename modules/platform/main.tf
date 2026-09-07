@@ -2,6 +2,32 @@
 # Dependency graph fix: breaks deadlock where cilium waited for nodes Ready,
 # but nodes never Ready without CNI. Order: gateway-api-crds -> cilium -> wait_nodes -> argocd
 
+# API readiness gate — apiserver needs a moment after Talos bootstrap before Helm can connect.
+# Full node-Ready gating is impossible here (cni.name: none until Cilium installs below),
+# so poll /healthz only. Post-CNI node-Ready gate stays in terraform_data.wait_nodes.
+resource "terraform_data" "wait_api" {
+  # Re-run on kubeconfig change; use content hash to avoid filesha256 race.
+  triggers_replace = {
+    kubeconfig_hash = var.kubeconfig_hash != null ? var.kubeconfig_hash : (fileexists(var.kubeconfig_path) ? "exists" : "missing")
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -euo pipefail
+      export KUBECONFIG=${abspath(var.kubeconfig_path)}
+      for i in $(seq 1 60); do
+        if kubectl get --raw=/healthz >/dev/null 2>&1; then
+          exit 0
+        fi
+        sleep 5
+      done
+      echo "timed out waiting for Kubernetes API" >&2
+      exit 1
+    EOT
+  }
+}
+
 # Gateway API CRDs (Helm-managed) — must be installed BEFORE Cilium
 # Chart: https://github.com/christianhuth/helm-charts/tree/main/charts/gateway-api-crds
 # Vendors upstream standard+experimental CRDs; standard channel is stable.
@@ -18,6 +44,8 @@ resource "helm_release" "gateway_api" {
   cleanup_on_fail  = true
   timeout          = 300
   max_history      = 10
+
+  depends_on = [terraform_data.wait_api]
 
   # Standard channel enabled, experimental disabled.
   # Chart values: standard.enabled / experimental.enabled (see chart values.yaml)
@@ -76,6 +104,15 @@ resource "terraform_data" "wait_nodes" {
     command     = <<-EOT
       set -euo pipefail
       export KUBECONFIG=${abspath(var.kubeconfig_path)}
+      # kubectl wait --all errors with "no matching resources found" when zero
+      # Node objects exist yet (kubelets register shortly after bootstrap),
+      # so first poll until at least one node appears, then wait for Ready.
+      for i in $(seq 1 60); do
+        if [ -n "$(kubectl get nodes -o name 2>/dev/null)" ]; then
+          break
+        fi
+        sleep 5
+      done
       kubectl wait --for=condition=Ready node --all --timeout=600s
     EOT
   }
