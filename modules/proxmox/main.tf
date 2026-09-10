@@ -1,5 +1,5 @@
 locals {
-  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if try(n.data_disk_size, null) != null]) > 0
+  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if length(coalesce(n.disks, [])) > 0]) > 0
   # UserVolumeConfig "data" -> /var/mnt/data (generic); "!system_disk" suffices for virtio.
   data_volume_patch = local.has_data_disk ? yamlencode({
     apiVersion = "v1alpha1"
@@ -46,7 +46,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
   bios            = "ovmf"
   machine         = "q35"
   initialization {
-    datastore_id = each.value.datastore
+    datastore_id = coalesce(each.value.datastore, var.default_datastore)
     ip_config {
       ipv4 {
         address = "${each.value.ip}/${split("/", var.network_cidr)[1]}"
@@ -58,12 +58,12 @@ resource "proxmox_virtual_environment_vm" "talos" {
     enabled = true
   }
   efi_disk {
-    datastore_id      = each.value.datastore
+    datastore_id      = coalesce(each.value.datastore, var.default_datastore)
     type              = "4m"
     pre_enrolled_keys = false
   }
   disk {
-    datastore_id = each.value.datastore
+    datastore_id = coalesce(each.value.datastore, var.default_datastore)
     file_id      = proxmox_download_file.talos_image.id
     interface    = "virtio0"
     iothread     = true
@@ -71,13 +71,13 @@ resource "proxmox_virtual_environment_vm" "talos" {
     size         = each.value.disk_size
   }
   dynamic "disk" {
-    for_each = try(each.value.data_disk_size, null) != null ? [1] : []
+    for_each = coalesce(each.value.disks, [])
     content {
-      datastore_id = coalesce(try(each.value.data_datastore, null), each.value.datastore)
-      interface    = "virtio1"
+      datastore_id = coalesce(disk.value.datastore, var.default_data_datastore, each.value.datastore, var.default_datastore)
+      interface    = "virtio${disk.key + 1}"
       iothread     = true
       discard      = "on"
-      size         = each.value.data_disk_size
+      size         = disk.value.size
     }
   }
   cpu {
@@ -111,7 +111,7 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   bios            = "ovmf"
   machine         = "q35"
   initialization {
-    datastore_id = each.value.datastore
+    datastore_id = coalesce(each.value.datastore, var.default_datastore)
     ip_config {
       ipv4 {
         address = "${each.value.ip}/${split("/", var.network_cidr)[1]}"
@@ -123,12 +123,12 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     enabled = true
   }
   efi_disk {
-    datastore_id      = each.value.datastore
+    datastore_id      = coalesce(each.value.datastore, var.default_datastore)
     type              = "4m"
     pre_enrolled_keys = false
   }
   disk {
-    datastore_id = each.value.datastore
+    datastore_id = coalesce(each.value.datastore, var.default_datastore)
     file_id      = proxmox_download_file.talos_image.id
     interface    = "virtio0"
     iothread     = true
@@ -136,13 +136,13 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     size         = each.value.disk_size
   }
   dynamic "disk" {
-    for_each = try(each.value.data_disk_size, null) != null ? [1] : []
+    for_each = coalesce(each.value.disks, [])
     content {
-      datastore_id = coalesce(try(each.value.data_datastore, null), each.value.datastore)
-      interface    = "virtio1"
+      datastore_id = coalesce(disk.value.datastore, var.default_data_datastore, each.value.datastore, var.default_datastore)
+      interface    = "virtio${disk.key + 1}"
       iothread     = true
       discard      = "on"
-      size         = each.value.data_disk_size
+      size         = disk.value.size
     }
   }
   cpu {

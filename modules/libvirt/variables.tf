@@ -1,7 +1,7 @@
 # Nodes
 
 variable "nodes_cp" {
-  description = "Control plane nodes; optional data_disk_size creates vdb -> /var/mnt/data."
+  description = "Control plane nodes; disks[] creates vdb..N -> /var/mnt/data."
   type = list(object({
     hostname         = string
     ip               = string
@@ -11,8 +11,11 @@ variable "nodes_cp" {
     disk_size        = number
     pool             = optional(string)
     allow_scheduling = bool
-    data_disk_size   = optional(number)
-    data_pool        = optional(string)
+    disks = optional(list(object({
+      name = string
+      size = number
+      pool = optional(string)
+    })))
   }))
 
   validation {
@@ -22,28 +25,29 @@ variable "nodes_cp" {
 
   validation {
     condition = alltrue([
-      for n in var.nodes_cp : (
-        try(n.data_pool, null) != null ? try(n.data_disk_size, null) != null : true
-        ) && (
-        try(n.data_disk_size, null) == null ? true : try(n.data_disk_size, 0) > 0
-      )
+      for n in var.nodes_cp : alltrue([
+        for d in coalesce(n.disks, []) : d.size > 0
+      ])
     ])
-    error_message = "data_disk_size must be >0 when set; data_datastore/data_pool requires data_disk_size"
+    error_message = "disks[].size must be >0 when set."
   }
 }
 
 variable "nodes_worker" {
-  description = "Worker nodes; optional data_disk_size creates vdb -> /var/mnt/data."
+  description = "Worker nodes; disks[] creates vdb..N -> /var/mnt/data."
   type = list(object({
-    hostname       = string
-    ip             = string
-    mac            = optional(string)
-    cores          = number
-    memory         = number
-    disk_size      = number
-    pool           = optional(string)
-    data_disk_size = optional(number)
-    data_pool      = optional(string)
+    hostname  = string
+    ip        = string
+    mac       = optional(string)
+    cores     = number
+    memory    = number
+    disk_size = number
+    pool      = optional(string)
+    disks = optional(list(object({
+      name = string
+      size = number
+      pool = optional(string)
+    })))
   }))
 
   validation {
@@ -53,13 +57,11 @@ variable "nodes_worker" {
 
   validation {
     condition = alltrue([
-      for n in var.nodes_worker : (
-        try(n.data_pool, null) != null ? try(n.data_disk_size, null) != null : true
-        ) && (
-        try(n.data_disk_size, null) == null ? true : try(n.data_disk_size, 0) > 0
-      )
+      for n in var.nodes_worker : alltrue([
+        for d in coalesce(n.disks, []) : d.size > 0
+      ])
     ])
-    error_message = "data_disk_size must be >0 when set; data_datastore/data_pool requires data_disk_size"
+    error_message = "disks[].size must be >0 when set."
   }
 }
 
@@ -75,6 +77,18 @@ variable "pool_path" {
   description = "Target directory for the Talos storage pool"
   type        = string
   default     = "/mnt/data/libvirt/talos"
+}
+
+variable "default_pool" {
+  description = "Global default pool for system disks. Per-node pool overrides it; falls back to pool_name when null."
+  type        = string
+  default     = null
+}
+
+variable "default_data_pool" {
+  description = "Global default pool for data disks. Falls back to the resolved system pool when null."
+  type        = string
+  default     = null
 }
 
 # Network
@@ -176,7 +190,7 @@ variable "kubernetes_version" {
 # }
 
 variable "longhorn_enabled" {
-  description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data_disk_size."
+  description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data disks (disks[])."
   type        = bool
   default     = true
 }

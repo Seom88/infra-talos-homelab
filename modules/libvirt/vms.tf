@@ -1,30 +1,55 @@
 # Node mapping with deterministic MACs
+# Data disk resolution: per-disk pool > default_data_pool > per-node pool > default_pool > managed pool.
 
 locals {
+  data_device_letters = ["vdb", "vdc", "vdd", "vde", "vdf", "vdg", "vdh", "vdi", "vdj", "vdk"]
+
   nodes_all = merge(
     { for n in var.nodes_cp : n.hostname => {
-      role           = "cp"
-      mac            = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
-      ip             = n.ip
-      cores          = n.cores
-      memory         = n.memory
-      disk_size      = n.disk_size
-      pool           = coalesce(n.pool, libvirt_pool.talos.name)
-      data_disk_size = try(n.data_disk_size, null)
-      data_pool      = coalesce(try(n.data_pool, null), try(n.pool, null), libvirt_pool.talos.name)
+      role      = "cp"
+      mac       = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
+      ip        = n.ip
+      cores     = n.cores
+      memory    = n.memory
+      disk_size = n.disk_size
+      pool      = coalesce(n.pool, var.default_pool, libvirt_pool.talos.name)
+      effective_disks = [
+        for d in coalesce(n.disks, []) : {
+          name = d.name
+          size = d.size
+          pool = coalesce(d.pool, var.default_data_pool, n.pool, var.default_pool, libvirt_pool.talos.name)
+        }
+      ]
     } },
     { for n in var.nodes_worker : n.hostname => {
-      role           = "worker"
-      mac            = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
-      ip             = n.ip
-      cores          = n.cores
-      memory         = n.memory
-      disk_size      = n.disk_size
-      pool           = coalesce(n.pool, libvirt_pool.talos.name)
-      data_disk_size = try(n.data_disk_size, null)
-      data_pool      = coalesce(try(n.data_pool, null), try(n.pool, null), libvirt_pool.talos.name)
+      role      = "worker"
+      mac       = coalesce(n.mac, format("52:54:00:%s:%s:%s", substr(md5(n.hostname), 0, 2), substr(md5(n.hostname), 2, 2), substr(md5(n.hostname), 4, 2)))
+      ip        = n.ip
+      cores     = n.cores
+      memory    = n.memory
+      disk_size = n.disk_size
+      pool      = coalesce(n.pool, var.default_pool, libvirt_pool.talos.name)
+      effective_disks = [
+        for d in coalesce(n.disks, []) : {
+          name = d.name
+          size = d.size
+          pool = coalesce(d.pool, var.default_data_pool, n.pool, var.default_pool, libvirt_pool.talos.name)
+        }
+      ]
     } },
   )
+
+  data_volumes = {
+    for entry in flatten([
+      for hostname, node in local.nodes_all : [
+        for d in node.effective_disks : {
+          key      = "${hostname}-${d.name}"
+          hostname = hostname
+          disk     = d
+        }
+      ]
+    ]) : entry.key => entry
+  }
 }
 
 # Boot volumes (bootstrap only)
@@ -89,13 +114,13 @@ resource "terraform_data" "resize_boot" {
   depends_on = [libvirt_volume.boot]
 }
 
-# Data volumes (optional second disk)
+# Data volumes (scalable extra disks, vdb and up)
 
 resource "libvirt_volume" "data" {
-  for_each = { for k, v in local.nodes_all : k => v if try(v.data_disk_size, null) != null }
-  name     = "${each.key}-data.qcow2"
-  pool     = each.value.data_pool
-  capacity = each.value.data_disk_size * 1024 * 1024 * 1024
+  for_each = local.data_volumes
+  name     = "${each.value.hostname}-${each.value.disk.name}.qcow2"
+  pool     = each.value.disk.pool
+  capacity = each.value.disk.size * 1024 * 1024 * 1024
 
   target = {
     format = {
@@ -180,24 +205,24 @@ resource "libvirt_domain" "node" {
           }
         },
       ],
-      try(local.nodes_all[each.key].data_disk_size, null) != null ? [
-        {
+      [
+        for idx, d in local.nodes_all[each.key].effective_disks : {
           source = {
             volume = {
-              pool   = libvirt_volume.data[each.key].pool
-              volume = libvirt_volume.data[each.key].name
+              pool   = libvirt_volume.data["${each.key}-${d.name}"].pool
+              volume = libvirt_volume.data["${each.key}-${d.name}"].name
             }
           }
           target = {
-            dev = "vdb"
+            dev = local.data_device_letters[idx]
             bus = "virtio"
           }
           driver = {
             name = "qemu"
             type = "qcow2"
           }
-        },
-      ] : []
+        }
+      ]
     )
 
     graphics = [

@@ -1,5 +1,5 @@
 locals {
-  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if try(n.data_disk_size, null) != null]) > 0
+  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if length(coalesce(n.disks, [])) > 0]) > 0
   # UserVolumeConfig "data" -> /var/mnt/data (generic); "!system_disk" suffices for virtio.
   data_volume_patch = local.has_data_disk ? yamlencode({
     apiVersion = "v1alpha1"

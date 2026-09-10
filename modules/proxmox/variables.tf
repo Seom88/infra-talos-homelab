@@ -43,6 +43,18 @@ variable "datastore_iso" {
   default     = "local"
 }
 
+variable "default_datastore" {
+  description = "Global default datastore for system disks (efi, virtio0, initialization). Per-node datastore overrides it."
+  type        = string
+  default     = null
+}
+
+variable "default_data_datastore" {
+  description = "Global default datastore for data disks. Falls back to the resolved system datastore when null."
+  type        = string
+  default     = null
+}
+
 variable "network_bridge" {
   description = "Bridge for VMs; with SDN must match VNet id (max 8 chars, e.g. talosvn)"
   type        = string
@@ -79,7 +91,7 @@ variable "network_snat" {
 }
 
 variable "nodes_cp" {
-  description = "Control plane nodes; optional data_disk_size creates virtio1 -> /var/mnt/data."
+  description = "Control plane nodes; disks[] creates virtio1..N -> /var/mnt/data."
   type = list(object({
     hostname         = string
     ip               = string
@@ -87,10 +99,13 @@ variable "nodes_cp" {
     memory           = number
     proxmox_node     = string
     disk_size        = number
-    datastore        = string
+    datastore        = optional(string)
     allow_scheduling = bool
-    data_disk_size   = optional(number)
-    data_datastore   = optional(string)
+    disks = optional(list(object({
+      name      = string
+      size      = number
+      datastore = optional(string)
+    })))
   }))
 
   validation {
@@ -100,28 +115,29 @@ variable "nodes_cp" {
 
   validation {
     condition = alltrue([
-      for n in var.nodes_cp : (
-        try(n.data_datastore, null) != null ? try(n.data_disk_size, null) != null : true
-        ) && (
-        try(n.data_disk_size, null) == null ? true : try(n.data_disk_size, 0) > 0
-      )
+      for n in var.nodes_cp : alltrue([
+        for d in coalesce(n.disks, []) : d.size > 0
+      ])
     ])
-    error_message = "data_disk_size must be >0 when set; data_datastore/data_pool requires data_disk_size"
+    error_message = "disks[].size must be >0 when set."
   }
 }
 
 variable "nodes_worker" {
-  description = "Worker nodes; optional data_disk_size creates virtio1 -> /var/mnt/data."
+  description = "Worker nodes; disks[] creates virtio1..N -> /var/mnt/data."
   type = list(object({
-    hostname       = string
-    ip             = string
-    cores          = number
-    memory         = number
-    proxmox_node   = string
-    disk_size      = number
-    datastore      = string
-    data_disk_size = optional(number)
-    data_datastore = optional(string)
+    hostname     = string
+    ip           = string
+    cores        = number
+    memory       = number
+    proxmox_node = string
+    disk_size    = number
+    datastore    = optional(string)
+    disks = optional(list(object({
+      name      = string
+      size      = number
+      datastore = optional(string)
+    })))
   }))
 
   validation {
@@ -131,13 +147,11 @@ variable "nodes_worker" {
 
   validation {
     condition = alltrue([
-      for n in var.nodes_worker : (
-        try(n.data_datastore, null) != null ? try(n.data_disk_size, null) != null : true
-        ) && (
-        try(n.data_disk_size, null) == null ? true : try(n.data_disk_size, 0) > 0
-      )
+      for n in var.nodes_worker : alltrue([
+        for d in coalesce(n.disks, []) : d.size > 0
+      ])
     ])
-    error_message = "data_disk_size must be >0 when set; data_datastore/data_pool requires data_disk_size"
+    error_message = "disks[].size must be >0 when set."
   }
 }
 

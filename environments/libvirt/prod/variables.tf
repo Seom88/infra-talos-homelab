@@ -8,22 +8,28 @@ variable "nodes_cp" {
     disk_size        = number
     pool             = optional(string)
     allow_scheduling = bool
-    data_disk_size   = optional(number)
-    data_pool        = optional(string)
+    disks = optional(list(object({
+      name = string
+      size = number
+      pool = optional(string)
+    })))
   }))
 }
 
 variable "nodes_worker" {
   type = list(object({
-    hostname       = string
-    ip             = string
-    mac            = optional(string)
-    cores          = number
-    memory         = number
-    disk_size      = number
-    pool           = optional(string)
-    data_disk_size = optional(number)
-    data_pool      = optional(string)
+    hostname  = string
+    ip        = string
+    mac       = optional(string)
+    cores     = number
+    memory    = number
+    disk_size = number
+    pool      = optional(string)
+    disks = optional(list(object({
+      name = string
+      size = number
+      pool = optional(string)
+    })))
   }))
 }
 
@@ -35,6 +41,18 @@ variable "pool_name" {
 variable "pool_path" {
   type    = string
   default = "/mnt/data/libvirt/talos"
+}
+
+variable "default_pool" {
+  description = "Global default pool for system disks."
+  type        = string
+  default     = null
+}
+
+variable "default_data_pool" {
+  description = "Global default pool for data disks."
+  type        = string
+  default     = null
 }
 
 variable "gateway" {

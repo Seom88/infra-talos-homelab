@@ -87,6 +87,18 @@ variable "network_snat" {
   default = true
 }
 
+variable "default_datastore" {
+  description = "Global default datastore for system disks."
+  type        = string
+  default     = null
+}
+
+variable "default_data_datastore" {
+  description = "Global default datastore for data disks."
+  type        = string
+  default     = null
+}
+
 variable "nodes_cp" {
   type = list(object({
     hostname         = string
@@ -95,24 +107,30 @@ variable "nodes_cp" {
     memory           = number
     proxmox_node     = string
     disk_size        = number
-    datastore        = string
+    datastore        = optional(string)
     allow_scheduling = bool
-    data_disk_size   = optional(number)
-    data_datastore   = optional(string)
+    disks = optional(list(object({
+      name      = string
+      size      = number
+      datastore = optional(string)
+    })))
   }))
 }
 
 variable "nodes_worker" {
   type = list(object({
-    hostname       = string
-    ip             = string
-    cores          = number
-    memory         = number
-    proxmox_node   = string
-    disk_size      = number
-    datastore      = string
-    data_disk_size = optional(number)
-    data_datastore = optional(string)
+    hostname     = string
+    ip           = string
+    cores        = number
+    memory       = number
+    proxmox_node = string
+    disk_size    = number
+    datastore    = optional(string)
+    disks = optional(list(object({
+      name      = string
+      size      = number
+      datastore = optional(string)
+    })))
   }))
 }
 

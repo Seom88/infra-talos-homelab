@@ -9,6 +9,10 @@ network_bridge   = "dev"
 sdn_zone         = "talos"
 network_cidr     = "10.10.1.0/24"
 network_snat     = true
+
+# Global datastore defaults (DRY); per-node datastore overrides.
+default_datastore = "ssd01"
+
 nodes_cp = [
   {
     hostname         = "talos-cp1"
@@ -19,7 +23,7 @@ nodes_cp = [
     disk_size        = 25
     datastore        = "ssd01"
     allow_scheduling = true
-    data_disk_size   = 50
+    disks            = [{ name = "data", size = 50, datastore = "ssd01" }]
   },
   # {
   #   hostname         = "talos-cp2"
@@ -30,7 +34,7 @@ nodes_cp = [
   #   disk_size        = 30
   #   datastore        = "ssd01"
   #   allow_scheduling = false
-  #   data_disk_size   = 50
+  #   disks            = [{ name = "data", size = 50, datastore = "ssd01" }]
   # },
   # {
   #   hostname         = "talos-cp3"
@@ -41,38 +45,38 @@ nodes_cp = [
   #   disk_size        = 30
   #   datastore        = "ssd01"
   #   allow_scheduling = false
-  #   data_disk_size   = 50
+  #   disks            = [{ name = "data", size = 50, datastore = "ssd01" }]
   # }
 ]
 nodes_worker = [
   # {
-  #   hostname       = "talos-w1"
-  #   ip             = "10.10.1.101"
-  #   cores          = 4
-  #   memory         = 4 * 1024
-  #   proxmox_node   = "pve01"
-  #   disk_size      = 40
-  #   datastore      = "ssd01"
-  #   data_disk_size = 50
+  #   hostname     = "talos-w1"
+  #   ip           = "10.10.1.101"
+  #   cores        = 4
+  #   memory       = 4 * 1024
+  #   proxmox_node = "pve01"
+  #   disk_size    = 40
+  #   datastore    = "ssd01"
+  #   disks        = [{ name = "data", size = 50, datastore = "ssd01" }]
   # },
   # {
-  #   hostname       = "talos-w2"
-  #   ip             = "10.10.1.102"
-  #   cores          = 4
-  #   memory         = 4 * 1024
-  #   proxmox_node   = "pve01"
-  #   disk_size      = 40
-  #   datastore      = "ssd01"
-  #   data_disk_size = 50
+  #   hostname     = "talos-w2"
+  #   ip           = "10.10.1.102"
+  #   cores        = 4
+  #   memory       = 4 * 1024
+  #   proxmox_node = "pve01"
+  #   disk_size    = 40
+  #   datastore    = "ssd01"
+  #   disks        = [{ name = "data", size = 50, datastore = "ssd01" }]
   # },
   # {
-  #   hostname       = "talos-w3"
-  #   ip             = "10.10.1.103"
-  #   cores          = 4
-  #   memory         = 4 * 1024
-  #   proxmox_node   = "pve01"
-  #   disk_size      = 40
-  #   datastore      = "ssd01"
-  #   data_disk_size = 50
+  #   hostname     = "talos-w3"
+  #   ip           = "10.10.1.103"
+  #   cores        = 4
+  #   memory       = 4 * 1024
+  #   proxmox_node = "pve01"
+  #   disk_size    = 40
+  #   datastore    = "ssd01"
+  #   disks        = [{ name = "data", size = 50, datastore = "ssd01" }]
   # }
 ]

@@ -14,6 +14,9 @@ module "proxmox" {
   nodes_worker   = var.nodes_worker
   talos_version  = var.talos_version
 
+  default_datastore      = var.default_datastore
+  default_data_datastore = var.default_data_datastore
+
   schematic_path = "${path.module}/../../../schematic-${var.env_name}.yaml"
 
   # Tailscale disabled - see ADR 001

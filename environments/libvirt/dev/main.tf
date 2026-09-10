@@ -6,6 +6,9 @@ module "libvirt" {
   pool_name    = var.pool_name
   pool_path    = var.pool_path
 
+  default_pool      = var.default_pool
+  default_data_pool = var.default_data_pool
+
   gateway      = var.gateway
   network_cidr = var.network_cidr
 
