@@ -23,16 +23,16 @@ locals {
   # per distinct disks[].name); has_data_volume just reflects their presence.
   has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
 
-    # Tailscale disabled - see ADR 001
-    # var.tailscale_auth_key != "" ? yamlencode({
-    #   apiVersion = "v1alpha1"
-    #   kind       = "ExtensionServiceConfig"
-    #   name       = "tailscale"
-    #   environment = [
-    #     "TS_AUTHKEY=${var.tailscale_auth_key}",
-    #     "TS_ACCEPT_DNS=false"
-    #   ]
-    # }) : "",
+  # Tailscale disabled - see ADR 001
+  # var.tailscale_auth_key != "" ? yamlencode({
+  #   apiVersion = "v1alpha1"
+  #   kind       = "ExtensionServiceConfig"
+  #   name       = "tailscale"
+  #   environment = [
+  #     "TS_AUTHKEY=${var.tailscale_auth_key}",
+  #     "TS_ACCEPT_DNS=false"
+  #   ]
+  # }) : "",
 
   cilium_patch = join("\n---\n", [
     yamlencode({
@@ -88,7 +88,7 @@ locals {
       "rotate-server-certificates" = true
     }
   })
-  metrics_server_patch = join("\n---\n", [ 
+  metrics_server_patch = join("\n---\n", [
     yamlencode({
       apiVersion = "v1alpha1"
       kind       = "KubeExternalManifestConfig"
