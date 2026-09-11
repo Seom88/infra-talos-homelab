@@ -174,7 +174,6 @@ data "talos_machine_configuration" "worker_machine_config" {
       }
     }),
     local.install_patch,
-    local.cilium_patch,
     local.rotate_kubelet_certificates_patch,
   ], var.extra_config_patches))
 }
