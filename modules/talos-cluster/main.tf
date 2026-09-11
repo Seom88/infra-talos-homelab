@@ -23,6 +23,17 @@ locals {
   # per distinct disks[].name); has_data_volume just reflects their presence.
   has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
 
+    # Tailscale disabled - see ADR 001
+    # var.tailscale_auth_key != "" ? yamlencode({
+    #   apiVersion = "v1alpha1"
+    #   kind       = "ExtensionServiceConfig"
+    #   name       = "tailscale"
+    #   environment = [
+    #     "TS_AUTHKEY=${var.tailscale_auth_key}",
+    #     "TS_ACCEPT_DNS=false"
+    #   ]
+    # }) : "",
+
   cilium_patch = join("\n---\n", [
     yamlencode({
       apiVersion = "v1alpha1"
@@ -68,6 +79,29 @@ locals {
       }
     }
   })
+
+  # Enable metrics 
+  rotate_kubelet_certificates_patch = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "KubeletConfig"
+    extraArgs = {
+      "rotate-server-certificates" = true
+    }
+  })
+  metrics_server_patch = join("\n---\n", [ 
+    yamlencode({
+      apiVersion = "v1alpha1"
+      kind       = "KubeExternalManifestConfig"
+      name       = "kubelet-serving-cert-approver"
+      url = "https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml"
+    }),
+    yamlencode({
+      apiVersion = "v1alpha1"
+      kind       = "KubeExternalManifestConfig"
+      name       = "metrics-server"
+      url = "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+    }),
+  ])
 }
 
 # Talos client config for talosctl; TF >=1.11 prefers ephemeral write-only (see below).
@@ -94,18 +128,10 @@ data "talos_machine_configuration" "control_machine_config" {
       }
     }),
     local.install_patch,
-    # Tailscale disabled - see ADR 001
-    # var.tailscale_auth_key != "" ? yamlencode({
-    #   apiVersion = "v1alpha1"
-    #   kind       = "ExtensionServiceConfig"
-    #   name       = "tailscale"
-    #   environment = [
-    #     "TS_AUTHKEY=${var.tailscale_auth_key}",
-    #     "TS_ACCEPT_DNS=true"
-    #   ]
-    # }) : "",
     local.cp_allow_scheduling_map[each.key] ? local.scheduling_patch : "",
     local.cilium_patch,
+    local.rotate_kubelet_certificates_patch,
+    local.metrics_server_patch,
   ], var.extra_config_patches))
 }
 
@@ -148,17 +174,8 @@ data "talos_machine_configuration" "worker_machine_config" {
       }
     }),
     local.install_patch,
-    # Tailscale disabled - see ADR 001
-    # var.tailscale_auth_key != "" ? yamlencode({
-    #   apiVersion = "v1alpha1"
-    #   kind       = "ExtensionServiceConfig"
-    #   name       = "tailscale"
-    #   environment = [
-    #     "TS_AUTHKEY=${var.tailscale_auth_key}",
-    #     "TS_ACCEPT_DNS=false"
-    #   ]
-    # }) : "",
     local.cilium_patch,
+    local.rotate_kubelet_certificates_patch,
   ], var.extra_config_patches))
 }
 

@@ -12,6 +12,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Deterministic App-of-Apps sync-wave ordering (Synced + Healthy gate, opt-out per app).
 - Renovate coverage for Cilium, Gateway API CRDs and Kubernetes; safe automerge for minor/patch bumps.
 - ADR 004 (single control-plane topology for the 32 GiB homelab) and docs split into topic guides.
+- Metrics Server via kubelet certificate rotation (Option 2): `KubeletConfig rotate-server-certificates` on all nodes + `kubelet-serving-cert-approver` and `metrics-server` external manifests on controlplanes.
 
 ### Changed
 - **Breaking: Talos 1.13.9 → 1.14.0 (K8s stays 1.36.3).** Machine-config patches moved to the 1.14 multi-doc format (scheduling, install, Cilium); kubelet `extraMounts` removed — Longhorn storage now comes from UserVolumeConfigs via `defaultDataPath` (see ADR 005). Rollout: verify a fresh bootstrap in libvirt/dev first, then apply with `-parallelism=1`.
