@@ -99,7 +99,7 @@ Steps: `checkout` → `setup-terraform` → placeholder `kubeconfig.yaml` → `t
 | Group non-critical Terraform providers | `terraform` `terraform-provider` excl. `siderolabs/talos` | `terraform providers` (`terraform-providers`), `terraform` | grouped PR |
 | Automerge patch/minor for Helm charts (ArgoCD, Cilium, Gateway API) — safe for homelab | `helm` `argo-cd`/`cilium`/`gateway-api-crds` `matchUpdateTypes: ["patch","minor"]` | `automerge/minor` | `true` |
 | Automerge patch for Terraform providers — minor/major needs review | `terraform` `terraform-provider` excl. `siderolabs/talos` `matchUpdateTypes: ["patch"]` | `automerge/patch` | `true` |
-| K8s patch automerge only — minor needs Talos support check (1.13 max 1.36) | `github-releases` `kubernetes/kubernetes` `matchUpdateTypes: ["patch"]` | `automerge/patch` | `true` |
+| K8s patch automerge only — minor needs Talos support check (1.14 supports 1.36-1.37) | `github-releases` `kubernetes/kubernetes` `matchUpdateTypes: ["patch"]` | `automerge/patch` | `true` |
 | Major updates still need manual review | `*` `matchUpdateTypes: ["major"]` | `manual-review/major` | `false` |
 
 **Custom managers** (regex on `variables.tf`, semver):

@@ -12,8 +12,6 @@ module "libvirt" {
   gateway      = var.gateway
   network_cidr = var.network_cidr
 
-  schematic_path = "${path.module}/../../../schematic-${var.env_name}.yaml"
-
   secureboot            = var.secureboot
   ovmf_code_secboot     = var.ovmf_code_secboot
   ovmf_vars_secboot     = var.ovmf_vars_secboot

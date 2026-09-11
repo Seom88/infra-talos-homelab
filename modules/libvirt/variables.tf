@@ -1,7 +1,7 @@
 # Nodes
 
 variable "nodes_cp" {
-  description = "Control plane nodes; disks[] creates vdb..N -> /var/mnt/data."
+  description = "Control plane nodes; disks[] creates vdb..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
   type = list(object({
     hostname         = string
     ip               = string
@@ -34,7 +34,7 @@ variable "nodes_cp" {
 }
 
 variable "nodes_worker" {
-  description = "Worker nodes; disks[] creates vdb..N -> /var/mnt/data."
+  description = "Worker nodes; disks[] creates vdb..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
   type = list(object({
     hostname  = string
     ip        = string
@@ -116,10 +116,6 @@ variable "network_cidr" {
 }
 
 # Environment
-variable "schematic_path" {
-  description = "Path to Talos Image Factory schematic YAML."
-  type        = string
-}
 
 variable "secureboot" {
   description = "Enable UEFI SecureBoot"
@@ -160,13 +156,13 @@ variable "cluster_name" {
 }
 
 variable "talos_version" {
-  description = "Talos Linux version (e.g. 1.13.3)"
+  description = "Talos Linux version (e.g. 1.14.0)"
   type        = string
-  default     = "1.13.9"
+  default     = "1.14.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
-    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.14.0)."
   }
 }
 
@@ -190,7 +186,7 @@ variable "kubernetes_version" {
 # }
 
 variable "longhorn_enabled" {
-  description = "Enable Longhorn kubelet extraMounts. Uses /var/mnt/data when any node has data disks (disks[])."
+  description = "Deprecated no-op (kept for caller compatibility): Longhorn uses defaultDataPath=/var/mnt/data with no kubelet extraMounts."
   type        = bool
   default     = true
 }

@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 |------|---------|---------|
 | [Terraform](https://www.terraform.io/downloads) | >= 1.11 | Infrastructure provisioning |
 | [just](https://github.com/casey/just) | latest | Task runner |
-| [Talosctl](https://www.talos.dev/v1.13/introduction/get-started/) | matching `talos_version` | Cluster management |
+| [Talosctl](https://www.talos.dev/v1.14/introduction/get-started/) | matching `talos_version` | Cluster management |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | latest | Kubernetes CLI |
 | [jq](https://stedolan.github.io/jq/) | latest | JSON processing |
 
@@ -69,7 +69,7 @@ environments/libvirt/{dev,prod}/  # Libvirt env roots (backend local dev / S3 pr
 modules/{proxmox,libvirt,talos-cluster,platform}/  # Reusable modules
 modules/talos-cluster/            # Provider-agnostic Talos bootstrap & kubeconfig
 docs/adr/                         # Architecture Decision Records (MADR)
-schematic-*.yaml                  # Talos Image Factory extension bundles
+modules/talos-image/               # Canonical Image Factory wiring (extensions data -> schematic -> URLs)
 .github/workflows/                # CI/CD (deploy.yaml, destroy.yaml)
 justfile                          # Unified provider=/env= tasks (tf-apply, tf-apply-upgrade, tf-destroy, ...)
 ```

@@ -91,7 +91,7 @@ variable "network_snat" {
 }
 
 variable "nodes_cp" {
-  description = "Control plane nodes; disks[] creates virtio1..N -> /var/mnt/data."
+  description = "Control plane nodes; disks[] creates virtio1..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
   type = list(object({
     hostname         = string
     ip               = string
@@ -124,7 +124,7 @@ variable "nodes_cp" {
 }
 
 variable "nodes_worker" {
-  description = "Worker nodes; disks[] creates virtio1..N -> /var/mnt/data."
+  description = "Worker nodes; disks[] creates virtio1..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
   type = list(object({
     hostname     = string
     ip           = string
@@ -164,13 +164,13 @@ variable "extra_config_patches" {
 # Talos version (bootstrap pin)
 # DANGER: bumping replaces disks (etcd wipe); use 'just upgrade' for in-place.
 variable "talos_version" {
-  description = "Talos Linux version to install on the nodes (e.g. 1.13.9)"
+  description = "Talos Linux version to install on the nodes (e.g. 1.14.0)"
   type        = string
-  default     = "1.13.9"
+  default     = "1.14.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
-    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.14.0)."
   }
 }
 
@@ -183,14 +183,9 @@ variable "talos_version" {
 # }
 
 variable "longhorn_enabled" {
-  description = "Enable Longhorn extraMounts via /var/mnt/data."
+  description = "Deprecated no-op (kept for caller compatibility): Longhorn uses defaultDataPath=/var/mnt/data with no kubelet extraMounts."
   type        = bool
   default     = true
-}
-
-variable "schematic_path" {
-  description = "Path to Talos Image Factory schematic YAML."
-  type        = string
 }
 
 variable "enable_health_check" {

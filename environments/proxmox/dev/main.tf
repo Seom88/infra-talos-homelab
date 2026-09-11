@@ -17,8 +17,6 @@ module "proxmox" {
   default_datastore      = var.default_datastore
   default_data_datastore = var.default_data_datastore
 
-  schematic_path = "${path.module}/../../../schematic-${var.env_name}.yaml"
-
   # Tailscale disabled - see ADR 001
   # tailscale_auth_key  = var.tailscale_auth_key
   enable_health_check = var.enable_health_check

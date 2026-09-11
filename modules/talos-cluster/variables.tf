@@ -62,12 +62,12 @@ variable "cluster_name" {
 }
 
 variable "talos_version" {
-  description = "Talos Linux version (e.g. 1.13.3)"
+  description = "Talos Linux version (e.g. 1.14.0)"
   type        = string
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
-    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.14.0)."
   }
 }
 
@@ -82,31 +82,19 @@ variable "kubernetes_version" {
   }
 }
 
-variable "talos_image_id" {
-  description = "Schematic ID from the Talos Image Factory"
+variable "installer_image" {
+  description = "Installer image for talos_machine (from Image Factory urls data, e.g. factory.talos.dev/nocloud-installer-secureboot/<id>:v1.14.0)"
   type        = string
   nullable    = false
 
   validation {
-    condition     = length(trimspace(var.talos_image_id)) > 0
-    error_message = "talos_image_id must not be empty."
+    condition     = length(trimspace(var.installer_image)) > 0
+    error_message = "installer_image must not be empty."
   }
 }
 
-variable "installer_image" {
-  description = "Installer image for talos_machine (e.g. factory.talos.dev/nocloud-installer/<id>:vX.Y.Z). Defaults to secureboot flavor."
-  type        = string
-  default     = ""
-}
-
-variable "secureboot" {
-  description = "Use secureboot installer flavor; false for libvirt, true for Proxmox."
-  type        = bool
-  default     = true
-}
-
 # Tailscale disabled - see ADR 001
-# To enable: uncomment here and in schematic-*.yaml
+# To enable: uncomment here and add siderolabs/tailscale to modules/talos-image/variables.tf extensions
 # variable "tailscale_auth_key" {
 #   description = "Tailscale key; omit to skip."
 #   type        = string
@@ -120,7 +108,7 @@ variable "cp_allow_scheduling" {
 }
 
 variable "longhorn_enabled" {
-  description = "Enable Longhorn support: inject kubelet extraMounts for /var/lib/longhorn on all nodes"
+  description = "Deprecated no-op (kept for caller compatibility): Longhorn uses defaultDataPath=/var/mnt/data with no kubelet extraMounts; UVCs arrive via extra_config_patches."
   type        = bool
   default     = true
 }

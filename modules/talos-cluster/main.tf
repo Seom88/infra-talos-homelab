@@ -10,49 +10,62 @@ terraform {
 }
 
 locals {
-  cp_names           = var.cp_hostnames
-  worker_names       = var.worker_hostnames
-  all_nodes_names    = concat(local.cp_names, local.worker_names)
-  cluster_endpoint   = "https://${var.cp_ips[0]}:6443"
-  base_install_image = var.secureboot ? "factory.talos.dev/nocloud-installer-secureboot/${var.talos_image_id}:v${var.talos_version}" : "factory.talos.dev/nocloud-installer/${var.talos_image_id}:v${var.talos_version}"
-  installer_image    = var.installer_image != "" ? var.installer_image : local.base_install_image
-  # Multi-disk: UserVolumeConfig "data" -> /var/mnt/data; kubelet bind to /var/lib/longhorn.
-  # See https://docs.siderolabs.com/kubernetes-guides/csi/longhorn
+  cp_names         = var.cp_hostnames
+  worker_names     = var.worker_hostnames
+  all_nodes_names  = concat(local.cp_names, local.worker_names)
+  cluster_endpoint = "https://${var.cp_ips[0]}:6443"
+  installer_image  = var.installer_image
+  # Longhorn needs no kubelet extraMounts: each UserVolumeConfig mounts at
+  # /var/mnt/<name> and Longhorn runs with defaultDataPath=/var/mnt/data
+  # (GitOps repo, platform/longhorn values.yaml), so kubelet propagation
+  # picks it up automatically. UVC documents arrive via
+  # var.extra_config_patches from the caller (proxmox/libvirt build one UVC
+  # per distinct disks[].name); has_data_volume just reflects their presence.
   has_data_volume = length([for p in var.extra_config_patches : p if strcontains(p, "UserVolumeConfig")]) > 0
-  longhorn_patch = var.longhorn_enabled ? yamlencode({
-    machine = {
-      kubelet = {
-        extraMounts = [
-          {
-            destination = "/var/lib/longhorn"
-            type        = "bind"
-            source      = "/var/mnt/data"
-            options     = ["bind", "rshared", "rw"]
-          }
-        ]
-      }
-    }
-  }) : ""
 
-  # Cilium: update this for talos v14 https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium
-  cilium_patch = yamlencode({
-    cluster = {
-      network = {
-        cni = {
-          name = "none"
-        }
-      }
-      proxy = {
-        disabled = true
+  cilium_patch = join("\n---\n", [
+    yamlencode({
+      apiVersion = "v1alpha1"
+      kind       = "KubeFlannelCNIConfig"
+      "$patch"   = "delete"
+    }),
+    yamlencode({
+      apiVersion = "v1alpha1"
+      kind       = "KubeProxyConfig"
+      enabled    = false
+    }),
+  ])
+
+  cp_allow_scheduling_map = { for i, hostname in var.cp_hostnames : hostname => var.cp_allow_scheduling[i] }
+  # Per-node scheduling (Talos 1.14): cluster.allowSchedulingOnControlPlanes is
+  # gone; the control-plane taint lives in the KubeNodeConfig document.
+  # Deleting it per node makes only that node schedulable.
+  # See https://docs.siderolabs.com/talos/v1.14/deploy-and-manage-workloads/workloads-on-controlplane
+  scheduling_patch = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "KubeNodeConfig"
+    taints = {
+      "node-role.kubernetes.io/control-plane" = {
+        "$patch" = "delete"
       }
     }
   })
 
-  cp_allow_scheduling_map = { for i, hostname in var.cp_hostnames : hostname => var.cp_allow_scheduling[i] }
-  # Per-node scheduling: allowSchedulingOnControlPlanes removes taint per node.
-  scheduling_patch = yamlencode({
-    cluster = {
-      allowSchedulingOnControlPlanes = true
+  # Unattended install (Talos 1.14): replaces deprecated machine.install.
+  # disk.dev_path pins the virtio boot disk; system_disk is only populated
+  # after installation, so it cannot select the install target. wipe/reboot
+  # omitted (defaults: wipe=true, reboot when installer.image is set).
+  # See https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/unattendedinstallconfig
+  install_patch = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "UnattendedInstallConfig"
+    installer = {
+      image = local.installer_image
+    }
+    provisioning = {
+      diskSelector = {
+        match = "disk.dev_path == '/dev/vda'"
+      }
     }
   })
 }
@@ -78,12 +91,9 @@ data "talos_machine_configuration" "control_machine_config" {
     yamlencode({
       machine = {
         certSANs = concat(local.cp_names, var.cp_ips)
-        install = {
-          disk  = "/dev/vda"
-          image = local.installer_image
-        }
       }
     }),
+    local.install_patch,
     # Tailscale disabled - see ADR 001
     # var.tailscale_auth_key != "" ? yamlencode({
     #   apiVersion = "v1alpha1"
@@ -95,12 +105,11 @@ data "talos_machine_configuration" "control_machine_config" {
     #   ]
     # }) : "",
     local.cp_allow_scheduling_map[each.key] ? local.scheduling_patch : "",
-    local.longhorn_patch,
     local.cilium_patch,
   ], var.extra_config_patches))
 }
 
-# In-place upgrades via talos_machine.image; bootstrap disk pinned.
+# In-place upgrades via talos_machine.image; bootstrap disk selected by UnattendedInstallConfig.
 resource "talos_machine" "control_plane" {
   for_each              = { for i, hostname in var.cp_hostnames : hostname => var.cp_ips[i] }
   node                  = each.value
@@ -136,12 +145,9 @@ data "talos_machine_configuration" "worker_machine_config" {
     yamlencode({
       machine = {
         certSANs = local.worker_names
-        install = {
-          disk  = "/dev/vda"
-          image = local.installer_image
-        }
       }
     }),
+    local.install_patch,
     # Tailscale disabled - see ADR 001
     # var.tailscale_auth_key != "" ? yamlencode({
     #   apiVersion = "v1alpha1"
@@ -152,7 +158,6 @@ data "talos_machine_configuration" "worker_machine_config" {
     #     "TS_ACCEPT_DNS=false"
     #   ]
     # }) : "",
-    local.longhorn_patch,
     local.cilium_patch,
   ], var.extra_config_patches))
 }

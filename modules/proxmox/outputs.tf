@@ -9,3 +9,8 @@ output "kubeconfig" {
   value       = module.talos.kubeconfig
   sensitive   = true
 }
+
+output "schematic_id" {
+  description = "Image Factory schematic ID for the canonical extension set"
+  value       = module.image.schematic_id
+}

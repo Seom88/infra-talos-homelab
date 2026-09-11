@@ -10,7 +10,7 @@
 - **Network access (Proxmox SDN)**: the machine running `terraform apply` (laptop or CI) must be able to reach the cluster subnet `10.10.0.0/24`. The `talosvn` SDN VNet is isolated — VMs get outbound internet via SNAT but nothing from outside reaches them directly. For `prod`, expose the subnet through a Tailscale subnet router (see [Access → Proxmox](#proxmox) and [Networking](./networking.md#tailscale-subnet-routing-both-providers))
 - **Libvirt path**: Linux host with libvirt + KVM and `qemu:///system` accessible
 - Terraform >= 1.11
-- Talos Image Factory schematic ID (computed via `just get-schematic-id name="prod"`)
+- Talos Image Factory schematic ID (read via `just get-schematic-id`, sourced from `terraform output -raw schematic_id`)
 
 See [Networking](./networking.md) for SDN/NAT and Tailscale subnet-routing details.
 
@@ -72,7 +72,7 @@ just provider=libvirt env=prod tf-apply    # libvirt/prod
 | `gen-secrets` | Extract talosconfig + kubeconfig from state |
 | `setup-cli` | `gen-secrets` + merge into `~/.talos/config` and `~/.kube/config` |
 | `status` | Show Talos version, extensions, and cluster members |
-| `get-schematic-id name="prod"` | Compute schematic ID from `schematic-{name}.yaml` via the Image Factory API |
+| `get-schematic-id` | Read schematic ID from state (`terraform output -raw schematic_id`, canonical set in `modules/talos-image`) |
 | `cluster-schematic-id` | Read the active schematic ID from the running cluster |
 | `setup-host` | (libvirt) Ensure firewalld NAT for `virbr-talos` — masquerade + forward on zone `libvirt` (idempotent, needs sudo) |
 

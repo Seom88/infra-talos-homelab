@@ -125,10 +125,9 @@ status:
     echo "── Nodes ──"
     talosctl --talosconfig "$TC" get members -n "$FIRST"
 
-# Compute schematic ID via factory API
-get-schematic-id name="prod":
-    curl -sf -X POST --data-binary @schematic-{{ name }}.yaml \
-      https://factory.talos.dev/schematics | jq -r '.id'
+# Read schematic ID from Terraform state (canonical extension set in modules/talos-image)
+get-schematic-id:
+    terraform -chdir={{ tf_root }} output -raw schematic_id
 
 # Read schematic ID from cluster
 cluster-schematic-id:

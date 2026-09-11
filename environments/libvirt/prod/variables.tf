@@ -107,11 +107,11 @@ variable "cluster_name" {
 
 variable "talos_version" {
   type    = string
-  default = "1.13.9"
+  default = "1.14.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
-    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.14.0)."
   }
 }
 
@@ -142,10 +142,10 @@ variable "extra_config_patches" {
   default = []
 }
 
-# Schematic selector
+# Environment selector
 # TODO: DRY duplicate across 4 envs (see ADR).
 variable "env_name" {
-  description = "Selects schematic-<env_name>.yaml (e.g. prod)"
+  description = "Environment selector (prod); used for secrets paths"
   type        = string
   default     = "prod"
 

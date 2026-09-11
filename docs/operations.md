@@ -23,7 +23,7 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 | tfvars key | What happens |
 |------------|--------------|
 | `talos_version` | Bumping the version triggers a **sequential rolling upgrade** via `talos_machine.image` (pull → install → reboot, one node at a time with `-parallelism=1` to protect etcd quorum). No VM recreation, no etcd wipe. `drain_on_upgrade = false`. A fresh `terraform destroy` + `apply` or manually tainting `proxmox_download_file.talos_image` still pulls a new bootstrap image |
-| `schematic-{env}.yaml` (editing system extensions) | New schematic ID changes `local.installer_image` → same rolling upgrade path as `talos_version`. The bootstrap disk (`proxmox_download_file.talos_image`) ignores `url` changes (`lifecycle { ignore_changes = [url] }`), so etcd is preserved |
+| `modules/talos-image/variables.tf` `extensions` (editing system extensions) | New schematic ID changes the `urls` data `installer`/`disk_image` → same rolling upgrade path as `talos_version`. The bootstrap disk (`proxmox_download_file.talos_image`) ignores `url` changes (`lifecycle { ignore_changes = [url] }`), so etcd is preserved |
 | `network_bridge`, `sdn_zone`, `network_cidr`, `network_mtu`, `network_snat` | SDN config re-pushed, VMs reboot |
 | `gateway` | Machine config re-pushed; cluster endpoint (direct per-node IPs) changes |
 | `kubernetes_version` | Machine config re-pushed (rolling kubelet update) |
@@ -34,11 +34,11 @@ Some `terraform.tfvars` values make Terraform **destroy and recreate the VMs** i
 
 `endpoint`, `api_token`, `ssh_username`, `ssh_node_address`, `insecure`, `nodes_cp[].allow_scheduling`.
 
-> Tailscale node extension is disabled ([ADR 001](./adr/001-remove-tailscale-extension.md)) — uncomment variables in `variables.tf` / `schematic-*.yaml` at repo root to re-enable.
+> Tailscale node extension is disabled ([ADR 001](./adr/001-remove-tailscale-extension.md)) — uncomment variables in `variables.tf` and add `siderolabs/tailscale` to `modules/talos-image/variables.tf` `extensions` to re-enable.
 
 ## Upgrading Talos
 
-Bumping `talos_version` and running `just tf-apply-upgrade` (or `just tf-apply -parallelism=1`) performs a sequential in-place upgrade via `talos_machine.image` (control planes first, then workers) with `-parallelism=1` to protect etcd quorum. The installer image is platform-aware: `factory.talos.dev/nocloud-installer-secureboot/...` by default (Proxmox/secureboot), overridden to `factory.talos.dev/nocloud-installer/...` for libvirt via `var.installer_image`. `drain_on_upgrade = false` (revisit when dedicated workers carry workloads). Bump the pin in `modules/proxmox/variables.tf` (default `1.13.9`), `modules/libvirt/variables.tf` (`1.13.9`) or `environments/<provider>/<env>/terraform.tfvars`, then apply.
+Bumping `talos_version` and running `just tf-apply-upgrade` (or `just tf-apply -parallelism=1`) performs a sequential in-place upgrade via `talos_machine.image` (control planes first, then workers) with `-parallelism=1` to protect etcd quorum. The installer image comes from the Image Factory `urls` data source: `factory.talos.dev/nocloud-installer-secureboot/...` (Proxmox) or the plain `nocloud-installer/...` flavor for libvirt when `secureboot = false`. `drain_on_upgrade = false` (revisit when dedicated workers carry workloads). Bump the pin in `modules/talos-image/variables.tf` via `talos_version` (default `1.14.0`), `modules/proxmox/variables.tf`, `modules/libvirt/variables.tf` or `environments/<provider>/<env>/terraform.tfvars`, then apply.
 
 ```bash
 # Example: bump talos_version in terraform.tfvars (or variables.tf default), then:
@@ -49,7 +49,7 @@ just provider=libvirt env=dev tf-apply-upgrade
 
 **Details:**
 
-- `talos_machine.control_plane` / `talos_machine.worker` set `image = local.installer_image` (`factory.talos.dev/nocloud-installer-secureboot/<schematic-id>:v<version>` by default).
+- `talos_machine.control_plane` / `talos_machine.worker` set `image = local.installer_image` (from the Image Factory `urls` data source via `modules/talos-image`).
 - `drain_on_upgrade` is parameterized (`bool`, default `false`, platform-aware — `false` for prod with Longhorn, opt-in `true` for dev).
 - `time_sleep.post_bootstrap` is `10s`; `talos_cluster_health` has `read = "10m"` and blocks until kube-apiserver, etcd, and all nodes are Ready.
 - Cold bootstrap (`terraform destroy` + `apply`) uses `-parallelism=10` (fast ~8 min); upgrades use `-parallelism=1` (safe quorum).
@@ -93,7 +93,7 @@ kubectl -n kube-system logs deploy/cilium-operator --tail=100
 kubectl get events --sort-by=.lastTimestamp | tail -n 30
 ```
 
-Common causes: Cilium Helm release still progressing (`wait=true` timeout `1800s` — check `helm -n kube-system status cilium`), CRDs missing (gateway_api must precede cilium), or Talos `cni: none` / `proxy.disabled: true` patch not applied (see `modules/talos-cluster/main.tf:38-49` and [Networking: Cilium](./networking.md#cilium-cni-ebpf-data-plane)).
+Common causes: Cilium Helm release still progressing (`wait=true` timeout `1800s` — check `helm -n kube-system status cilium`), CRDs missing (gateway_api must precede cilium), or Talos multi-doc CNI patch not applied (`KubeFlannelCNIConfig` delete + `KubeProxyConfig` `enabled: false`, see `modules/talos-cluster/main.tf:26-37` and [Networking: Cilium](./networking.md#cilium-cni-ebpf-data-plane)).
 
 #### Operator HA (prod 2 replicas)
 

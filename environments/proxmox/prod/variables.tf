@@ -29,7 +29,7 @@ variable "endpoint" {
 
 # Infrastructure (forwarded to module)
 variable "env_name" {
-  description = "Environment name (prod, dev) — used for Talos schematic filename"
+  description = "Environment name (prod, dev) — used for secrets paths"
   type        = string
 
   validation {
@@ -136,11 +136,11 @@ variable "nodes_worker" {
 
 variable "talos_version" {
   type    = string
-  default = "1.13.9"
+  default = "1.14.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
-    error_message = "talos_version must be semver X.Y.Z (e.g. 1.13.9)."
+    error_message = "talos_version must be semver X.Y.Z (e.g. 1.14.0)."
   }
 }
 

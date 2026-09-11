@@ -55,7 +55,7 @@
       "labels": ["automerge/patch"]
     },
     {
-      "description": "K8s patch automerge only - minor needs Talos support check (1.13 max 1.36)",
+      "description": "K8s patch automerge only - minor needs Talos support check (1.14 supports 1.36-1.37)",
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["kubernetes/kubernetes"],
       "matchUpdateTypes": ["patch"],

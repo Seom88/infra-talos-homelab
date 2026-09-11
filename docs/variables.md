@@ -10,7 +10,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `env_name` | Environment name (`dev` / `prod`); selects schematic file — validated `^(dev\|prod)$` | — |
+| `env_name` | Environment name (`dev` / `prod`); selects secrets paths — validated `^(dev\|prod)$` | — |
 | `endpoint` | Proxmox API URL (e.g. `https://10.10.10.1:8006`) | — |
 | `api_token` | Proxmox API token in format `user@realm!tokenid=secret` | — |
 | `username` | Proxmox API user — legacy, commented out in code | — |
@@ -28,7 +28,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 | `datastore_iso` | Datastore for ISO/raw images | `local` |
 | `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required) | — |
 | `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required) | — |
-| `talos_version` | Talos Linux version | `1.13.9` |
+| `talos_version` | Talos Linux version | `1.14.0` |
 | `argocd_version` | ArgoCD Helm chart version | `10.7.0` |
 | `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
 
@@ -62,11 +62,11 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 | `secureboot` | Enable UEFI SecureBoot (q35) | `true` |
 | `talos_image_cache_dir` | Local cache for nocloud raw images | `~/.cache/talos-images` |
 | `cluster_name` | Talos / Kubernetes cluster name | `talos-cluster` |
-| `talos_version` | Talos Linux version — semver validated | `1.13.9` |
+| `talos_version` | Talos Linux version — semver validated | `1.14.0` |
 | `kubernetes_version` | Kubernetes version — semver validated | `1.36.3` |
-| `longhorn_enabled` | Inject kubelet extraMounts for Longhorn | `true` |
+| `longhorn_enabled` | Deprecated no-op: Longhorn uses `defaultDataPath=/var/mnt/data` with no kubelet `extraMounts`; UVCs come from `disks[]` via `extra_config_patches` | `true` |
 | `extra_config_patches` | Additional Talos machine config patches | `[]` |
-| `env_name` | Selects schematic file (`schematic-<env_name>.yaml`) — validated `^(dev\|prod)$` (`dev` in `libvirt/dev`, `prod` in `libvirt/prod` + both proxmox envs) | `dev` |
+| `env_name` | Environment selector — validated `^(dev\|prod)$` (`dev` in `libvirt/dev`, `prod` in `libvirt/prod` + both proxmox envs) | `dev` |
 | `argocd_version` | ArgoCD Helm chart version — semver validated | `10.7.0` |
 | `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
 
@@ -76,9 +76,9 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 
 | Variable | Providers | Description | Default |
 |----------|-----------|-------------|---------|
-| `talos_version` | both | Talos Linux version | `1.13.9` |
-| `installer_image` | module | Installer container image for `talos_machine.image` (e.g. `factory.talos.dev/nocloud-installer/<schematic-id>:v<version>`). Must match platform flavor — secureboot roots can omit (defaults to `nocloud-installer-secureboot` built from `talos_image_id` + `talos_version`); non-secureboot roots (e.g. libvirt) must override | `""` |
-| `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Applied per node via the Talos `cluster.allowSchedulingOnControlPlanes` machine-config patch (Sidero docs) | — |
+| `talos_version` | both | Talos Linux version | `1.14.0` |
+| `installer_image` | module | Installer container image for `talos_machine.image` (from the Image Factory `urls` data source, e.g. `factory.talos.dev/nocloud-installer-secureboot/<schematic-id>:v1.14.0`). Required; flavor selected by the caller (Proxmox always secureboot, libvirt via `var.secureboot`) | — |
+| `cp_allow_scheduling` | module | Per control plane node: allow workloads on that node (from `nodes_cp[].allow_scheduling`). Applied per node via the Talos `KubeNodeConfig` taint-delete machine-config patch (pre-1.14: `cluster.allowSchedulingOnControlPlanes`, Sidero docs) | — |
 
 > **Note**: Proxmox doesn't expose `cluster_name`, `kubernetes_version`, `longhorn_enabled`, or `extra_config_patches` — the `talos-cluster` module uses its defaults. Libvirt passes all of them explicitly. Tailscale node extension and the former shared API address were removed in 2.0.0 (direct per-node IPs via health gate).
 
@@ -87,7 +87,7 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 - 57+ validation blocks across `modules/talos-cluster`, `modules/proxmox`, `modules/libvirt`, `modules/platform` and all 4 envs (`environments/proxmox/{dev,prod}`, `environments/libvirt/{dev,prod}`).
 - `drain_on_upgrade` — `bool`, default `false`, parameterized and platform-aware (`false` for Longhorn prod, opt-in `true` for dev). Controls whether nodes are drained during `talos_machine` rolling upgrades.
 - Provider versions are pinned: `bpg/proxmox 0.111.1`, `dmacvicar/libvirt ~>0.9.8`, `siderolabs/talos 0.12.0-beta.0` ([ADR 002](./adr/002-pinned-talos-provider-alpha.md)), `helm ~>2.17`, `kubernetes ~>2.38`, `time ~>0.14`.
-- `kubernetes_version` (`1.36.3` default in `modules/talos-cluster` + `environments/libvirt/*`) is now **managed by Renovate** via `customManagers` regex (`github-releases/kubernetes/kubernetes`, semver) — patch automerges, minor stays manual (Talos 1.13 max 1.36). `talos_cluster.kubernetes_version` is pinned per-machine (`v${var.kubernetes_version}`) with `ignore_kubernetes_upgrade_drift = true` to keep upgrades driven by `talos_cluster`. See [CI/CD](./ci-cd.md).
+- `kubernetes_version` (`1.36.3` default in `modules/talos-cluster` + `environments/libvirt/*`) is now **managed by Renovate** via `customManagers` regex (`github-releases/kubernetes/kubernetes`, semver) — patch automerges, minor stays manual (Talos 1.14 supports 1.36-1.37). `talos_cluster.kubernetes_version` is pinned per-machine (`v${var.kubernetes_version}`) with `ignore_kubernetes_upgrade_drift = true` to keep upgrades driven by `talos_cluster`. See [CI/CD](./ci-cd.md).
 
 ---
 

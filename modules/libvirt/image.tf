@@ -1,7 +1,8 @@
-# Talos schematic and base volume (bootstrap only)
+# Canonical Image Factory image (extensions data -> schematic -> URLs) + base volume (bootstrap only).
 
-resource "talos_image_factory_schematic" "this" {
-  schematic = file(var.schematic_path)
+module "image" {
+  source        = "../talos-image"
+  talos_version = var.talos_version
 }
 
 locals {
@@ -10,6 +11,7 @@ locals {
   image_filename    = var.secureboot ? "talos-nocloud-amd64-secureboot.raw" : "talos-nocloud-amd64.raw"
   cached_raw_path   = "${local.image_cache_dir}/${local.image_filename}"
   cached_qcow2_path = "${local.image_cache_dir}/${replace(local.image_filename, ".raw", ".qcow2")}"
+  disk_download_url = var.secureboot ? module.image.disk_image_secureboot_url : module.image.disk_image_url
 }
 
 # Base volume - qcow2 thin provisioned for homelab trial (provider converts raw cache -> qcow2 on upload)
@@ -45,7 +47,7 @@ resource "terraform_data" "talos_nocloud_image" {
     secureboot    = var.secureboot
     cache_dir     = local.image_cache_dir
     talos_version = var.talos_version
-    schematic_id  = talos_image_factory_schematic.this.id
+    schematic_id  = module.image.schematic_id
   }
 
   provisioner "local-exec" {
@@ -53,10 +55,10 @@ resource "terraform_data" "talos_nocloud_image" {
     command     = <<-EOT
       set -euo pipefail
       CACHE_DIR="${local.image_cache_dir}"
-      SCHEMATIC_ID="${talos_image_factory_schematic.this.id}"
+      SCHEMATIC_ID="${module.image.schematic_id}"
       RAW_PATH="${local.cached_raw_path}"
       QCOW2_PATH="${local.cached_qcow2_path}"
-      IMAGE_TYPE="${var.secureboot ? "nocloud-amd64-secureboot.raw.xz" : "nocloud-amd64.raw.xz"}"
+      IMAGE_URL="${local.disk_download_url}"
       MARKER_FILE="$${CACHE_DIR}/.schematic-$${SCHEMATIC_ID}-v${var.talos_version}"
       mkdir -p "$${CACHE_DIR}"
 
@@ -67,8 +69,8 @@ resource "terraform_data" "talos_nocloud_image" {
       fi
 
       if [ ! -f "$${RAW_PATH}" ] || [ ! -f "$${MARKER_FILE}" ]; then
-        echo "Downloading Talos nocloud image $${SCHEMATIC_ID} v${var.talos_version} ($${IMAGE_TYPE})..."
-        curl -fsSL "https://factory.talos.dev/image/$${SCHEMATIC_ID}/v${var.talos_version}/$${IMAGE_TYPE}" \
+        echo "Downloading Talos nocloud image $${SCHEMATIC_ID} v${var.talos_version} ($${IMAGE_URL})..."
+        curl -fsSL "$${IMAGE_URL}" \
           | xz -d > "$${RAW_PATH}.tmp"
 
         chmod 644 "$${RAW_PATH}.tmp" || true

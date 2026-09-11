@@ -1,21 +1,33 @@
 locals {
-  has_data_disk = length([for n in concat(var.nodes_cp, var.nodes_worker) : n if length(coalesce(n.disks, [])) > 0]) > 0
-  # UserVolumeConfig "data" -> /var/mnt/data (generic); "!system_disk" suffices for virtio.
-  data_volume_patch = local.has_data_disk ? yamlencode({
-    apiVersion = "v1alpha1"
-    kind       = "UserVolumeConfig"
-    name       = "data"
-    provisioning = {
-      diskSelector = { match = "!system_disk" }
-      grow         = false
-      minSize      = "10GB"
-    }
-  }) : ""
+  # One UserVolumeConfig per distinct disks[].name across CP + workers.
+  # Single name ("data") => single UVC /var/mnt/data (previous behavior).
+  # by-id is unknown at plan-time (Talos populates disk IDs post-boot), so the
+  # multi-disk selector is best-effort: !system_disk + per-name size floor.
+  # Harden post-bootstrap with `talosctl get disks -o yaml` and pin
+  # diskSelector.match to by-id/serial when two names share the same size.
+  all_data_disks   = flatten([for n in concat(var.nodes_cp, var.nodes_worker) : coalesce(n.disks, [])])
+  data_disk_names  = distinct([for d in local.all_data_disks : d.name])
+  data_disk_min_gb = { for name in local.data_disk_names : name => min([for d in local.all_data_disks : d.size if d.name == name]...) }
+  data_volume_patches = [
+    for name in local.data_disk_names : yamlencode({
+      apiVersion = "v1alpha1"
+      kind       = "UserVolumeConfig"
+      name       = name
+      provisioning = {
+        diskSelector = {
+          match = length(local.data_disk_names) == 1 ? "!system_disk" : "!system_disk && disk.size >= ${local.data_disk_min_gb[name] * 1073741824}u"
+        }
+        grow    = false
+        minSize = "${local.data_disk_min_gb[name]}GB"
+      }
+    })
+  ]
 }
 
-# Talos schematic
-resource "talos_image_factory_schematic" "this" {
-  schematic = file(var.schematic_path)
+# Canonical Image Factory image (extensions data -> schematic -> URLs); Proxmox always uses the secureboot flavor.
+module "image" {
+  source        = "../talos-image"
+  talos_version = var.talos_version
 }
 
 # Bootstrap image only; version bumps use talos_machine.image, not disk recreate.
@@ -24,7 +36,7 @@ resource "proxmox_download_file" "talos_image" {
   content_type            = "iso"
   datastore_id            = var.datastore_iso
   node_name               = var.node_name
-  url                     = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v${var.talos_version}/nocloud-amd64-secureboot.raw.xz"
+  url                     = module.image.disk_image_secureboot_url
   decompression_algorithm = "zst"
   file_name               = "talos-nocloud-amd64-secureboot.img"
   overwrite               = false
@@ -185,13 +197,13 @@ module "talos" {
   worker_ips           = [for node in var.nodes_worker : node.ip]
   worker_hostnames     = [for node in var.nodes_worker : node.hostname]
   talos_version        = var.talos_version
-  talos_image_id       = talos_image_factory_schematic.this.id
+  installer_image      = module.image.installer_image_secureboot
   # Tailscale disabled - see ADR 001
   # tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
   drain_on_upgrade     = var.drain_on_upgrade
-  extra_config_patches = compact(concat(var.extra_config_patches, [local.data_volume_patch]))
+  extra_config_patches = compact(concat(var.extra_config_patches, local.data_volume_patches))
 
   depends_on = [
     proxmox_virtual_environment_vm.talos,

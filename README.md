@@ -3,7 +3,7 @@
 > One `terraform apply` → HA Kubernetes, reproducible, immutable.
 
 [![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.11-7B42BC?logo=terraform)](https://www.terraform.io/)
-[![Talos](https://img.shields.io/badge/Talos_Linux-1.13-000000?logo=linux)](https://www.talos.dev/)
+[![Talos](https://img.shields.io/badge/Talos_Linux-1.14-000000?logo=linux)](https://www.talos.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/Seom88/infra-talos-homelab/deploy.yaml?label=CI)](https://github.com/Seom88/infra-talos-homelab/actions/workflows/deploy.yaml)
 [![Last commit](https://img.shields.io/github/last-commit/Seom88/infra-talos-homelab)](https://github.com/Seom88/infra-talos-homelab/commits/main)
@@ -41,7 +41,7 @@ Infrastructure alone isn't enough: without a distributed storage layer, Kubernet
 
 **Companion repo ([secured-gitops-tailscale-homelab](https://github.com/Seom88/secured-gitops-tailscale-homelab)):** declares everything that *runs* on it — [Longhorn](./docs/decisions.md#5-longhorn-vs-ceph-rook) (wave-0, CSI-gated so PVCs bind before Vault), cert-manager, Vault (HA Raft), SeaweedFS, monitoring (kube-prometheus-stack + Loki), and Tailscale ingress — via App-of-Apps sync-waves. See its [`platform/`](https://github.com/Seom88/secured-gitops-tailscale-homelab/tree/main/platform) and [`gitops/templates/apps/`](https://github.com/Seom88/secured-gitops-tailscale-homelab/tree/main/gitops/templates/apps) (`00-longhorn` → `01-vault` → `02-seaweedfs` → `03-monitoring` → `04-tailscale`).
 
-**[Cilium is the exception that stays here.](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application)** Talos disables kube-router (`cluster.network.cni.name: none` + `cluster.proxy.disabled: true` in `modules/talos-cluster/main.tf:38-49`), but Cilium itself is **Cilium 1.20.1 via Helm + Gateway API CRDs 1.2.3 (standard v1.6.1) with KubePrism `localhost:7445`** in `modules/platform` — not `inlineManifests` — to avoid manifest/secrets bloat in `tfstate` and keep the Helm provider flow (`gateway_api` → `cilium` → `wait_nodes` → `argocd`, values `modules/platform/values/cilium/values.yaml` Sidero Without kube-proxy + Gateway API). It can't be an ArgoCD Application (ArgoCD needs networking to become Healthy — circular dependency). See [Roadmap](#roadmap--changelog).
+**[Cilium is the exception that stays here.](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application)** Talos disables Flannel/kube-proxy via multi-doc patch (`KubeFlannelCNIConfig` `$patch: delete` + `KubeProxyConfig` `enabled: false` in `modules/talos-cluster/main.tf:26-37`), but Cilium itself is **Cilium 1.20.1 via Helm + Gateway API CRDs 1.2.3 (standard v1.6.1) with KubePrism `localhost:7445`** in `modules/platform` — not `inlineManifests` — to avoid manifest/secrets bloat in `tfstate` and keep the Helm provider flow (`gateway_api` → `cilium` → `wait_nodes` → `argocd`, values `modules/platform/values/cilium/values.yaml` Sidero Without kube-proxy + Gateway API). It can't be an ArgoCD Application (ArgoCD needs networking to become Healthy — circular dependency). See [Roadmap](#roadmap--changelog).
 
 > Why these choices? See the [Decision Log](./docs/decisions.md) for the `why X over Y` trade-offs ([Talos vs kubeadm](./docs/decisions.md#1-talos-linux-vs-kubeadm), [Proxmox vs ESXi](./docs/decisions.md#2-proxmox-ve-vs-esxi-bare-metal), [libvirt vs Proxmox-only](./docs/decisions.md#3-libvirt-kvm-vs-proxmox-only), [Tailscale subnet vs extension/WireGuard](./docs/decisions.md#4-tailscale-subnet-routing-vs-per-node-extension), [Longhorn vs Ceph/Rook](./docs/decisions.md#5-longhorn-vs-ceph-rook), [ArgoCD vs FluxCD](./docs/decisions.md#6-argocd-vs-fluxcd), [Cilium InlineManifest vs Helm](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application)). Full MADRs live in [`docs/adr/`](./docs/adr/).
 
@@ -63,7 +63,7 @@ Infrastructure alone isn't enough: without a distributed storage layer, Kubernet
 - 🔒 **Hardened & reproducible** — 57 validation blocks, pinned providers, one `terraform apply` for infra + ArgoCD → [Variables](./docs/variables.md) · [CI/CD](./docs/ci-cd.md)
 - 🌐 **SDN/NAT + subnet routing** — `talosvn` SNAT + `virbr-talos` NAT, Tailscale `10.10.0.0/24` without node extension (ADR 001) → [Networking](./docs/networking.md)
 - ♻️ **In-place upgrades** — bump `talos_version` → sequential `talos_machine.image` rolling reboot (`-parallelism=1`, `drain_on_upgrade=false`) → [Operations](./docs/operations.md)
-- 📦 **Longhorn-ready, GitOps-native** — kubelet extraMounts + `iscsi-tools` extensions, Longhorn as wave-0 ArgoCD app → [Platform](./docs/platform.md)
+- 📦 **Longhorn-ready, GitOps-native** — dynamic `UserVolumeConfig` per `disks[].name` (`/var/mnt/data`, no kubelet `extraMounts`) + `iscsi-tools` extensions, Longhorn as wave-0 ArgoCD app → [Platform](./docs/platform.md)
 - ⚡ **Fast & safe** — bootstrap ~8 min (`-parallelism=10`), upgrades safe (`-parallelism=1`), 60s dry-run `just tf-validate` → [Usage](./docs/usage.md)
 
 ## 🏗️ Architecture
@@ -139,7 +139,7 @@ Upgrades & destroy: `just tf-apply-upgrade` (`-parallelism=1`, protects etcd quo
 - **57 validation blocks** — semver (`talos_version`/`kubernetes_version`/`argocd_version`), CIDR, IP, `^(dev|prod)$`, nullable guards — across `modules/` + 4 envs.
 - **CI matrix** — `terraform validate` on 4 envs (`init -backend=false`, no creds) + `terraform fmt -check` gate.
 - **Local parity** — `just tf-validate` and `just tf-ci` mirror CI; `just tf-fmt` enforces formatting.
-- **Renovate weekly** (Mon 05:00 `Europe/Madrid`, `baseBranch: dev`) — 5 `customManagers` (`talos_version`, `argocd_version`, `cilium_version`, `gateway_api_crds_version`, `kubernetes_version`) + 8 `packageRules`: Helm `argo-cd`/`cilium`/`gateway-api-crds` patch+minor automerge, Terraform providers patch automerge, k8s patch automerge / minor manual (Talos 1.13 max 1.36), `siderolabs/talos` pinned to `0.12.0-beta.0` per [ADR 002](./docs/adr/002-pinned-talos-provider-alpha.md), manual-review labels.
+- **Renovate weekly** (Mon 05:00 `Europe/Madrid`, `baseBranch: dev`) — 5 `customManagers` (`talos_version`, `argocd_version`, `cilium_version`, `gateway_api_crds_version`, `kubernetes_version`) + 8 `packageRules`: Helm `argo-cd`/`cilium`/`gateway-api-crds` patch+minor automerge, Terraform providers patch automerge, k8s patch automerge / minor manual (Talos 1.14 supports 1.36-1.37), `siderolabs/talos` pinned to `0.12.0-beta.0` per [ADR 002](./docs/adr/002-pinned-talos-provider-alpha.md), manual-review labels.
 
 | Check | Env | Command | Link |
 |-------|-----|---------|------|
@@ -160,7 +160,7 @@ Details: [docs/ci-cd.md](./docs/ci-cd.md) · [docs/variables.md](./docs/variable
 
 **Next (infra scope only):**
 
-- **Cilium hardened** — `1.20.1` Without kube-proxy + Gateway API now shipped via Helm (`modules/platform`); remaining: Hubble observability, NetworkPolicies/microsegmentation tuning, and Gateway API Gateway/HTTPRoute rollout. Talos still `cni.name: none` + `proxy.disabled: true` (`modules/talos-cluster/main.tf:38-49`); platform DAG `gateway_api→cilium→wait_nodes→argocd` replaces the old `InlineManifest` deadlock. See [Decisions: Cilium](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application).
+- **Cilium hardened** — `1.20.1` Without kube-proxy + Gateway API now shipped via Helm (`modules/platform`); remaining: Hubble observability, NetworkPolicies/microsegmentation tuning, and Gateway API Gateway/HTTPRoute rollout. Talos still disables Flannel/kube-proxy via multi-doc (`KubeFlannelCNIConfig` delete + `KubeProxyConfig` `enabled: false`, `modules/talos-cluster/main.tf:26-37`); platform DAG `gateway_api→cilium→wait_nodes→argocd` replaces the old `InlineManifest` deadlock. See [Decisions: Cilium](./docs/decisions.md#7-cilium-inlinemanifest-vs-helm-application).
 - **Multi-node Proxmox SDN** (remove single-node `pve-sdn-ensure` limitation — see [ADR 003](./docs/adr/003-sdn-snat-runtime-drift.md) and [Decisions: Proxmox SDN](./docs/decisions.md#2-proxmox-ve-vs-esxi-bare-metal))
 - **Talos/Kubernetes version stream validation** ([libvirt/dev → prod promotion](./docs/decisions.md#3-libvirt-kvm-vs-proxmox-only)) — cheap validation in ephemeral [libvirt](./docs/decisions.md#3-libvirt-kvm-vs-proxmox-only) before rolling prod.
 

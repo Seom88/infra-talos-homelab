@@ -74,20 +74,21 @@ Cilium provides the pod network, service load-balancing, network policy, and Gat
 Talos is configured with no built-in CNI or kube-proxy so Cilium can own the data plane:
 
 ```yaml
-# modules/talos-cluster/main.tf:38-49 (machine config patch)
-cluster:
-  network:
-    cni:
-      name: none
-  proxy:
-    disabled: true
+# modules/talos-cluster/main.tf:40-51 (multi-doc machine config patch)
+apiVersion: v1alpha1
+kind: KubeFlannelCNIConfig
+$patch: delete
+---
+apiVersion: v1alpha1
+kind: KubeProxyConfig
+enabled: false
 ```
 
 KubePrism provides the in-cluster API endpoint for Cilium:
 
 - `k8sServiceHost=localhost`, `k8sServicePort=7445` (KubePrism load-balanced API on each node).
 
-Reference: Sidero Labs [Deploying Cilium — Without kube-proxy + Gateway API](https://docs.siderolabs.com/talos/v1.13/kubernetes-guides/network/deploying-cilium) (also mirrored at `https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium#cli-install`).
+Reference: Sidero Labs [Deploying Cilium — Without kube-proxy + Gateway API](https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium) (also mirrored at `https://docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium#cli-install`).
 
 ### Deployment DAG
 

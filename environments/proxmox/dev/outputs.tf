@@ -9,3 +9,8 @@ output "kubeconfig" {
   value       = module.proxmox.kubeconfig
   sensitive   = true
 }
+
+output "schematic_id" {
+  description = "Image Factory schematic ID for the canonical extension set"
+  value       = module.proxmox.schematic_id
+}
