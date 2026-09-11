@@ -56,7 +56,7 @@ nodes_worker = [
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "ssd01"
-    disks        = [{ name = "data", size = 100, datastore = "ssd01" }]
+    disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
     hostname     = "talos-w2"
@@ -66,7 +66,7 @@ nodes_worker = [
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "ssd01"
-    disks        = [{ name = "data", size = 100, datastore = "ssd01" }]
+    disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
     hostname     = "talos-w3"
@@ -76,6 +76,6 @@ nodes_worker = [
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "ssd01"
-    disks        = [{ name = "data", size = 100, datastore = "ssd01" }]
+    disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
 ]

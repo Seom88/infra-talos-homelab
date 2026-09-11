@@ -17,7 +17,7 @@ locals {
         diskSelector = {
           match = length(local.data_disk_names) == 1 ? "!system_disk" : "!system_disk && disk.size >= ${local.data_disk_min_gb[name] * 1073741824}u"
         }
-        grow    = false
+        grow    = true
         minSize = "${local.data_disk_min_gb[name]}GB"
       }
     })
