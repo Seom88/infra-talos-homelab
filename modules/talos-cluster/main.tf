@@ -93,13 +93,13 @@ locals {
       apiVersion = "v1alpha1"
       kind       = "KubeExternalManifestConfig"
       name       = "kubelet-serving-cert-approver"
-      url = "https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml"
+      url        = "https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml"
     }),
     yamlencode({
       apiVersion = "v1alpha1"
       kind       = "KubeExternalManifestConfig"
       name       = "metrics-server"
-      url = "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+      url        = "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
     }),
   ])
 }
