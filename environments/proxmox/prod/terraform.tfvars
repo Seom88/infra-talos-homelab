@@ -20,7 +20,7 @@ nodes_cp = [
     memory           = 4 * 1024
     proxmox_node     = "pve01"
     disk_size        = 40
-    datastore        = "ssd01"
+    datastore        = "local-lvm"
     allow_scheduling = false
   },
   # If you wanna use more than a cp with allow_scheduling = true, use 8Gb or above and even number of cp
@@ -31,7 +31,7 @@ nodes_cp = [
   #   memory           = 6 * 1024
   #   proxmox_node     = "pve01"
   #   disk_size        = 40
-  #   datastore        = "ssd01"
+  #   datastore        = "local-lvm"
   #   allow_scheduling = true
   #   disks            = [{ name = "data", size = 100, datastore = "ssd01" }]
   # },
@@ -42,7 +42,7 @@ nodes_cp = [
   #   memory           = 6 * 1024
   #   proxmox_node     = "pve01"
   #   disk_size        = 40
-  #   datastore        = "ssd01"
+  #   datastore        = "local-lvm"
   #   allow_scheduling = true
   #   disks            = [{ name = "data", size = 100, datastore = "ssd01" }]
   # }
@@ -55,7 +55,7 @@ nodes_worker = [
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
-    datastore    = "ssd01"
+    datastore    = "local-lvm"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
@@ -65,7 +65,7 @@ nodes_worker = [
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
-    datastore    = "ssd01"
+    datastore    = "local-lvm"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
@@ -75,7 +75,7 @@ nodes_worker = [
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
-    datastore    = "ssd01"
+    datastore    = "local-lvm"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
 ]
