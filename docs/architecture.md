@@ -16,7 +16,7 @@ Proxmox VE (SDN talosvn — VNet 10.10.0.0/24, SNAT)
 └── M × worker nodes
 
 Terraform (environments/proxmox/<env>/)
-├── Backend                  (dev: local, prod: s3 RustFS terraform-homelab)
+├── Backend                  (dev: local, prod: S3-compatible terraform-homelab)
 ├── SDN network              (proxmox_sdn_zone + VNet talosvn + subnet + applier, modules/proxmox/network.tf)
 ├── Image download           (proxmox_download_file bootstrap-only, modules/proxmox/main.tf)
 ├── VMs                      (proxmox_virtual_environment_vm per node)
@@ -58,7 +58,7 @@ Both providers share the same provider-agnostic `modules/talos-cluster` module f
 .
 ├── .github/workflows/
 │   ├── deploy.yaml                 # CI: validate + single terraform apply per env (S3 state for prod)
-│   └── destroy.yaml                # CI: terraform destroy (S3 state for prod, RustFS)
+│   └── destroy.yaml                # CI: terraform destroy (S3 state for prod)
 ├── docs/
 │   ├── adr/                        # Architecture Decision Records (MADR: 001, 002, 003)
 │   ├── architecture.md             # ← you are here
@@ -72,10 +72,10 @@ Both providers share the same provider-agnostic `modules/talos-cluster` module f
 ├── environments/                   # Composed roots — one state per env (infra + platform)
 │   ├── proxmox/
 │   │   ├── dev/                    # backend local — bpg/proxmox 0.111.1, helm ~>2.17, talos 0.12.0-beta.0
-│   │   └── prod/                   # backend s3 (RustFS bucket terraform-homelab, key proxmox/prod/terraform.tfstate)
+│   │   └── prod/                   # backend s3 (S3-compatible bucket terraform-homelab, key proxmox/prod/terraform.tfstate)
 │   └── libvirt/
 │       ├── dev/                    # backend local — dmacvicar/libvirt ~>0.9.8, talos 0.12.0-beta.0
-│       └── prod/                   # backend s3 (RustFS bucket terraform-homelab, key libvirt/prod/terraform.tfstate)
+│       └── prod/                   # backend s3 (S3-compatible bucket terraform-homelab, key libvirt/prod/terraform.tfstate)
 │       # each env: main.tf, provider.tf, variables.tf, outputs.tf, terraform.tfvars
 ├── modules/
 │   ├── talos-image/                # Canonical Image Factory wiring: extensions data -> schematic -> download/installer URLs

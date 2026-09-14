@@ -125,7 +125,7 @@ just provider=proxmox env=prod tf-apply
 
 ## State
 
-Platform is now composed in each environment root — single state at `environments/<provider>/<env>/terraform.tfstate` (covers both infra `module.proxmox`/`module.libvirt` and `module.platform`). Prod state is on S3 (RustFS bucket `terraform-homelab`); dev state is local (intentional, no lock — see C1). CI no longer uses `tfstate-*` artifacts.
+Platform is now composed in each environment root — single state at `environments/<provider>/<env>/terraform.tfstate` (covers both infra `module.proxmox`/`module.libvirt` and `module.platform`). Prod state is on S3-compatible storage (bucket `terraform-homelab`); dev state is local (intentional, no lock — see C1). CI no longer uses `tfstate-*` artifacts.
 
 > **Migration note:** legacy locations `platform/terraform.tfstate`, `platform/environments/prod/platform-terraform.tfstate`, `platform/environments/<env>/platform-terraform.tfstate`, and `platform/environments/<provider>/<env>/terraform.tfstate` are superseded by the composed model. Keep old files on disk for manual `terraform state mv` into `environments/<provider>/<env>/module.platform.*` (see [CHANGELOG.md](../CHANGELOG.md) 2.0.0), but new `just tf-apply` and CI use the single environment state.
 

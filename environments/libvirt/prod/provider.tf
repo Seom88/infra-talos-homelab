@@ -1,11 +1,8 @@
 terraform {
   required_version = ">= 1.11"
   backend "s3" {
-    bucket = "terraform-homelab"
-    key    = "libvirt/prod/terraform.tfstate"
-    endpoints = {
-      s3 = "https://rustfs.lonk-mirfak.ts.net"
-    }
+    bucket                      = "terraform-homelab"
+    key                         = "libvirt/prod/terraform.tfstate"
     region                      = "us-east-1"
     skip_credentials_validation = true
     skip_requesting_account_id  = true

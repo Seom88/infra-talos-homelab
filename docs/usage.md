@@ -64,7 +64,7 @@ just provider=libvirt env=prod tf-apply    # libvirt/prod
 | `tf-fmt-check` | Check formatting like CI (fails with diff if not formatted) |
 | `tf-validate` | Validate all envs like CI — `init -backend=false` + `validate` for all 4 envs (`proxmox/prod`, `proxmox/dev`, `libvirt/prod`, `libvirt/dev`) + `modules/platform` |
 | `tf-ci` | Full CI check locally: `tf-fmt-check` + `tf-validate` |
-| `tf-init` | Initialize Terraform with the env backend (local for dev, S3 RustFS for prod) |
+| `tf-init` | Initialize Terraform with the env backend (local for dev, S3-compatible for prod) |
 | `tf-plan` | Plan changes for the active provider/env |
 | `tf-apply` | Apply changes (bootstrap or update) — runs with `-parallelism=10` (fast bootstrap, use `tf-apply-upgrade -parallelism=1` for Talos rolling upgrades) |
 | `tf-apply-upgrade` | Apply with `-parallelism=1` for sequential Talos rolling upgrades (protects etcd quorum) |

@@ -22,9 +22,9 @@ Triggers: `push` + `pull_request` (all branches), `workflow_dispatch`. Deploy ga
 
 | `tf_root` | `tf_env` | Backend | Extra checks |
 |-----------|----------|---------|--------------|
-| `proxmox` | `prod` | s3 (RustFS) | + platform `fmt` + platform `init -backend=false` / `validate` |
+| `proxmox` | `prod` | S3-compatible | + platform `fmt` + platform `init -backend=false` / `validate` |
 | `proxmox` | `dev`  | local | — |
-| `libvirt` | `prod` | s3 (RustFS) | — |
+| `libvirt` | `prod` | S3-compatible | — |
 | `libvirt` | `dev`  | local | — |
 
 ```yaml
@@ -53,7 +53,7 @@ Local equivalent: `just tf-validate` (same loop, no creds). Full CI locally: `ju
 1. `checkout` + `setup-terraform` + `setup-kubectl` + `setup-helm`
 2. `mkdir -p secrets/<TF_ROOT>/<TF_ENV> && touch kubeconfig.yaml` — placeholder so `helm` provider can `init`
 3. `tailscale/github-action@v4` with `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` (`tags: tag:terraform`) — subnet-route reachability to `10.10.0.0/24` (no Tailscale extension on nodes, see [ADR 001](./adr/001-remove-tailscale-extension.md))
-4. `terraform init -reconfigure` in `environments/${TF_ROOT}/${TF_ENV}` with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (RustFS S3 `terraform-homelab` bucket, path-style, `skip_*` for S3-compatible API)
+4. `terraform init -reconfigure` in `environments/${TF_ROOT}/${TF_ENV}` with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_ENDPOINT_URL_S3` (S3-compatible `terraform-homelab` bucket, path-style, `skip_*` for S3-compatible API)
 5. `terraform output -raw kubeconfig > .../kubeconfig.yaml` — restore kubeconfig from state (keeps placeholder if no prior state)
 6. `terraform apply -parallelism=1 -auto-approve -no-color` with `TF_VAR_api_token: ${{ secrets.PROXMOX_API_TOKEN }}` (certs scrubbed via `sed -E 's/[A-Za-z0-9+/=]{80,}/***CERT***/g'`)
 
@@ -66,8 +66,9 @@ Local equivalent: `just tf-validate` (same loop, no creds). Full CI locally: `ju
 | `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client ID (`tag:terraform`, scopes `devices:core:write` + `auth_keys:write`) |
 | `TS_OAUTH_SECRET` | Tailscale OAuth client secret |
 | `PROXMOX_API_TOKEN` | Proxmox API token (`user@realm!tokenid=secret`) |
-| `AWS_ACCESS_KEY_ID` | RustFS S3 access key |
-| `AWS_SECRET_ACCESS_KEY` | RustFS S3 secret key |
+| `AWS_ACCESS_KEY_ID` | S3-compatible access key |
+| `AWS_SECRET_ACCESS_KEY` | S3-compatible secret key |
+| `AWS_ENDPOINT_URL_S3` | S3-compatible endpoint URL |
 
 To use from a fork, also configure `tagOwners` / `acls` / `ssh` for `tag:terraform → tag:pve` in your Tailscale ACL (see original README CI/CD section and `deploy.yaml` env `TF_ROOT=proxmox TF_ENV=prod`).
 

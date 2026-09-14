@@ -166,7 +166,7 @@ If `kubectl port-forward` / `exec` / `logs` fails with `RST` or hangs, verify `s
 ## Notes
 
 - **Validation:** 57 blocks cover semver, CIDR, IP, `^(dev|prod)$` — invalid `tfvars` fail at `terraform validate` before any VM mutation. See [Variables](./variables.md) and [CI/CD](./ci-cd.md).
-- **State:** Single state file at `environments/<provider>/<env>/terraform.tfstate` (infra + platform). Prod is S3 (RustFS `terraform-homelab`), dev is local. See [Platform](./platform.md#state).
+- **State:** Single state file at `environments/<provider>/<env>/terraform.tfstate` (infra + platform). Prod is S3-compatible (`terraform-homelab`), dev is local. See [Platform](./platform.md#state).
 - **Networking reboot drift:** After PVE reboot, `pve-sdn-ensure.service` heals the SDN bridge + MASQUERADE automatically. See [Networking](./networking.md) and [ADR 003](./adr/003-sdn-snat-runtime-drift.md).
 
 ---

@@ -156,7 +156,7 @@ Details: [docs/ci-cd.md](./docs/ci-cd.md) · [docs/variables.md](./docs/variable
 | Version | Highlights | Link |
 |---------|------------|------|
 | `[Unreleased]` | **Cilium 1.20.1 via Helm + Gateway API CRDs 1.2.3 (standard v1.6.1) with KubePrism 7445** (Helm not InlineManifest — no manifest/secrets in state, Sidero Without kube-proxy + Gateway API, DAG `gateway_api→cilium→wait_nodes→argocd`), deterministic App-of-Apps sync-wave Lua, SDN SNAT reboot fix (`pve-sdn-ensure.service`), [Longhorn](./docs/decisions.md#5-longhorn-vs-ceph-rook) dual-disk HA | [CHANGELOG#unreleased](./CHANGELOG.md#unreleased) |
-| `2.0.0` | Composed platform (single state), S3 backend (RustFS), `talos_machine` rolling upgrades, 57 validations | [CHANGELOG#2.0.0](./CHANGELOG.md#200---2026-08-28) |
+| `2.0.0` | Composed platform (single state), S3-compatible backend, `talos_machine` rolling upgrades, 57 validations | [CHANGELOG#2.0.0](./CHANGELOG.md#200---2026-08-28) |
 
 **Next (infra scope only):**
 

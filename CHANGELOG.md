@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [2.1.0] - 2026-09-14
 
 ### Added
 - Canonical Image Factory module — extensions → schematic → URLs from data sources, no YAML files; `schematic_id` output replaces the factory API POST.
@@ -34,7 +34,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - ADR 001 (Tailscale node extension removed, subnet routing kept) + destroy-cleanup history.
-- S3 backend for prod state (RustFS) with `.env.example` credentials.
+- S3-compatible backend for prod state with `.env.example` credentials.
 - `enable_health_check` gate so destroy/bootstrap never blocks on the health data source.
 - Provider modules (`proxmox`, `libvirt`) + symmetrical `environments/<provider>/<env>/` layout; platform composed into each environment (single state, single apply).
 - Platform module (ArgoCD in-cluster); cluster health gate; Proxmox SDN networking; Justfile platform wrappers.

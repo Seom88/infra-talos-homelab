@@ -2,7 +2,7 @@
 # Providers: proxmox (prod, dev) | libvirt (dev, prod)
 # Terraform: ./environments/<provider>/<env>/
 # Secrets: ./secrets/<provider>/<env>/
-# Backend: prod S3 (RustFS), dev local
+# Backend: prod S3-compatible, dev local
 # Usage: just tf-apply (default libvirt/dev) or just provider=... env=... tf-apply
 # Platform (ArgoCD) via modules/platform; single apply for infra + platform.
 

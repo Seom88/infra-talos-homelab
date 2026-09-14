@@ -84,7 +84,7 @@ Original `1×6 + 3×4` assumed TrueNAS 4 GiB and CP needing 6 GiB (~70% host). L
 * **Host tight (~96%: `6 + 18 + 4 + 2 = 30 GiB`).** Only ~1 GiB free for bursts/backups/rebuilds. Relief: workers 6→5 GiB (`6+15+4+2=27 GiB → 87%`, Alt F).
 * **SPOF:** loss of `talos-cp1` = API/etcd down. RTO 15–30 min (`apply -replace` + bootstrap ≈ 20 min with healthy snapshots).
 * **No rolling CP upgrade:** `~2–4 min` API downtime per Talos/K8s upgrade. Workloads keep running on cached manifests; announce maintenance window.
-* **Backups mandatory:** hourly `talosctl etcd snapshot` + Velero/Restic to RustFS S3 + Terraform state in S3 backend; monthly restore drill. Without them, CP disk loss = rebuild etcd + re-push GitOps, PVC data gone.
+* **Backups mandatory:** hourly `talosctl etcd snapshot` + Velero/Restic to S3-compatible storage + Terraform state in S3 backend; monthly restore drill. Without them, CP disk loss = rebuild etcd + re-push GitOps, PVC data gone.
 * **Monitoring gap:** need `KubeControlPlaneDown` / `EtcdMembersDown` (>2m) + Velero-failure alerts in same channel; `metrics-server` present (verified 2026-09-14, `kubectl top` available).
 * **Longhorn degraded on worker loss:** with `replicas: 2`, one worker down = single remaining replica until return. `replicas: 3` deferred until 6–8 GiB workers.
 * **CPU overcommit (144–181% limits).** RAM fixed; `pressure/io` is next bottleneck.
