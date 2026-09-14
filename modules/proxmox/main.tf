@@ -93,8 +93,11 @@ resource "proxmox_virtual_environment_vm" "talos" {
     }
   }
   cpu {
-    cores = each.value.cores
-    type  = "host"
+    cores    = each.value.cores
+    type     = "host"
+    units    = lookup(each.value, "cpu_units", null)
+    affinity = lookup(each.value, "cpu_affinity", null)
+    limit    = lookup(each.value, "cpu_limit", null)
   }
   memory {
     dedicated = each.value.memory
@@ -158,8 +161,11 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
     }
   }
   cpu {
-    cores = each.value.cores
-    type  = "host"
+    cores    = each.value.cores
+    type     = "host"
+    units    = lookup(each.value, "cpu_units", null)
+    affinity = lookup(each.value, "cpu_affinity", null)
+    limit    = lookup(each.value, "cpu_limit", null)
   }
   memory {
     dedicated = each.value.memory

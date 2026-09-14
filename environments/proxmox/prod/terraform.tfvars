@@ -13,6 +13,7 @@ network_snat     = true
 default_datastore = "ssd01"
 
 nodes_cp = [
+  # Reserve cores 0-1 for host/TrueNAS IRQs; consolidate Talos vCPUs on 2-5,8-11 to let idle cores enter deep C-states; verify via turbostat PkgWatt/%pc10 + guest steal%.
   {
     hostname         = "talos-cp1"
     ip               = "10.10.0.11"
@@ -22,6 +23,8 @@ nodes_cp = [
     disk_size        = 40
     datastore        = "local-lvm"
     allow_scheduling = false
+    cpu_units        = 200
+    cpu_affinity     = "2-5,8-11"
   },
   # If you wanna use more than a cp with allow_scheduling = true, use 8Gb or above and even number of cp
   # {
@@ -56,6 +59,8 @@ nodes_worker = [
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "local-lvm"
+    cpu_units    = 100
+    cpu_affinity = "2-5,8-11"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
@@ -66,6 +71,8 @@ nodes_worker = [
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "local-lvm"
+    cpu_units    = 100
+    cpu_affinity = "2-5,8-11"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
@@ -76,6 +83,8 @@ nodes_worker = [
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "local-lvm"
+    cpu_units    = 100
+    cpu_affinity = "2-5,8-11"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
 ]

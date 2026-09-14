@@ -101,6 +101,9 @@ variable "nodes_cp" {
     disk_size        = number
     datastore        = optional(string)
     allow_scheduling = bool
+    cpu_units        = optional(number)
+    cpu_affinity     = optional(string)
+    cpu_limit        = optional(number)
     disks = optional(list(object({
       name      = string
       size      = number
@@ -133,6 +136,9 @@ variable "nodes_worker" {
     proxmox_node = string
     disk_size    = number
     datastore    = optional(string)
+    cpu_units    = optional(number)
+    cpu_affinity = optional(string)
+    cpu_limit    = optional(number)
     disks = optional(list(object({
       name      = string
       size      = number
