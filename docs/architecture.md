@@ -47,6 +47,8 @@ Terraform (environments/libvirt/<env>/)
 ```
 
 > **File refs:** `modules/libvirt/network.tf` (NAT + DHCP + DNS), `modules/libvirt/image.tf` (factory image + cache), `modules/libvirt/pool.tf` (pool), `modules/libvirt/vms.tf` (volumes + domains), `modules/libvirt/cluster.tf` (bootstrap + health gate).
+>
+> **Libvirt specifics:** host-side `qemu-img convert` raw → thin `qcow2` (dir pool does not auto-convert), UEFI `q35` with `qcow2` virtio driver type, Talos-layer-only health gate (`skip_kubernetes_checks=true`; node-Ready waits live in the platform layer).
 
 Both providers share the same provider-agnostic `modules/talos-cluster` module for Talos bootstrap and kubeconfig generation (`talos_machine.control_plane` / `talos_machine.worker` + `talos_cluster`).
 
@@ -119,6 +121,10 @@ flowchart TD
 
 Terraform creates the SDN stack (`proxmox_sdn_zone` + VNet `talosvn` + subnet `snat = true` + `proxmox_sdn_applier`), downloads the Talos image and creates VMs with cloud-init. Talos boots, `talos_cluster` bootstraps the first control plane node, `talos_cluster_health` blocks until kube-apiserver, etcd and all nodes are bootstrapped (direct per-node IPs, health-gated), `local_file.kubeconfig` materializes a single-context kubeconfig via the subnet route `10.10.0.0/24`, and `module.platform` installs Gateway API CRDs → Cilium → `wait_nodes` (CNI-gated `Ready`) → ArgoCD in the same apply (DAG `gateway_api→cilium→wait_nodes→argocd`).
 
+### Image Factory (no YAML)
+
+No schematic YAML files: `modules/talos-image` resolves extensions via `talos_image_factory_extensions_versions`, publishes the schematic (`talos_image_factory_schematic`, `schematic_id` output), and reads installer/disk URLs from `talos_image_factory_urls` — Proxmox uses the secureboot flavor, libvirt the plain flavor unless `secureboot = true`.
+
 ### Libvirt path
 
 Terraform downloads the nocloud raw image, creates boot volumes, and injects cloud-init with static IPs and Talos machine config. VMs boot via libvirt, the cluster bootstraps, the health gate blocks until Ready, and the same single-context kubeconfig + platform flow runs.
@@ -131,7 +137,7 @@ Preserved verbatim from the original README (trimmed to 6 in [README Highlights]
 
 - **Two providers** — choose Proxmox VE (`bpg/proxmox`) or libvirt (`dmacvicar/libvirt`); both share the same provider-agnostic `talos-cluster` module
 - **Modular design** — infrastructure (VMs) and configuration (Talos/K8s) are separated; `talos-cluster` module works with any provider
-- **Control plane** — 1–3 nodes with direct per-node IPs health-gated via `talos_cluster_health`. HA with 3+ nodes. Proxmox prod runs 3 CP nodes, dev runs 1
+- **Control plane** — 1 control-plane + 3 workers in prod per [ADR 004](./adr/004-single-control-plane-for-32gb-homelab.md) (direct per-node IPs health-gated via `talos_cluster_health`; no etcd HA on the 32 GiB host)
 - **Dedicated workers** — worker VMs keep workloads off the control plane; disk sizes and datastores configurable per node (20 GB CP default, 100 GB worker default, `disk_size` + `datastore`/`pool` required per node)
 - **Per-node scheduling** — `nodes_cp[].allow_scheduling` controls `KubeNodeConfig` taint delete per control-plane node (pre-1.14: `cluster.allowSchedulingOnControlPlanes`; replaces the old global flag)
 - **Tailscale subnet routing only** — Tailscale Talos extension disabled (see [ADR 001](./adr/001-remove-tailscale-extension.md)). Cluster reachability for `10.10.0.0/24` is via a Tailscale subnet router (`tailscale set --advertise-routes=10.10.0.0/24` on the Proxmox host, `tailscale/github-action` in CI). No per-node Tailscale kubeconfigs — single context via subnet route. See [Networking](./networking.md)

@@ -54,6 +54,10 @@ just provider=libvirt env=dev tf-apply-upgrade
 - `time_sleep.post_bootstrap` is `10s`; `talos_cluster_health` has `read = "10m"` and blocks until kube-apiserver, etcd, and all nodes are Ready.
 - Cold bootstrap (`terraform destroy` + `apply`) uses `-parallelism=10` (fast ~8 min); upgrades use `-parallelism=1` (safe quorum).
 
+### Metrics Server (Option 2)
+
+`kubectl top` works via kubelet certificate rotation: `KubeletConfig rotate-server-certificates=true` on all nodes + `kubelet-serving-cert-approver` and `metrics-server` external manifests on controlplanes only (`modules/talos-cluster/main.tf`). Verify with `kubectl top nodes`.
+
 ### CPU affinity lives outside CI
 
 `cpu.affinity` on `proxmox_virtual_environment_vm` requires `root@pam`; CI applies with an API token, so the API silently drops the value. `terraform.tfvars` stays the source of truth (`cpu_affinity`, `cpu_units` per node), and both VM resources set `lifecycle { ignore_changes = [cpu[0].affinity] }` so token-based plans never fight the privileged value.
@@ -113,7 +117,7 @@ Common causes: Cilium Helm release still progressing (`wait=true` timeout `1800s
 `var.cilium_operator_replicas` maps to `operator.replicas` via Helm `set`. Leader election ensures a single active operator.
 
 - **Dev / single-node**: `1` (default, RAM-constrained).
-- **Prod HA (3 control planes)**: `2` — tolerates one operator pod loss without cold start. No need for `3`; two with leader election is sufficient.
+- **Prod (single control-plane)**: `2` — tolerates one operator pod loss without cold start. No need for `3`; two with leader election is sufficient.
 
 ```bash
 kubectl -n kube-system get deploy cilium-operator -o jsonpath='{.spec.replicas}{"\n"}'

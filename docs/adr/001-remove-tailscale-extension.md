@@ -110,6 +110,8 @@ Remove the **Talos system extension** path, keep **Tailscale as subnet routing o
 
 ## Restore Guide — Re-enable Tailscale extension
 
+> ⚠️ **Superseded:** schematic YAML files were deleted — installer/disk URLs now come from Image Factory data sources (`modules/talos-image`). Do NOT recreate `schematic-*.yaml`; re-add `siderolabs/tailscale` to the `extensions` variable instead, then follow steps 1–2 and 4–5 below.
+
 > Use this when you need per-node MagicDNS again (e.g., subnet router unavailable or you want direct tailnet IPs).
 
 1.  **Uncomment the variable** in 7 files:

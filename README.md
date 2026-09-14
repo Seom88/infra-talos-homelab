@@ -14,8 +14,8 @@
 [![Project Status](https://img.shields.io/badge/Project%20Status-Active-brightgreen)](#roadmap--changelog)
 [![Last deploy](https://img.shields.io/badge/Last%20deploy-Aug%202026-blue)](#roadmap--changelog)
 
-![Demo — cluster bootstrap ~8 min, 3 CP + workers](docs/demo.png)
-*Demo: cluster bootstrap ~8 min — 3 CP + workers (via `just tf-apply` on Proxmox prod).*
+![Demo — cluster bootstrap ~8 min, 1 CP + 3 workers](docs/demo.png)
+*Demo: cluster bootstrap ~8 min — 1 CP + 3 workers (via `just tf-apply` on Proxmox prod).*
 
 ## 📑 Contents
 

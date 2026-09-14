@@ -107,7 +107,7 @@ Why this order:
 | Cilium before wait_nodes | Nodes become `Ready` only when a CNI is present. The DAG is `gateway_api → cilium → wait_nodes → argocd`. This ordering ensures Gateway API CRDs exist before Cilium (`gatewayAPI.enabled=true` requires them) and that `wait_nodes` runs only after the CNI is present. The gate re-triggers when the `kubeconfig` hash changes. |
 | wait_nodes before ArgoCD | ArgoCD needs a Ready cluster with networking; the gate guarantees CNI + API are healthy before the GitOps engine starts. |
 
-Helm settings: `wait=true` with `timeout=1800` on the Cilium release; `operator.replicas` is parameterized (`var.cilium_operator_replicas`, `1` for dev/single-node, `2` for HA with 3 control planes, leader election).
+Helm settings: `wait=true` with `timeout=1800` on the Cilium release; `operator.replicas` is parameterized (`var.cilium_operator_replicas`, `1` for dev/single-node, `2` for single-CP prod, leader election).
 
 ### Key values summary
 

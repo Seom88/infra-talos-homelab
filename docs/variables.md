@@ -26,8 +26,11 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 | `network_mtu` | MTU for the SDN zone | `1500` |
 | `network_snat` | Enable SNAT on the SDN subnet (MASQUERADE for VM egress) | `true` |
 | `datastore_iso` | Datastore for ISO/raw images | `local` |
-| `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required) | — |
-| `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required) | — |
+| `nodes_cp` | Control plane nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore, allow_scheduling — all required; `cpu_units`/`cpu_affinity`/`disks[]` optional) | — |
+| `nodes_worker` | Worker nodes (hostname, ip, cores, memory, proxmox_node, disk_size, datastore — all required; `cpu_units`/`cpu_affinity`/`disks[]` optional) | — |
+| `nodes_[cp,worker].cpu_units` | Proxmox CPU shares weight (e.g. `200` CP / `100` workers); applied via `just affinity-sync` (`root`, `qm set --cpuunits`) | — |
+| `nodes_[cp,worker].cpu_affinity` | Pinned host CPU set (e.g. `"2-5,8-11"`); applied via `just affinity-sync` (`root`, `qm set --affinity`) | — |
+| `nodes_[cp,worker].disks[]` | Extra data disks (`{ name, size, datastore }`) → virtio1..N + one `UserVolumeConfig` per distinct name (`/var/mnt/<name>`) | — |
 | `talos_version` | Talos Linux version | `1.14.0` |
 | `argocd_version` | ArgoCD Helm chart version | `10.7.0` |
 | `enable_health_check` | Enable `talos_cluster_health` gate (set `false` for destroy) | `true` |
@@ -53,8 +56,9 @@ All 4 envs ship input validations — 57 blocks total — semver for `talos_vers
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `nodes_cp` | Control plane nodes (hostname, ip, mac, cores, memory, disk_size, pool, allow_scheduling — all required) | — |
-| `nodes_worker` | Worker nodes (hostname, ip, mac, cores, memory, disk_size, pool — all required) | — |
+| `nodes_cp` | Control plane nodes (hostname, ip, mac, cores, memory, disk_size, pool, allow_scheduling — all required; `disks[]` optional) | — |
+| `nodes_worker` | Worker nodes (hostname, ip, mac, cores, memory, disk_size, pool — all required; `disks[]` optional) | — |
+| `nodes_[cp,worker].disks[]` | Extra data disks (`{ name, size }`) → vdb..N + one `UserVolumeConfig` per distinct name (`/var/mnt/<name>`) | — |
 | `pool_name` | Dedicated storage pool name | `talos-pool` |
 | `pool_path` | Filesystem path for the pool | `/var/lib/libvirt/images/talos` |
 | `gateway` | Default gateway IPv4 | `10.0.1.1` |

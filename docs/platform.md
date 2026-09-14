@@ -41,6 +41,14 @@ terraform -chdir=environments/proxmox/prod destroy -target=module.platform.helm_
 3. **Node readiness gate** (`terraform_data.wait_nodes`) — waits for all nodes to be `Ready` via `kubectl wait`. Layer 2; Layer 1 is the `talos_cluster_health` gate in the infra module (`modules/proxmox` / `modules/libvirt`). `depends_on = [helm_release.cilium]` — CNI must be present for nodes to become `Ready`; this ordering ensures the readiness gate runs only after Cilium is installed.
 4. **ArgoCD** (`helm_release.argocd`) — installs the `argo-cd` chart from `https://argoproj.github.io/argo-helm`. `depends_on = [terraform_data.wait_nodes]` which transitively implies `gateway_api` + `cilium`.
 
+### ArgoCD gateway path + sync-wave policy
+
+| Topic | Decision |
+|-------|----------|
+| `/argocd` strip mode | ArgoCD is served at `/argocd` via the cluster gateway (path stripped to `argocd-server:80`); `server.insecure=true` for the HTTP proxy (`modules/platform/values/argocd/values.yaml`) |
+| Sync-wave health gate | Custom `health.lua` for `argoproj.io/Application`: default `healthy` policy requires Synced + Healthy; opt out per app with label/annotation `wave-policy: sync-only` (Synced is enough) |
+| ServiceMonitors | All Cilium `serviceMonitor.enabled=false` until monitoring is synced in the GitOps repo (`modules/platform/values/cilium/values.yaml`) |
+
 ### Inputs
 
 | Variable | Type | Default | Description |
@@ -49,7 +57,7 @@ terraform -chdir=environments/proxmox/prod destroy -target=module.platform.helm_
 | `cilium_version` | string | `1.20.1` | Exact Cilium chart version (`cilium/cilium`). |
 | `cilium_namespace` | string | `kube-system` | Namespace for Cilium. |
 | `cilium_values_file` | string | `""` → `values/cilium/values.yaml` | Custom Cilium Helm values file path (Sidero Without kube-proxy + Gateway API). |
-| `cilium_operator_replicas` | number | `1` | Cilium operator replicas (`1..3`, leader election; `1` for dev/single-node, `2` for HA `3× CP`). Sets `operator.replicas` via Helm `set`. |
+| `cilium_operator_replicas` | number | `1` | Cilium operator replicas (`1..3`, leader election; `1` for dev/single-node, `2` for single-CP prod). Sets `operator.replicas` via Helm `set`. |
 | `gateway_api_crds_version` | string | `1.2.3` | Gateway API CRDs chart version (`christianhuth/gateway-api-crds` → app `v1.6.1`). |
 | `gateway_api_version` | string | `1.2.3` | Alias for `gateway_api_crds_version` (same chart version). |
 | `gateway_api_crds_namespace` | string | `kube-system` | Namespace for Gateway API CRDs release (CRDs are cluster-scoped; Helm still needs a namespace). |
