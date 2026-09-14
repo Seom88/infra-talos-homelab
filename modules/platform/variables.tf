@@ -54,7 +54,7 @@ variable "cilium_operator_replicas" {
 variable "gateway_api_crds_version" {
   description = "Gateway API CRDs Helm chart version (christianhuth/gateway-api-crds)."
   type        = string
-  default     = "1.2.3"
+  default     = "1.2.4"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.gateway_api_crds_version))
