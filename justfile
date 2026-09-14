@@ -6,8 +6,8 @@
 # Usage: just tf-apply (default libvirt/dev) or just provider=... env=... tf-apply
 # Platform (ArgoCD) via modules/platform; single apply for infra + platform.
 
-provider := "libvirt"   # proxmox | libvirt
-env      := "dev"      # prod | dev
+provider := "proxmox"   # proxmox | libvirt
+env      := "prod"      # prod | dev
 
 tf_root     := "./environments/" + provider + "/" + env
 secrets_dir := "./secrets/" + provider + "/" + env
@@ -140,6 +140,64 @@ cluster-schematic-id:
     echo "Schematic ID ({{ label }}):"
     talosctl --talosconfig "$TC" get extensions -n "$FIRST" \
       -o json | jq -r 'select(.spec.metadata.name=="schematic") | .spec.metadata.version'
+
+# Apply CPU affinity + cpuunits as root (API tokens cannot set affinity)
+# Source of truth: environments/proxmox/prod/terraform.tfvars (cpu_affinity/cpu_units per node).
+# VMIDs are resolved by hostname at runtime — never hardcoded. Only tfvars
+# hostnames are touched, so non-Talos VMs (e.g. TrueNAS) are never affected.
+# Idempotent: qm set converges to the tfvars values; safe to re-run.
+affinity-sync:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{ provider }}" != "proxmox" ]; then
+      echo "affinity-sync is proxmox-only (provider={{ provider }}); run with just provider=proxmox env=prod affinity-sync"
+      exit 1
+    fi
+    TFVARS="{{ tfvars_path }}"
+    SSH_HOST=$(grep -E '^\s*ssh_node_address' "$TFVARS" | head -n1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+    SSH_HOST=${SSH_HOST:-pve01}
+    echo "── affinity-sync from $TFVARS via root@$SSH_HOST ──"
+    python3 - "$TFVARS" > /tmp/affinity-sync.map <<'EOF'
+    import re, sys
+    host = affinity = units = None
+    rows = []
+    def flush():
+        if host and affinity:
+            rows.append((host, affinity, units or ""))
+    with open(sys.argv[1]) as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            m = re.match(r'hostname\s*=\s*"([^"]+)"', s)
+            if m:
+                flush(); host, affinity, units = m.group(1), None, None
+                continue
+            m = re.match(r'cpu_affinity\s*=\s*"([^"]+)"', s)
+            if m:
+                affinity = m.group(1)
+                continue
+            m = re.match(r'cpu_units\s*=\s*(\d+)', s)
+            if m:
+                units = m.group(1)
+    flush()
+    for r in rows:
+        print(f"{r[0]} {r[1]} {r[2]}")
+    EOF
+    while read -r HOST AFFINITY UNITS; do
+      [ -z "$HOST" ] && continue
+      echo "── $HOST (affinity=$AFFINITY cpuunits=${UNITS:-unchanged}) ──"
+      VMID=$(ssh -n -o BatchMode=yes "root@$SSH_HOST" 'qm list' | awk -v name="$HOST" '$2==name {print $1}')
+      if [ -z "$VMID" ]; then echo "✗ no VMID found for $HOST; skipping"; continue; fi
+      echo "resolved $HOST -> VMID $VMID"
+      ARGS="--affinity $AFFINITY"
+      if [ -n "$UNITS" ]; then ARGS="$ARGS --cpuunits $UNITS"; fi
+      # shellcheck disable=SC2086
+      ssh -n -o BatchMode=yes "root@$SSH_HOST" "qm set $VMID $ARGS"
+      ssh -n -o BatchMode=yes "root@$SSH_HOST" "qm config $VMID" | grep -E '^(affinity|cpuunits):' || true
+    done < /tmp/affinity-sync.map
+    rm -f /tmp/affinity-sync.map
+    echo "✓ affinity-sync done ({{ label }})"
 
 # Host prerequisites (libvirt): ensure firewalld NAT for talos-net
 setup-host:

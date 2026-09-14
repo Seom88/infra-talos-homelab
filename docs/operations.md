@@ -54,6 +54,19 @@ just provider=libvirt env=dev tf-apply-upgrade
 - `time_sleep.post_bootstrap` is `10s`; `talos_cluster_health` has `read = "10m"` and blocks until kube-apiserver, etcd, and all nodes are Ready.
 - Cold bootstrap (`terraform destroy` + `apply`) uses `-parallelism=10` (fast ~8 min); upgrades use `-parallelism=1` (safe quorum).
 
+### CPU affinity lives outside CI
+
+`cpu.affinity` on `proxmox_virtual_environment_vm` requires `root@pam`; CI applies with an API token, so the API silently drops the value. `terraform.tfvars` stays the source of truth (`cpu_affinity`, `cpu_units` per node), and both VM resources set `lifecycle { ignore_changes = [cpu[0].affinity] }` so token-based plans never fight the privileged value.
+
+Two-step flow:
+
+```bash
+just provider=proxmox env=prod tf-apply        # converges everything except affinity
+just provider=proxmox env=prod affinity-sync   # root over SSH: qm set affinity/cpuunits per tfvars hostname, then prints qm config proof
+```
+
+Drift contract: if `qm config` disagrees with `tfvars`, `tfvars` wins — re-run `affinity-sync`. Never hand-edit affinity on the host; never add a second source for it.
+
 ### Cilium Operations & Troubleshooting
 
 #### Health checks

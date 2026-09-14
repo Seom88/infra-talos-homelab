@@ -1,6 +1,6 @@
 # 4. Single Control-Plane for 32 GiB Homelab (current 1×6 + 3×6)
 
-* **Status:** Accepted (amended 2026-09-06; updated 2026-09-14 — see Amendments)
+* **Status:** Accepted (amended 2026-09-06; updated 2026-09-14 — see Update 2026-09-14 below)
 * **Date:** 2026-09-06
 * **Updated:** 2026-09-14 — aligned to `terraform.tfvars` + TrueNAS 2c/4GB
 * **Deciders:** Seom88
@@ -50,7 +50,7 @@ Run **single control-plane + three workers**: current deployed shape **`1×6 + 3
 | worker | `talos-w2` | `10.10.0.102` | 4 | `6×1024` | `40 GiB local-lvm` | `150 GiB ssd01` | `true` |
 | worker | `talos-w3` | `10.10.0.103` | 4 | `6×1024` | `40 GiB local-lvm` | `150 GiB ssd01` | `true` |
 
-All on `pve01`. OS disks on `local-lvm`, data disks on `ssd01`. CPU: `cpu_units` CP `200` vs workers `100` each (relative weight only), `cpu_affinity = "2-5,8-11"` on all four Talos VMs (host/TrueNAS IRQs reserved on 0-1). vCPU assigned: 16 Talos + 2 TrueNAS = 18 on 6c/12t.
+All on `pve01`. OS disks on `local-lvm`, data disks on `ssd01`. CPU: `cpu_units` CP `200` vs workers `100` each (relative weight only), `cpu_affinity = "2-5,8-11"` desired in `tfvars` for all four Talos VMs, applied via privileged `just affinity-sync` (host/TrueNAS IRQs reserved on 0-1). vCPU assigned: 16 Talos + 2 TrueNAS = 18 on 6c/12t.
 
 * **CP:** Talos `controlplane` role, `NoSchedule` taint, no `UserVolumeConfig`, no Longhorn replicas (`Schedulable=false`). `longhorn-manager` DaemonSet still runs for CSI hooks.
 * **Workers:** `worker` role, each with `150 GiB` data disk on `ssd01` → `UserVolumeConfig "data"` (`/var/mnt/data`). Longhorn replicas constrained to workers. 6 GiB = 5.48 GiB allocatable vs 3.29 GiB on 4 GiB.
@@ -67,7 +67,7 @@ Original `1×6 + 3×4` assumed TrueNAS 4 GiB and CP needing 6 GiB (~70% host). L
 * **CP back to 6 GiB:** `tfvars` sets `memory = 6*1024`, live CP 71% (3747Mi). The 4 GiB right-size proved too tight under full GitOps load — CP drift closed by adopting 6 GiB in this ADR. New tested minimum **4c + 5 GiB per node** still holds; CP at 6 GiB complies with margin.
 * **TrueNAS lowered 6→4 GiB done:** now **2 cores / 4 GiB**. Host total unchanged (`6+18+4+2 = 30 GiB → ~96%`) — the 2 GiB freed from TrueNAS funds the 2 GiB returned to CP. Next relief valve is now workers 6→5 GiB (`6+15+4+2=27 GiB → 87%`) instead of TrueNAS.
 * **Data disks 100→150 GiB** on `ssd01` (OS stays on `local-lvm`). Reflects current `tfvars` `disks` block.
-* **CPU:** workers live `6→4` vCPU reconciled (16 vCPU Talos + 2 TrueNAS = 18 on 6c/12t); `cpu_units` CP `200` vs workers `100` in config; `cpu_affinity = "2-5,8-11"` now set on all four Talos VMs (host/TrueNAS on 0-1). Relative weight only, no pinning beyond affinity string; validate via `turbostat` PkgWatt/%pc10 + guest steal%.
+* **CPU:** workers live `6→4` vCPU reconciled (16 vCPU Talos + 2 TrueNAS = 18 on 6c/12t); `cpu_units` CP `200` vs workers `100` in config; `cpu_affinity = "2-5,8-11"` is desired state in `tfvars` for all four Talos VMs (host/TrueNAS on 0-1), pending privileged `just affinity-sync` — API tokens cannot apply it, so CI ignores the attribute. Relative weight only, no pinning beyond the affinity string; validate via `turbostat` PkgWatt/%pc10 + guest steal%.
 * Sizing still provisional: only ~19.6h Prometheus history (rebuilt 2026-09-13). Reconfirm after one week.
 
 ## Consequences
@@ -85,7 +85,7 @@ Original `1×6 + 3×4` assumed TrueNAS 4 GiB and CP needing 6 GiB (~70% host). L
 * **SPOF:** loss of `talos-cp1` = API/etcd down. RTO 15–30 min (`apply -replace` + bootstrap ≈ 20 min with healthy snapshots).
 * **No rolling CP upgrade:** `~2–4 min` API downtime per Talos/K8s upgrade. Workloads keep running on cached manifests; announce maintenance window.
 * **Backups mandatory:** hourly `talosctl etcd snapshot` + Velero/Restic to RustFS S3 + Terraform state in S3 backend; monthly restore drill. Without them, CP disk loss = rebuild etcd + re-push GitOps, PVC data gone.
-* **Monitoring gap:** need `KubeControlPlaneDown` / `EtcdMembersDown` (>2m) + Velero-failure alerts in same channel; `metrics-server` absent (`kubectl top` unavailable).
+* **Monitoring gap:** need `KubeControlPlaneDown` / `EtcdMembersDown` (>2m) + Velero-failure alerts in same channel; `metrics-server` present (verified 2026-09-14, `kubectl top` available).
 * **Longhorn degraded on worker loss:** with `replicas: 2`, one worker down = single remaining replica until return. `replicas: 3` deferred until 6–8 GiB workers.
 * **CPU overcommit (144–181% limits).** RAM fixed; `pressure/io` is next bottleneck.
 

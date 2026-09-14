@@ -13,6 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Renovate coverage for Cilium, Gateway API CRDs and Kubernetes; safe automerge for minor/patch bumps.
 - ADR 004 (single control-plane topology for the 32 GiB homelab) and docs split into topic guides.
 - Metrics Server via kubelet certificate rotation (Option 2): `KubeletConfig rotate-server-certificates` on all nodes + `kubelet-serving-cert-approver` and `metrics-server` external manifests on controlplanes.
+- Proxmox CPU shares + affinity: `cpu_units` (200 control-plane / 100 workers) and `cpu_affinity` pool `2-5,8-11` per Talos node in prod `tfvars` (cores 0-1 reserved for host/TrueNAS); `just affinity-sync` applies them as root via `qm set` (VMIDs resolved by hostname, `qm config` proof), drift contract in `docs/operations.md` (`tfvars` wins), and `lifecycle { ignore_changes = [cpu[0].affinity] }` so API-token CI never fights the `root@pam`-only value.
 
 ### Changed
 - **Breaking: Talos 1.13.9 → 1.14.0 (K8s stays 1.36.3).** Machine-config patches moved to the 1.14 multi-doc format (scheduling, install, Cilium); kubelet `extraMounts` removed — Longhorn storage now comes from UserVolumeConfigs via `defaultDataPath` (see ADR 005). Rollout: verify a fresh bootstrap in libvirt/dev first, then apply with `-parallelism=1`.
@@ -27,6 +28,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Longhorn data-path drift + single-disk control-plane blocking 3-replica scheduling; storage-class disk selector cleared for virtio.
 - Libvirt UEFI boot failure after the `qcow2` migration (driver type declared).
 - ArgoCD `/argocd` path stripping at the gateway; Cilium ServiceMonitors disabled until monitoring is synced.
+- `just affinity-sync` SSH stdin bug: the first `ssh` consumed the VM-list stdin so only the first node applied; fixed with `ssh -n` on all three host calls.
 
 ## [2.0.0] - 2026-08-28
 

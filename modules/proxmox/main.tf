@@ -110,6 +110,13 @@ resource "proxmox_virtual_environment_vm" "talos" {
   operating_system {
     type = "l26"
   }
+  # cpu.affinity needs root@pam; CI applies with an API token so the API
+  # silently drops it. The privileged value is applied outside CI via
+  # `just affinity-sync`; ignore it here so token-based plans never fight it.
+  # The cpu block is list-nested, hence the indexed cpu[0].affinity address.
+  lifecycle {
+    ignore_changes = [cpu[0].affinity]
+  }
   depends_on = [
     proxmox_sdn_applier.this
   ]
@@ -177,6 +184,12 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   }
   operating_system {
     type = "l26"
+  }
+  # Same root@pam-only constraint as the control-plane VMs above: affinity is
+  # applied via `just affinity-sync`, CI ignores it (cpu[0].affinity indexed
+  # because the cpu block is list-nested).
+  lifecycle {
+    ignore_changes = [cpu[0].affinity]
   }
   depends_on = [
     proxmox_sdn_applier.this
