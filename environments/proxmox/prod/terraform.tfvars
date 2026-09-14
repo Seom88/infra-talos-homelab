@@ -51,7 +51,7 @@ nodes_worker = [
   {
     hostname     = "talos-w1"
     ip           = "10.10.0.101"
-    cores        = 6
+    cores        = 4
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
@@ -61,7 +61,7 @@ nodes_worker = [
   {
     hostname     = "talos-w2"
     ip           = "10.10.0.102"
-    cores        = 6
+    cores        = 4
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
@@ -71,7 +71,7 @@ nodes_worker = [
   {
     hostname     = "talos-w3"
     ip           = "10.10.0.103"
-    cores        = 6
+    cores        = 4
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
