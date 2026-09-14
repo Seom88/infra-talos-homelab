@@ -72,9 +72,9 @@ variable "talos_version" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version (e.g. 1.36.3); only at bootstrap, upgrades via talos_cluster."
+  description = "Kubernetes version (e.g. 1.37.0); only at bootstrap, upgrades via talos_cluster."
   type        = string
-  default     = "1.36.3"
+  default     = "1.37.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
