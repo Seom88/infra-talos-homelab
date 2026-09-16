@@ -40,5 +40,8 @@ module "platform" {
   kubeconfig_hash = local_file.kubeconfig.content_base64sha256
   argocd_version  = var.argocd_version
 
+  # Dev: full observability — base prod (values.yaml) + hubble ON via overlay
+  cilium_values_file = "${path.module}/../../../modules/platform/values/cilium/values-dev.yaml"
+
   depends_on = [local_file.kubeconfig]
 }

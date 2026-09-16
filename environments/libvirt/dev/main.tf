@@ -46,6 +46,9 @@ module "platform" {
   argocd_version     = var.argocd_version
   argocd_values_file = "${path.module}/../../../modules/platform/values/argocd/values-dev.yaml"
 
+  # Dev: full observability — base prod (values.yaml) + hubble ON via overlay
+  cilium_values_file = "${path.module}/../../../modules/platform/values/cilium/values-dev.yaml"
+
   # Cilium operator: 1 replica for dev single-node (8Gi RAM constrained)
   cilium_operator_replicas = 1
 

@@ -91,7 +91,7 @@ variable "network_snat" {
 }
 
 variable "nodes_cp" {
-  description = "Control plane nodes; disks[] creates virtio1..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
+  description = "Control plane nodes; disks[] creates scsi1..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
   type = list(object({
     hostname         = string
     ip               = string
@@ -108,6 +108,7 @@ variable "nodes_cp" {
       name      = string
       size      = number
       datastore = optional(string)
+      ssd       = optional(bool, true)
     })))
   }))
 
@@ -127,7 +128,7 @@ variable "nodes_cp" {
 }
 
 variable "nodes_worker" {
-  description = "Worker nodes; disks[] creates virtio1..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
+  description = "Worker nodes; disks[] creates scsi1..N -> /var/mnt/<name> (one UserVolumeConfig per distinct name)."
   type = list(object({
     hostname     = string
     ip           = string
@@ -143,6 +144,7 @@ variable "nodes_worker" {
       name      = string
       size      = number
       datastore = optional(string)
+      ssd       = optional(bool, true)
     })))
   }))
 

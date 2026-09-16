@@ -63,9 +63,12 @@ locals {
   })
 
   # Unattended install (Talos 1.14): replaces deprecated machine.install.
-  # disk.dev_path pins the virtio boot disk; system_disk is only populated
-  # after installation, so it cannot select the install target. wipe/reboot
-  # omitted (defaults: wipe=true, reboot when installer.image is set).
+  # Selects the boot disk via CEL on disk.dev_path; the path is hypervisor
+  # dependent (virtio-blk -> /dev/vd*, SCSI -> /dev/sd*) and configurable
+  # via var.install_disk_match (e.g. /dev/sda for Proxmox scsi0 boot disk).
+  # system_disk is only populated after installation, so it cannot select
+  # the install target. wipe/reboot omitted (defaults: wipe=true, reboot
+  # when installer.image is set).
   # See https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/unattendedinstallconfig
   install_patch = yamlencode({
     apiVersion = "v1alpha1"
@@ -75,7 +78,7 @@ locals {
     }
     provisioning = {
       diskSelector = {
-        match = "disk.dev_path == '/dev/vda'"
+        match = "disk.dev_path == '${var.install_disk_match}'"
       }
     }
   })

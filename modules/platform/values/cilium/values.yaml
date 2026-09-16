@@ -96,6 +96,7 @@ prometheus:
     interval: 30s
 
 envoy:
+  enabled: true
   resources:
     requests:
       cpu: 100m
@@ -108,8 +109,9 @@ envoy:
         release: monitoring
       interval: 30s
 
+# Prod lean: Envoy ON (Gateway API), Hubble OFF (enable on-demand for debug via values-dev.yaml overlay)
 hubble:
-  enabled: true
+  enabled: false
   metrics:
     enabled:
       - dns
@@ -132,7 +134,7 @@ hubble:
       labelValue: "1"
       annotations: {}
   relay:
-    enabled: true
+    enabled: false
     prometheus:
       enabled: true
       port: 9966
@@ -142,7 +144,7 @@ hubble:
           release: monitoring
         interval: 30s
   ui:
-    enabled: true
+    enabled: false
 
 dashboards:
   enabled: true

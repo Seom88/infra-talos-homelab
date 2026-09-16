@@ -57,6 +57,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
   node_name       = each.value.proxmox_node
   bios            = "ovmf"
   machine         = "q35"
+  scsi_hardware   = "virtio-scsi-single"
   initialization {
     datastore_id = coalesce(each.value.datastore, var.default_datastore)
     ip_config {
@@ -77,18 +78,20 @@ resource "proxmox_virtual_environment_vm" "talos" {
   disk {
     datastore_id = coalesce(each.value.datastore, var.default_datastore)
     file_id      = proxmox_download_file.talos_image.id
-    interface    = "virtio0"
+    interface    = "scsi0"
     iothread     = true
     discard      = "on"
+    ssd          = true
     size         = each.value.disk_size
   }
   dynamic "disk" {
     for_each = coalesce(each.value.disks, [])
     content {
       datastore_id = coalesce(disk.value.datastore, var.default_data_datastore, each.value.datastore, var.default_datastore)
-      interface    = "virtio${disk.key + 1}"
+      interface    = "scsi${disk.key + 1}"
       iothread     = true
       discard      = "on"
+      ssd          = disk.value.ssd
       size         = disk.value.size
     }
   }
@@ -101,11 +104,12 @@ resource "proxmox_virtual_environment_vm" "talos" {
   }
   memory {
     dedicated = each.value.memory
-    floating  = each.value.memory
+    floating  = 0 # ballooning disabled to reduce overhead
   }
   network_device {
     bridge   = var.network_bridge
     firewall = false
+    model    = "virtio" # VirtIO explicitly to avoid default drift
   }
   operating_system {
     type = "l26"
@@ -132,6 +136,7 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   node_name       = each.value.proxmox_node
   bios            = "ovmf"
   machine         = "q35"
+  scsi_hardware   = "virtio-scsi-single"
   initialization {
     datastore_id = coalesce(each.value.datastore, var.default_datastore)
     ip_config {
@@ -152,18 +157,20 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   disk {
     datastore_id = coalesce(each.value.datastore, var.default_datastore)
     file_id      = proxmox_download_file.talos_image.id
-    interface    = "virtio0"
+    interface    = "scsi0"
     iothread     = true
     discard      = "on"
+    ssd          = true
     size         = each.value.disk_size
   }
   dynamic "disk" {
     for_each = coalesce(each.value.disks, [])
     content {
       datastore_id = coalesce(disk.value.datastore, var.default_data_datastore, each.value.datastore, var.default_datastore)
-      interface    = "virtio${disk.key + 1}"
+      interface    = "scsi${disk.key + 1}"
       iothread     = true
       discard      = "on"
+      ssd          = disk.value.ssd
       size         = disk.value.size
     }
   }
@@ -176,11 +183,12 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
   }
   memory {
     dedicated = each.value.memory
-    floating  = each.value.memory
+    floating  = 0 # ballooning disabled to reduce overhead
   }
   network_device {
     bridge   = var.network_bridge
     firewall = false
+    model    = "virtio" # VirtIO explicitly to avoid default drift
   }
   operating_system {
     type = "l26"
@@ -222,6 +230,7 @@ module "talos" {
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
   drain_on_upgrade     = var.drain_on_upgrade
+  install_disk_match   = "/dev/sda"
   extra_config_patches = compact(concat(var.extra_config_patches, local.data_volume_patches))
 
   depends_on = [

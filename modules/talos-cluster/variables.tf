@@ -124,3 +124,9 @@ variable "drain_on_upgrade" {
   type        = bool
   default     = false
 }
+
+variable "install_disk_match" {
+  description = "Guest device path for provisioning.diskSelector.match CEL expression on disk.dev_path (e.g. /dev/vda for virtio-blk, /dev/sda for SCSI boot disk)."
+  type        = string
+  default     = "/dev/vda"
+}

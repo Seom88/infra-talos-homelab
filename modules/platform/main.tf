@@ -74,7 +74,10 @@ resource "helm_release" "cilium" {
   version          = var.cilium_version
   namespace        = var.cilium_namespace
   create_namespace = true
-  values           = [file(var.cilium_values_file != "" ? var.cilium_values_file : "${path.module}/values/cilium/values.yaml")]
+  values = var.cilium_values_file != "" ? [
+    file("${path.module}/values/cilium/values.yaml"),
+    file(var.cilium_values_file)
+  ] : [file("${path.module}/values/cilium/values.yaml")]
   wait             = true
   wait_for_jobs    = true
   atomic           = true
