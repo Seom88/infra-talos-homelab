@@ -78,12 +78,12 @@ resource "helm_release" "cilium" {
     file("${path.module}/values/cilium/values.yaml"),
     file(var.cilium_values_file)
   ] : [file("${path.module}/values/cilium/values.yaml")]
-  wait             = true
-  wait_for_jobs    = true
-  atomic           = true
-  cleanup_on_fail  = true
-  timeout          = 600
-  max_history      = 10
+  wait            = true
+  wait_for_jobs   = true
+  atomic          = true
+  cleanup_on_fail = true
+  timeout         = 600
+  max_history     = 10
 
   depends_on = [helm_release.gateway_api]
 
