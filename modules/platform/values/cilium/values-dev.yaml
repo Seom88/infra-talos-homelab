@@ -2,6 +2,9 @@
 # Merged via helm_release.cilium.values = [base, overlay] when cilium_values_file is set.
 # Dev keeps Hubble + Relay + UI + metrics for debugging NetworkPolicies and flows.
 
+operator:
+  replicas: 1
+
 hubble:
   enabled: true
   relay:

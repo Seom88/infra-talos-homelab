@@ -7,7 +7,7 @@ global:
     defaultDenyIngress: false
 
 controller:
-  replicas: 1
+  replicas: 2
 
 server:
   autoscaling:
