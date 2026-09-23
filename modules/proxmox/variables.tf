@@ -172,9 +172,9 @@ variable "extra_config_patches" {
 # Talos version (bootstrap pin)
 # DANGER: bumping replaces disks (etcd wipe); use 'just upgrade' for in-place.
 variable "talos_version" {
-  description = "Talos Linux version to install on the nodes (e.g. 1.14.0)"
+  description = "Talos Linux version to install on the nodes (e.g. 1.14.1)"
   type        = string
-  default     = "1.14.0"
+  default     = "1.14.1"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))

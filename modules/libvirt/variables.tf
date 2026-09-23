@@ -156,9 +156,9 @@ variable "cluster_name" {
 }
 
 variable "talos_version" {
-  description = "Talos Linux version (e.g. 1.14.0)"
+  description = "Talos Linux version (e.g. 1.14.1)"
   type        = string
-  default     = "1.14.0"
+  default     = "1.14.1"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
