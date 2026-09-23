@@ -16,9 +16,9 @@ variable "kubeconfig_hash" {
 
 # Cilium
 variable "cilium_version" {
-  description = "Cilium Helm chart version (exact, no ranges). Sidero guide pins 1.18.0, Cilium stable docs (2025-09) requires 1.20.1 for Gateway API v1.6.1."
+  description = "Cilium Helm chart version (exact, no ranges). Sidero guide pins 1.18.0, Cilium stable docs (2025-09) requires 1.20.2 for Gateway API v1.6.1."
   type        = string
-  default     = "1.20.1"
+  default     = "1.20.2"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.cilium_version))
