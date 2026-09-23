@@ -18,7 +18,6 @@ variable "node_name" {
 variable "ssh_username" {
   description = "SSH user for PVE node (e.g. root)"
   type        = string
-  default     = "root"
 }
 
 variable "ssh_node_address" {
@@ -40,7 +39,6 @@ variable "gateway" {
 variable "datastore_iso" {
   description = "Proxmox datastore ID for ISO/raw images (e.g. local, hdd)"
   type        = string
-  default     = "local"
 }
 
 variable "default_datastore" {
@@ -58,19 +56,16 @@ variable "default_data_datastore" {
 variable "network_bridge" {
   description = "Bridge for VMs; with SDN must match VNet id (max 8 chars, e.g. talosvn)"
   type        = string
-  default     = "vmbr0"
 }
 
 variable "sdn_zone" {
   description = "SDN zone id (each env gets own zone + VNet)"
   type        = string
-  default     = "talos"
 }
 
 variable "network_cidr" {
   description = "CIDR for SDN subnet (must contain node IPs, e.g. 10.10.0.0/24)"
   type        = string
-  default     = "10.10.0.0/24"
 
   validation {
     condition     = can(cidrhost(var.network_cidr, 0))
@@ -81,13 +76,11 @@ variable "network_cidr" {
 variable "network_mtu" {
   description = "MTU for the SDN zone"
   type        = number
-  default     = 1500
 }
 
 variable "network_snat" {
   description = "Enable SNAT so VMs reach internet via node."
   type        = bool
-  default     = true
 }
 
 variable "nodes_cp" {
@@ -166,7 +159,6 @@ variable "nodes_worker" {
 variable "extra_config_patches" {
   description = "Extra Talos patches (YAML) for all nodes; UserVolumeConfig auto-appended."
   type        = list(string)
-  default     = []
 }
 
 # Talos version (bootstrap pin)
@@ -174,11 +166,30 @@ variable "extra_config_patches" {
 variable "talos_version" {
   description = "Talos Linux version to install on the nodes (e.g. 1.14.1)"
   type        = string
-  default     = "1.14.1"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
     error_message = "talos_version must be semver X.Y.Z (e.g. 1.14.0)."
+  }
+}
+
+variable "cluster_name" {
+  description = "Talos / Kubernetes cluster name (pass-through to talos-cluster)."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cluster_name)) > 0
+    error_message = "cluster_name must not be empty."
+  }
+}
+
+variable "kubernetes_version" {
+  description = "Kubernetes version (e.g. 1.37.0); only at bootstrap, upgrades via talos_cluster (pass-through to talos-cluster)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
+    error_message = "kubernetes_version must be semver X.Y.Z (e.g. 1.37.0)."
   }
 }
 
@@ -193,17 +204,24 @@ variable "talos_version" {
 variable "longhorn_enabled" {
   description = "Deprecated no-op (kept for caller compatibility): Longhorn uses defaultDataPath=/var/mnt/data with no kubelet extraMounts."
   type        = bool
-  default     = true
 }
 
 variable "enable_health_check" {
   description = "Enable health gate; set false to skip on destroy."
   type        = bool
-  default     = true
 }
 
 variable "drain_on_upgrade" {
   description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
-  default     = false
+}
+
+variable "install_disk_match" {
+  description = "Guest device path for provisioning.diskSelector.match CEL expression on disk.dev_path (pass-through to talos-cluster)."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.install_disk_match)) > 0
+    error_message = "install_disk_match must not be empty."
+  }
 }

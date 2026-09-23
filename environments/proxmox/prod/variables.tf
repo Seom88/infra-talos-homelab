@@ -144,6 +144,47 @@ variable "talos_version" {
   }
 }
 
+variable "cluster_name" {
+  type    = string
+  default = "talos-cluster"
+
+  validation {
+    condition     = length(trimspace(var.cluster_name)) > 0
+    error_message = "cluster_name must not be empty."
+  }
+}
+
+variable "kubernetes_version" {
+  type    = string
+  default = "1.37.0"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
+    error_message = "kubernetes_version must be semver X.Y.Z (e.g. 1.37.0)."
+  }
+}
+
+variable "longhorn_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "extra_config_patches" {
+  type    = list(string)
+  default = []
+}
+
+variable "install_disk_match" {
+  description = "Guest device path for install disk matching (SCSI boot disk on Proxmox)."
+  type        = string
+  default     = "/dev/sda"
+
+  validation {
+    condition     = length(trimspace(var.install_disk_match)) > 0
+    error_message = "install_disk_match must not be empty."
+  }
+}
+
 # Tailscale disabled - see ADR 001
 # variable "tailscale_auth_key" {
 #   type      = string

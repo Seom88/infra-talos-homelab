@@ -1,18 +1,26 @@
 module "proxmox" {
   source = "../../../modules/proxmox"
 
-  env_name       = var.env_name
-  node_name      = var.node_name
-  gateway        = var.gateway
-  datastore_iso  = var.datastore_iso
-  network_bridge = var.network_bridge
-  sdn_zone       = var.sdn_zone
-  network_cidr   = var.network_cidr
-  network_mtu    = var.network_mtu
-  network_snat   = var.network_snat
-  nodes_cp       = var.nodes_cp
-  nodes_worker   = var.nodes_worker
-  talos_version  = var.talos_version
+  env_name         = var.env_name
+  node_name        = var.node_name
+  ssh_username     = var.ssh_username
+  ssh_node_address = var.ssh_node_address
+  gateway          = var.gateway
+  datastore_iso    = var.datastore_iso
+  network_bridge   = var.network_bridge
+  sdn_zone         = var.sdn_zone
+  network_cidr     = var.network_cidr
+  network_mtu      = var.network_mtu
+  network_snat     = var.network_snat
+  nodes_cp         = var.nodes_cp
+  nodes_worker     = var.nodes_worker
+  talos_version    = var.talos_version
+
+  cluster_name         = var.cluster_name
+  kubernetes_version   = var.kubernetes_version
+  longhorn_enabled     = var.longhorn_enabled
+  extra_config_patches = var.extra_config_patches
+  install_disk_match   = var.install_disk_match
 
   default_datastore      = var.default_datastore
   default_data_datastore = var.default_data_datastore

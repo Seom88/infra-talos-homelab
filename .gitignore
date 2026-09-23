@@ -35,6 +35,8 @@ plan.out
 
 # opencode
 /.atl
+# Local-only orchestrator working memory (ODD task docs + Engram mirror) — never commit
+odd/
 
 #secrets
 /secrets

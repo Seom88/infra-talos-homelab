@@ -53,7 +53,6 @@ variable "worker_hostnames" {
 variable "cluster_name" {
   description = "Name of the Talos/Kubernetes cluster"
   type        = string
-  default     = "talos-cluster"
 
   validation {
     condition     = length(trimspace(var.cluster_name)) > 0
@@ -74,7 +73,6 @@ variable "talos_version" {
 variable "kubernetes_version" {
   description = "Kubernetes version (e.g. 1.37.0); only at bootstrap, upgrades via talos_cluster."
   type        = string
-  default     = "1.37.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
@@ -110,23 +108,19 @@ variable "cp_allow_scheduling" {
 variable "longhorn_enabled" {
   description = "Deprecated no-op (kept for caller compatibility): Longhorn uses defaultDataPath=/var/mnt/data with no kubelet extraMounts; UVCs arrive via extra_config_patches."
   type        = bool
-  default     = true
 }
 
 variable "extra_config_patches" {
   description = "Additional Talos patches (YAML) for all nodes; UserVolumeConfig auto-appended."
   type        = list(string)
-  default     = []
 }
 
 variable "drain_on_upgrade" {
   description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
-  default     = false
 }
 
 variable "install_disk_match" {
   description = "Guest device path for provisioning.diskSelector.match CEL expression on disk.dev_path (e.g. /dev/vda for virtio-blk, /dev/sda for SCSI boot disk)."
   type        = string
-  default     = "/dev/vda"
 }

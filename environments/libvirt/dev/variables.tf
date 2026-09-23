@@ -142,6 +142,17 @@ variable "extra_config_patches" {
   default = []
 }
 
+variable "install_disk_match" {
+  description = "Guest device path for install disk matching (virtio-blk on libvirt)."
+  type        = string
+  default     = "/dev/vda"
+
+  validation {
+    condition     = length(trimspace(var.install_disk_match)) > 0
+    error_message = "install_disk_match must not be empty."
+  }
+}
+
 # Environment selector
 # TODO: DRY duplicate across 4 envs (see ADR).
 variable "env_name" {

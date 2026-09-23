@@ -223,14 +223,16 @@ module "talos" {
   cp_hostnames         = [for node in var.nodes_cp : node.hostname]
   worker_ips           = [for node in var.nodes_worker : node.ip]
   worker_hostnames     = [for node in var.nodes_worker : node.hostname]
+  cluster_name         = var.cluster_name
   talos_version        = var.talos_version
+  kubernetes_version   = var.kubernetes_version
   installer_image      = module.image.installer_image_secureboot
   # Tailscale disabled - see ADR 001
   # tailscale_auth_key   = var.tailscale_auth_key
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
   drain_on_upgrade     = var.drain_on_upgrade
-  install_disk_match   = "/dev/sda"
+  install_disk_match   = var.install_disk_match
   extra_config_patches = compact(concat(var.extra_config_patches, local.data_volume_patches))
 
   depends_on = [

@@ -54,6 +54,7 @@ module "talos_cluster" {
   cp_allow_scheduling  = [for n in var.nodes_cp : n.allow_scheduling]
   longhorn_enabled     = var.longhorn_enabled
   drain_on_upgrade     = var.drain_on_upgrade
+  install_disk_match   = var.install_disk_match
   extra_config_patches = compact(concat(var.extra_config_patches, local.data_volume_patches))
 
   depends_on = [libvirt_domain.node]

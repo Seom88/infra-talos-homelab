@@ -70,13 +70,11 @@ variable "nodes_worker" {
 variable "pool_name" {
   description = "Name of the dedicated storage pool for Talos"
   type        = string
-  default     = "talos-pool"
 }
 
 variable "pool_path" {
   description = "Target directory for the Talos storage pool"
   type        = string
-  default     = "/mnt/data/libvirt/talos"
 }
 
 variable "default_pool" {
@@ -96,7 +94,6 @@ variable "default_data_pool" {
 variable "gateway" {
   description = "Default gateway IPv4"
   type        = string
-  default     = "10.0.1.1"
 
   validation {
     condition     = can(cidrhost("${var.gateway}/32", 0))
@@ -107,7 +104,6 @@ variable "gateway" {
 variable "network_cidr" {
   description = "Subnet CIDR for the Talos network (e.g. 10.0.1.0/24)"
   type        = string
-  default     = "10.0.1.0/24"
 
   validation {
     condition     = can(cidrhost(var.network_cidr, 0))
@@ -120,26 +116,22 @@ variable "network_cidr" {
 variable "secureboot" {
   description = "Enable UEFI SecureBoot"
   type        = bool
-  default     = true
 }
 
 variable "ovmf_code_secboot" {
   description = "Path to the OVMF code binary on the host"
   type        = string
-  default     = "/usr/share/edk2/ovmf/OVMF_CODE.fd"
 }
 
 variable "ovmf_vars_secboot" {
   description = "Path to the OVMF vars template on the host"
   type        = string
-  default     = "/usr/share/edk2/ovmf/OVMF_VARS.fd"
 }
 
 # Image cache (libvirt-specific)
 variable "talos_image_cache_dir" {
   description = "Cache dir for Talos raw images."
   type        = string
-  default     = "~/.cache/talos-images"
 }
 
 # Pass-through to talos-cluster
@@ -147,7 +139,6 @@ variable "talos_image_cache_dir" {
 variable "cluster_name" {
   description = "Talos / Kubernetes cluster name"
   type        = string
-  default     = "talos-cluster"
 
   validation {
     condition     = length(trimspace(var.cluster_name)) > 0
@@ -158,7 +149,6 @@ variable "cluster_name" {
 variable "talos_version" {
   description = "Talos Linux version (e.g. 1.14.1)"
   type        = string
-  default     = "1.14.1"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
@@ -169,7 +159,6 @@ variable "talos_version" {
 variable "kubernetes_version" {
   description = "Kubernetes version (e.g. 1.36.1)"
   type        = string
-  default     = "1.37.0"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.kubernetes_version))
@@ -188,23 +177,29 @@ variable "kubernetes_version" {
 variable "longhorn_enabled" {
   description = "Deprecated no-op (kept for caller compatibility): Longhorn uses defaultDataPath=/var/mnt/data with no kubelet extraMounts."
   type        = bool
-  default     = true
 }
 
 variable "extra_config_patches" {
   description = "Extra Talos patches (YAML) for all nodes; UserVolumeConfig auto-appended."
   type        = list(string)
-  default     = []
 }
 
 variable "enable_health_check" {
   description = "Enable health gate; set false to skip on destroy."
   type        = bool
-  default     = true
 }
 
 variable "drain_on_upgrade" {
   description = "Drain before Talos upgrade; keep false in prod with Longhorn."
   type        = bool
-  default     = false
+}
+
+variable "install_disk_match" {
+  description = "Guest device path for provisioning.diskSelector.match CEL expression on disk.dev_path (pass-through to talos-cluster)."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.install_disk_match)) > 0
+    error_message = "install_disk_match must not be empty."
+  }
 }
