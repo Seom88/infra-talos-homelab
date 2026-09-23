@@ -154,7 +154,7 @@ variable "talos_version" {
 variable "argocd_version" {
   description = "ArgoCD Helm chart version (exact, no ranges)."
   type        = string
-  default     = "10.9.0"
+  default     = "10.9.2"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.argocd_version))
