@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-09-23
+
+### Added
+- `install_disk_match` variable — configurable `provisioning.diskSelector.match` CEL on `disk.dev_path` (`/dev/vda` libvirt, `/dev/sda` Proxmox); required after the SCSI migration.
+- Cilium values layering — prod lean base (`values.yaml`) + dev full-observability overlay (`values-dev.yaml`) via `cilium_values_file`.
+- Per-disk `ssd` flag on Proxmox `nodes_cp/nodes_worker` (default `true`).
+- ADR 006 (VAAPI/QuickSync sharing rejected on 8700T; CPU-only Immich).
+
+### Changed
+- **Breaking: Proxmox boot/data disks `virtio` → SCSI (`scsi0/scsiN`, `virtio-scsi-single`, `ssd=true`).** Existing VMs recreate; pair with `install_disk_match = "/dev/sda"`.
+- **Breaking: `talos-cluster` variables now required** (`cluster_name`, `kubernetes_version`, `longhorn_enabled`, `extra_config_patches`, `drain_on_upgrade`, `install_disk_match`) — callers must pass them explicitly.
+- **Breaking-ish: Kubernetes `1.36.3` → `1.37.0`.** Rollout with `-parallelism=1`, verify bootstrap in libvirt/dev first.
+- Talos `1.14.0` → `1.14.1`; Cilium `1.20.1` → `1.20.2`; ArgoCD `10.7.0` → `10.9.2`; `bpg/proxmox` `0.113.1` → `0.114.0`.
+- Cilium operator `1` → `2` replicas (HA) + ArgoCD controller `1` → `2`; memory ballooning disabled (`floating = 0`); Proxmox `proxmox/dev` now wires `cluster_name`/`kubernetes_version`/`longhorn_enabled`/`extra_config_patches` like prod.
+- Proxmox network device pins `model = "virtio"` to avoid default drift.
+
+### Fixed
+- `platform` `terraform fmt` drift.
+
 ## [2.1.0] - 2026-09-14
 
 ### Added
