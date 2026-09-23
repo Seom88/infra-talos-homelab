@@ -136,7 +136,7 @@ variable "nodes_worker" {
 
 variable "talos_version" {
   type    = string
-  default = "1.14.0"
+  default = "1.14.1"
 
   validation {
     condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.talos_version))
