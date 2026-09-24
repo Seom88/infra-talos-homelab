@@ -90,6 +90,7 @@ locals {
     extraArgs = {
       "rotate-server-certificates" = true
     }
+    config = { memorySwap = { swapBehavior = "LimitedSwap" } }
   })
   metrics_server_patch = join("\n---\n", [
     yamlencode({

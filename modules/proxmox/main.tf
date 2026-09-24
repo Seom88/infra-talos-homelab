@@ -22,6 +22,19 @@ locals {
       }
     })
   ]
+  swap_volume_patch = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "SwapVolumeConfig"
+    name       = "swap"
+    provisioning = {
+      diskSelector = {
+        match = "disk.dev_path == '${var.install_disk_match}'"
+      }
+      minSize = "4GiB"
+      maxSize = "4GiB"
+      grow    = false
+    }
+  })
 }
 
 # Canonical Image Factory image (extensions data -> schematic -> URLs); Proxmox always uses the secureboot flavor.
@@ -233,7 +246,7 @@ module "talos" {
   longhorn_enabled     = var.longhorn_enabled
   drain_on_upgrade     = var.drain_on_upgrade
   install_disk_match   = var.install_disk_match
-  extra_config_patches = compact(concat(var.extra_config_patches, local.data_volume_patches))
+  extra_config_patches = compact(concat(var.extra_config_patches, local.data_volume_patches, [local.swap_volume_patch]))
 
   depends_on = [
     proxmox_virtual_environment_vm.talos,
