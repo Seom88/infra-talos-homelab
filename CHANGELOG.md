@@ -8,15 +8,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Native Talos v1.14 swap provisioning for Proxmox: a dedicated 5 GiB VM disk in `local-lvm` provides a fixed 4 GiB `SwapVolumeConfig`, explicitly separated from Longhorn data disks.
+- Native Talos v1.14 swap provisioning for libvirt: a managed 5 GiB QCOW2 volume in each VM's existing pool provides a fixed 4 GiB `SwapVolumeConfig`, explicitly separated from Longhorn data disks.
 - Kubernetes pod swap support through `KubeletConfig.config.memorySwap.swapBehavior: LimitedSwap`.
 - Shared `ZswapConfig` with `maxPoolPercent: 20` and documented `SysctlConfig` tuning (`vm.swappiness: "130"`, `vm.page-cluster: "0"`) for control-plane and worker nodes.
 - Swap and zswap are configured together so zswap can act as a compressed RAM-backed cache in front of the swap device.
 
 ### Changed
-- Proxmox adds the dedicated swap disk after existing data disks and applies a data-disk size floor to `UserVolumeConfig` selectors so the 5 GiB swap disk cannot be claimed by Longhorn; libvirt remains unchanged in this correction.
+- Proxmox and libvirt now add dedicated 5 GiB swap backing after existing data disks and apply data-disk size floors to `UserVolumeConfig` selectors so the smaller swap disk cannot be claimed by Longhorn.
 
 ### Security
-- LUKS2 encryption remains intentionally disabled for swap; the Proxmox swap partition is isolated on its dedicated `local-lvm` virtual disk.
+- LUKS2 encryption remains intentionally disabled for swap; the Proxmox and libvirt swap partitions are isolated on dedicated virtual backing devices.
 
 ## [2.2.0] - 2026-09-23
 

@@ -15,7 +15,7 @@ locals {
       name       = name
       provisioning = {
         diskSelector = {
-          match = length(local.data_disk_names) == 1 ? "!system_disk" : "!system_disk && disk.size >= ${local.data_disk_min_gb[name] * 1073741824}u"
+          match = "!system_disk && disk.size >= ${local.data_disk_min_gb[name] * 1073741824}u"
         }
         grow    = false
         minSize = "${local.data_disk_min_gb[name]}GB"
@@ -28,7 +28,7 @@ locals {
     name       = "swap"
     provisioning = {
       diskSelector = {
-        match = "disk.dev_path == '${var.install_disk_match}'"
+        match = "!system_disk && disk.size == 5368709120u"
       }
       minSize = "4GiB"
       maxSize = "4GiB"

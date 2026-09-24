@@ -2,7 +2,8 @@
 # Data disk resolution: per-disk pool > default_data_pool > per-node pool > default_pool > managed pool.
 
 locals {
-  data_device_letters = ["vdb", "vdc", "vdd", "vde", "vdf", "vdg", "vdh", "vdi", "vdj", "vdk"]
+  data_device_letters = ["vdb", "vdc", "vdd", "vde", "vdf", "vdg", "vdh", "vdi", "vdj", "vdk", "vdl"]
+  swap_capacity_bytes = 5 * 1024 * 1024 * 1024
 
   nodes_all = merge(
     { for n in var.nodes_cp : n.hostname => {
@@ -131,6 +132,23 @@ resource "libvirt_volume" "data" {
   depends_on = [libvirt_pool.talos]
 }
 
+# Swap volumes
+
+resource "libvirt_volume" "swap" {
+  for_each = local.nodes_all
+  name     = "${each.key}-swap.qcow2"
+  pool     = each.value.pool
+  capacity = local.swap_capacity_bytes
+
+  target = {
+    format = {
+      type = "qcow2"
+    }
+  }
+
+  depends_on = [libvirt_pool.talos]
+}
+
 # VM domains (UEFI OVMF)
 
 resource "libvirt_domain" "node" {
@@ -222,6 +240,24 @@ resource "libvirt_domain" "node" {
             type = "qcow2"
           }
         }
+      ],
+      [
+        {
+          source = {
+            volume = {
+              pool   = libvirt_volume.swap[each.key].pool
+              volume = libvirt_volume.swap[each.key].name
+            }
+          }
+          target = {
+            dev = local.data_device_letters[length(local.nodes_all[each.key].effective_disks)]
+            bus = "virtio"
+          }
+          driver = {
+            name = "qemu"
+            type = "qcow2"
+          }
+        }
       ]
     )
 
@@ -250,6 +286,7 @@ resource "libvirt_domain" "node" {
   depends_on = [
     libvirt_volume.boot,
     libvirt_volume.data,
+    libvirt_volume.swap,
     terraform_data.resize_boot,
   ]
 }
