@@ -92,6 +92,19 @@ locals {
     }
     config = { memorySwap = { swapBehavior = "LimitedSwap" } }
   })
+  zswap_patch = yamlencode({
+    apiVersion     = "v1alpha1"
+    kind           = "ZswapConfig"
+    maxPoolPercent = 20
+  })
+  swap_sysctl_patch = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "SysctlConfig"
+    params = {
+      "vm.page-cluster" = "0"
+      "vm.swappiness"   = "130"
+    }
+  })
   metrics_server_patch = join("\n---\n", [
     yamlencode({
       apiVersion = "v1alpha1"
@@ -135,6 +148,8 @@ data "talos_machine_configuration" "control_machine_config" {
     local.cp_allow_scheduling_map[each.key] ? local.scheduling_patch : "",
     local.cilium_patch,
     local.rotate_kubelet_certificates_patch,
+    local.zswap_patch,
+    local.swap_sysctl_patch,
     local.metrics_server_patch,
   ], var.extra_config_patches))
 }
@@ -179,6 +194,8 @@ data "talos_machine_configuration" "worker_machine_config" {
     }),
     local.install_patch,
     local.rotate_kubelet_certificates_patch,
+    local.zswap_patch,
+    local.swap_sysctl_patch,
   ], var.extra_config_patches))
 }
 
