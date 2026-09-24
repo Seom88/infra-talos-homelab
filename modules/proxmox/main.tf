@@ -5,9 +5,11 @@ locals {
   # multi-disk selector is best-effort: !system_disk + per-name size floor.
   # Harden post-bootstrap with `talosctl get disks -o yaml` and pin
   # diskSelector.match to by-id/serial when two names share the same size.
-  all_data_disks   = flatten([for n in concat(var.nodes_cp, var.nodes_worker) : coalesce(n.disks, [])])
-  data_disk_names  = distinct([for d in local.all_data_disks : d.name])
-  data_disk_min_gb = { for name in local.data_disk_names : name => min([for d in local.all_data_disks : d.size if d.name == name]...) }
+  all_data_disks      = flatten([for n in concat(var.nodes_cp, var.nodes_worker) : coalesce(n.disks, [])])
+  data_disk_names     = distinct([for d in local.all_data_disks : d.name])
+  data_disk_min_gb    = { for name in local.data_disk_names : name => min([for d in local.all_data_disks : d.size if d.name == name]...) }
+  swap_disk_size_gb   = 5
+  swap_disk_datastore = "local-lvm"
   data_volume_patches = [
     for name in local.data_disk_names : yamlencode({
       apiVersion = "v1alpha1"
@@ -15,7 +17,7 @@ locals {
       name       = name
       provisioning = {
         diskSelector = {
-          match = length(local.data_disk_names) == 1 ? "!system_disk" : "!system_disk && disk.size >= ${local.data_disk_min_gb[name] * 1073741824}u"
+          match = "!system_disk && disk.size >= ${local.data_disk_min_gb[name] * 1073741824}u"
         }
         grow    = true
         minSize = "${local.data_disk_min_gb[name]}GB"
@@ -28,7 +30,7 @@ locals {
     name       = "swap"
     provisioning = {
       diskSelector = {
-        match = "disk.dev_path == '${var.install_disk_match}'"
+        match = "!system_disk && disk.size == ${local.swap_disk_size_gb * 1073741824}u"
       }
       minSize = "4GiB"
       maxSize = "4GiB"
@@ -108,6 +110,14 @@ resource "proxmox_virtual_environment_vm" "talos" {
       size         = disk.value.size
     }
   }
+  disk {
+    datastore_id = local.swap_disk_datastore
+    interface    = "scsi${length(coalesce(each.value.disks, [])) + 1}"
+    iothread     = true
+    discard      = "on"
+    ssd          = true
+    size         = local.swap_disk_size_gb
+  }
   cpu {
     cores    = each.value.cores
     type     = "host"
@@ -186,6 +196,14 @@ resource "proxmox_virtual_environment_vm" "talos_worker" {
       ssd          = disk.value.ssd
       size         = disk.value.size
     }
+  }
+  disk {
+    datastore_id = local.swap_disk_datastore
+    interface    = "scsi${length(coalesce(each.value.disks, [])) + 1}"
+    iothread     = true
+    discard      = "on"
+    ssd          = true
+    size         = local.swap_disk_size_gb
   }
   cpu {
     cores    = each.value.cores
