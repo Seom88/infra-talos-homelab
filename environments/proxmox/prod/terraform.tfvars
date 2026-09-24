@@ -61,7 +61,7 @@ nodes_worker = [
     datastore    = "local-lvm"
     # cpu_units    = 100
     # cpu_affinity = "2-5,8-11"
-    disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
+    disks = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
     hostname     = "talos-w2"
@@ -73,7 +73,7 @@ nodes_worker = [
     datastore    = "local-lvm"
     # cpu_units    = 100
     # cpu_affinity = "2-5,8-11"
-    disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
+    disks = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
     hostname     = "talos-w3"
@@ -85,6 +85,6 @@ nodes_worker = [
     datastore    = "local-lvm"
     # cpu_units    = 100
     # cpu_affinity = "2-5,8-11"
-    disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
+    disks = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
 ]
