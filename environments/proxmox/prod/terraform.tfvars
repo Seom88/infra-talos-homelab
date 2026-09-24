@@ -54,37 +54,37 @@ nodes_worker = [
   {
     hostname     = "talos-w1"
     ip           = "10.10.0.101"
-    cores        = 4
+    cores        = 6
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "local-lvm"
-    cpu_units    = 100
-    cpu_affinity = "2-5,8-11"
+    # cpu_units    = 100
+    # cpu_affinity = "2-5,8-11"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
     hostname     = "talos-w2"
     ip           = "10.10.0.102"
-    cores        = 4
+    cores        = 6
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "local-lvm"
-    cpu_units    = 100
-    cpu_affinity = "2-5,8-11"
+    # cpu_units    = 100
+    # cpu_affinity = "2-5,8-11"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
   {
     hostname     = "talos-w3"
     ip           = "10.10.0.103"
-    cores        = 4
+    cores        = 6
     memory       = 6 * 1024
     proxmox_node = "pve01"
     disk_size    = 40
     datastore    = "local-lvm"
-    cpu_units    = 100
-    cpu_affinity = "2-5,8-11"
+    # cpu_units    = 100
+    # cpu_affinity = "2-5,8-11"
     disks        = [{ name = "data", size = 150, datastore = "ssd01" }]
   },
 ]

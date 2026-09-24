@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Native Talos v1.14 swap provisioning for every node: a fixed 4 GiB `SwapVolumeConfig` on the existing installation disk (`/dev/sda` Proxmox, `/dev/vda` libvirt), explicitly avoiding Longhorn data disks.
+- Kubernetes pod swap support through `KubeletConfig.config.memorySwap.swapBehavior: LimitedSwap`.
+- Shared `ZswapConfig` with `maxPoolPercent: 20` and documented `SysctlConfig` tuning (`vm.swappiness: "130"`, `vm.page-cluster: "0"`) for control-plane and worker nodes.
+- Swap and zswap are configured together so zswap can act as a compressed RAM-backed cache in front of the swap device.
+
+### Changed
+- Proxmox and libvirt now apply the swap configuration through their existing machine-configuration paths without changing VM disk layouts or Longhorn `UserVolumeConfig` selectors.
+
+### Security
+- LUKS2 encryption is intentionally not enabled for swap in this change; the swap partition remains on the system disk.
+
 ## [2.2.0] - 2026-09-23
 
 ### Added
