@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-29
+
 ### Added
 - Native Talos v1.14 swap provisioning for Proxmox: a dedicated 5 GiB VM disk in `local-lvm` provides a fixed 4 GiB `SwapVolumeConfig`, explicitly separated from Longhorn data disks.
 - Native Talos v1.14 swap provisioning for libvirt: a managed 5 GiB QCOW2 volume in each VM's existing pool provides a fixed 4 GiB `SwapVolumeConfig`, explicitly separated from Longhorn data disks.
