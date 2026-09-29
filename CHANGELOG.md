@@ -15,6 +15,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - Proxmox and libvirt now add dedicated 5 GiB swap backing after existing data disks and apply data-disk size floors to `UserVolumeConfig` selectors so the smaller swap disk cannot be claimed by Longhorn.
+- Proxmox prod workers `cores` `4` → `6`, and CPU affinity pinning disabled: `cpu_units` and `cpu_affinity` are commented out in `terraform.tfvars`, so `just affinity-sync` no longer emits prod worker rows and `cpu_units` falls back to the Proxmox default.
 
 ### Security
 - LUKS2 encryption remains intentionally disabled for swap; the Proxmox and libvirt swap partitions are isolated on dedicated virtual backing devices.
